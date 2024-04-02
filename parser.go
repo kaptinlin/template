@@ -115,37 +115,48 @@ func parseFilters(filterStr string) []Filter {
 
 func splitArgsConsideringQuotes(argsStr string) []string {
 	var args []string
-	var currentQuote rune // 0 (none), '"' or '\''
-	var argStart int
+	var currentArg strings.Builder
+	var inQuotes bool
+	var quoteChar rune
 
-	appendArg := func(argEnd int) {
-		trimmedArg := strings.Trim(argsStr[argStart:argEnd], " ,")
-		if trimmedArg != "" {
-			// Remove surrounding quotes if present
+	appendArg := func() {
+		arg := currentArg.String()
+		if arg == `""` || arg == "''" {
+			args = append(args, "")
+		} else if trimmedArg := strings.TrimSpace(arg); len(trimmedArg) > 0 {
 			if len(trimmedArg) >= 2 && ((trimmedArg[0] == '"' && trimmedArg[len(trimmedArg)-1] == '"') || (trimmedArg[0] == '\'' && trimmedArg[len(trimmedArg)-1] == '\'')) {
-				trimmedArg = trimmedArg[1 : len(trimmedArg)-1]
+				args = append(args, trimmedArg[1:len(trimmedArg)-1])
+			} else {
+				args = append(args, trimmedArg)
 			}
-			args = append(args, trimmedArg)
 		}
-		argStart = argEnd + 1
+		currentArg.Reset()
 	}
 
-	for i, c := range argsStr {
-		switch c {
-		case '"', '\'':
-			if currentQuote == c {
-				currentQuote = 0 // Closing quote
-			} else if currentQuote == 0 {
-				currentQuote = c // Opening quote
+	for i, char := range argsStr {
+		switch {
+		case char == '"' || char == '\'':
+			if inQuotes && char == quoteChar {
+				currentArg.WriteRune(char)
+				inQuotes = false
+				if i == len(argsStr)-1 || argsStr[i+1] == ',' {
+					appendArg()
+				}
+			} else if !inQuotes {
+				inQuotes = true
+				quoteChar = char
+				currentArg.WriteRune(char)
 			}
-		case ',':
-			if currentQuote == 0 { // Only split if we're not inside quotes
-				appendArg(i)
-			}
+		case char == ',' && !inQuotes:
+			appendArg()
+		default:
+			currentArg.WriteRune(char)
 		}
 	}
-	// Add the last argument if it's not empty
-	appendArg(len(argsStr))
+
+	if currentArg.Len() > 0 || inQuotes {
+		appendArg()
+	}
 
 	return args
 }

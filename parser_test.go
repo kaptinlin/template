@@ -3,6 +3,8 @@ package template
 import (
 	"reflect"
 	"testing"
+
+	"github.com/gookit/goutil/dump"
 )
 
 func TestParseTextNode(t *testing.T) {
@@ -508,51 +510,66 @@ func TestParseVariableNodeWithFilterNoParams(t *testing.T) {
 	}
 }
 
-func TestParseFilterWithStringLiteralArgument(t *testing.T) {
+// TestFilterWithDoubleQuotesStringLiteralArguments covers various scenarios for filters with string literal arguments.
+func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 	cases := []struct {
 		name     string
 		source   string
 		expected *Template
 	}{
-		// Basic case with a single filter and string literal argument
 		{
-			"SingleFilterWithStringLiteral",
-			`{{ value|append:"!" }}`,
-			&Template{
+			name:   "SingleFilterSingleStringArgument",
+			source: `{{ name|append:"!" }}`,
+			expected: &Template{
 				Nodes: []*Node{
 					{
 						Type:     "variable",
-						Variable: "value",
+						Variable: "name",
 						Filters: []Filter{
 							{Name: "append", Args: []string{"!"}},
 						},
-						Text: `{{ value|append:"!" }}`,
+						Text: `{{ name|append:"!" }}`,
 					},
 				},
 			},
 		},
-		// Spaces around the filter argument
 		{
-			"SpaceAroundArgument",
-			`{{ value|append: "!" }}`,
-			&Template{
+			name:   "SingleFilterMultipleStringArguments",
+			source: `{{ greeting|replace:"Hello","Hi" }}`,
+			expected: &Template{
 				Nodes: []*Node{
 					{
 						Type:     "variable",
-						Variable: "value",
+						Variable: "greeting",
 						Filters: []Filter{
-							{Name: "append", Args: []string{"!"}},
+							{Name: "replace", Args: []string{"Hello", "Hi"}},
 						},
-						Text: `{{ value|append: "!" }}`,
+						Text: `{{ greeting|replace:"Hello","Hi" }}`,
 					},
 				},
 			},
 		},
-		// Multiple filters with string literal arguments
 		{
-			"MultipleFiltersWithStringLiteral",
-			`{{ greeting|replace:"Hello","Hi"|append:" everyone" }}`,
-			&Template{
+			name:   "MultipleFiltersSingleStringArgument",
+			source: `{{ name|append:"!"|uppercase }}`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "name",
+						Filters: []Filter{
+							{Name: "append", Args: []string{"!"}},
+							{Name: "uppercase"},
+						},
+						Text: `{{ name|append:"!"|uppercase }}`,
+					},
+				},
+			},
+		},
+		{
+			name:   "MultipleFiltersMultipleStringArguments",
+			source: `{{ greeting|replace:"Hello","Hi"|append:" everyone" }}`,
+			expected: &Template{
 				Nodes: []*Node{
 					{
 						Type:     "variable",
@@ -566,66 +583,277 @@ func TestParseFilterWithStringLiteralArgument(t *testing.T) {
 				},
 			},
 		},
-		// Text nodes around variable with filter and argument
 		{
-			"TextNodesAroundVariableWithFilter",
-			`Welcome, {{ user|prepend:"Mr. " }}!`,
-			&Template{
+			name:   "MultipleVariablesWithFilters",
+			source: `Hello {{name|capitalize|append:""}}, you have {{count|pluralize:"item","items"}}.`,
+			expected: &Template{
 				Nodes: []*Node{
-					{Type: "text", Text: "Welcome, "},
+					{Type: "text", Text: "Hello "},
 					{
 						Type:     "variable",
-						Variable: "user",
-						Filters: []Filter{
-							{Name: "prepend", Args: []string{"Mr. "}},
-						},
-						Text: `{{ user|prepend:"Mr. " }}`,
+						Variable: "name",
+						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []string{""}}},
+						Text:     `{{name|capitalize|append:""}}`,
 					},
-					{Type: "text", Text: "!"},
-				},
-			},
-		},
-		// Complex scenario with mixed text and multiple variables with filters and one string argument
-		{
-			"ComplexMixedTextAndVariables",
-			`Welcome, {{ user|prepend:"Mr. " }}! your score is {{ score|round }}.`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Welcome, "},
+					{Type: "text", Text: ", you have "},
 					{
 						Type:     "variable",
-						Variable: "user",
-						Filters: []Filter{
-							{Name: "prepend", Args: []string{"Mr. "}},
-						},
-						Text: `{{ user|prepend:"Mr. " }}`,
-					},
-					{Type: "text", Text: "! your score is "},
-					{
-						Type:     "variable",
-						Variable: "score",
-						Filters: []Filter{
-							{Name: "round"},
-						},
-						Text: `{{ score|round }}`,
+						Variable: "count",
+						Filters:  []Filter{{Name: "pluralize", Args: []string{"item", "items"}}},
+						Text:     `{{count|pluralize:"item","items"}}`,
 					},
 					{Type: "text", Text: "."},
 				},
 			},
 		},
+		{
+			name:   "MultipleVariablesNoDelimiter",
+			source: `{{firstName}}{{lastName}}`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "firstName",
+						Text:     "{{firstName}}",
+					},
+					{
+						Type:     "variable",
+						Variable: "lastName",
+						Text:     "{{lastName}}",
+					},
+				},
+			},
+		},
+		{
+			name:   "MultipleVariablesSpaceDelimiter",
+			source: `{{ firstName }} {{ lastName }}`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "firstName",
+						Text:     "{{ firstName }}",
+					},
+					{
+						Type: "text",
+						Text: " ",
+					},
+					{
+						Type:     "variable",
+						Variable: "lastName",
+						Text:     "{{ lastName }}",
+					},
+				},
+			},
+		},
+		{
+			name:   "MultipleVariablesOtherDelimiters",
+			source: `{{firstName}},{{lastName}}!`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "firstName",
+						Text:     "{{firstName}}",
+					},
+					{
+						Type: "text",
+						Text: ",",
+					},
+					{
+						Type:     "variable",
+						Variable: "lastName",
+						Text:     "{{lastName}}",
+					},
+					{
+						Type: "text",
+						Text: "!",
+					},
+				},
+			},
+		},
+		{
+			name:   "MultipleVariablesWithFiltersAndDelimiters",
+			source: `{{firstName|replace:"Mr.",""|replace:"Mrs.",""}}, {{lastName|lower}}!`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "firstName",
+						Filters:  []Filter{{Name: "replace", Args: []string{"Mr.", ""}}, {Name: "replace", Args: []string{"Mrs.", ""}}},
+						Text:     `{{firstName|replace:"Mr.",""|replace:"Mrs.",""}}`,
+					},
+					{
+						Type: "text",
+						Text: ", ",
+					},
+					{
+						Type:     "variable",
+						Variable: "lastName",
+						Filters:  []Filter{{Name: "lower"}},
+						Text:     `{{lastName|lower}}`,
+					},
+					{
+						Type: "text",
+						Text: "!",
+					},
+				},
+			},
+		},
 	}
-
-	parser := NewParser()
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			parser := NewParser()
 			tpl, err := parser.Parse(tc.source)
 			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+				t.Fatalf("Unexpected error for case '%s': %v", tc.name, err)
 			}
-
 			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, tc.expected, tpl)
+				dump.P(tc.expected)
+				t.Errorf("For case '%s', expected %+v, got %+v", tc.name, tc.expected, tpl)
+
+			}
+		})
+	}
+}
+
+// TestFilterWithSingleQuotesStringLiteralArguments covers various scenarios for filters with string literal arguments.
+func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		expected *Template
+	}{
+		{
+			name:   "SingleFilterSingleStringArgument",
+			source: `{{ name|append:'!' }}`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "name",
+						Filters: []Filter{
+							{Name: "append", Args: []string{"!"}},
+						},
+						Text: `{{ name|append:'!' }}`,
+					},
+				},
+			},
+		},
+		{
+			name:   "SingleFilterMultipleStringArguments",
+			source: `{{ greeting|replace:'Hello','Hi' }}`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "greeting",
+						Filters: []Filter{
+							{Name: "replace", Args: []string{"Hello", "Hi"}},
+						},
+						Text: `{{ greeting|replace:'Hello','Hi' }}`,
+					},
+				},
+			},
+		},
+		{
+			name:   "MultipleFiltersSingleStringArgument",
+			source: `{{ name|append:'!'|uppercase }}`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "name",
+						Filters: []Filter{
+							{Name: "append", Args: []string{"!"}},
+							{Name: "uppercase"},
+						},
+						Text: `{{ name|append:'!'|uppercase }}`,
+					},
+				},
+			},
+		},
+		{
+			name:   "MultipleFiltersMultipleStringArguments",
+			source: `{{ greeting|replace:'Hello','Hi'|append:' everyone' }}`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "greeting",
+						Filters: []Filter{
+							{Name: "replace", Args: []string{"Hello", "Hi"}},
+							{Name: "append", Args: []string{" everyone"}},
+						},
+						Text: `{{ greeting|replace:'Hello','Hi'|append:' everyone' }}`,
+					},
+				},
+			},
+		},
+		{
+			name:   "MultipleVariablesWithFilters",
+			source: `Hello {{name|capitalize|append:''}}, you have {{count|pluralize:'item','items'}}.`,
+			expected: &Template{
+				Nodes: []*Node{
+					{Type: "text", Text: "Hello "},
+					{
+						Type:     "variable",
+						Variable: "name",
+						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []string{""}}},
+						Text:     `{{name|capitalize|append:''}}`,
+					},
+					{Type: "text", Text: ", you have "},
+					{
+						Type:     "variable",
+						Variable: "count",
+						Filters:  []Filter{{Name: "pluralize", Args: []string{"item", "items"}}},
+						Text:     `{{count|pluralize:'item','items'}}`,
+					},
+					{Type: "text", Text: "."},
+				},
+			},
+		},
+		{
+			name:   "MultipleVariablesWithFiltersAndDelimiters",
+			source: `{{firstName|replace:'Mr.',''|replace:'Mrs.',''}}, {{lastName|lower}}!`,
+			expected: &Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "firstName",
+						Filters:  []Filter{{Name: "replace", Args: []string{"Mr.", ""}}, {Name: "replace", Args: []string{"Mrs.", ""}}},
+						Text:     `{{firstName|replace:'Mr.',''|replace:'Mrs.',''}}`,
+					},
+					{
+						Type: "text",
+						Text: ", ",
+					},
+					{
+						Type:     "variable",
+						Variable: "lastName",
+						Filters:  []Filter{{Name: "lower"}},
+						Text:     `{{lastName|lower}}`,
+					},
+					{
+						Type: "text",
+						Text: "!",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewParser()
+			tpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error for case '%s': %v", tc.name, err)
+			}
+			if !reflect.DeepEqual(tpl, tc.expected) {
+				dump.P(tc.expected)
+				t.Errorf("For case '%s', expected %+v, got %+v", tc.name, tc.expected, tpl)
 			}
 		})
 	}
