@@ -209,3 +209,221 @@ func TestVariableNotFoundReturnOriginal(t *testing.T) {
 		})
 	}
 }
+
+// TestFilterErrorsReturnOriginalVariableText ensures that when a filter encounters an error,
+// the template system gracefully handles it by returning the original variable text.
+func TestFilterErrorsReturnOriginalVariableText(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{
+			name:     "FilterNotFound",
+			source:   "Welcome, {{userName|nonExistentFilter}}!",
+			expected: "Welcome, {{userName|nonExistentFilter}}!",
+		},
+		{
+			name:     "PlusFilterWithString",
+			source:   "Total: {{tasks | plus:' extra'}}", // Plus expects numerical arguments
+			expected: "Total: {{tasks | plus:' extra'}}",
+		},
+		{
+			name:     "FirstFilterOnString",
+			source:   "First Task: {{userName|first}}", // First filter applied on a string, not an array
+			expected: "First Task: {{userName|first}}",
+		},
+		{
+			name:     "IndexFilterOutOfRange",
+			source:   "Task: {{tasks|index:10}}",
+			expected: "Task: {{tasks|index:10}}",
+		},
+		{
+			name:     "MultipleFiltersWithOneInvalid",
+			source:   "Email: {{profile.contacts.email|lower|nonExistentFilter}}",
+			expected: "Email: {{profile.contacts.email|lower|nonExistentFilter}}",
+		},
+		{
+			name:     "ValidAndInvalidFiltersMixed",
+			source:   "Bio: {{profile.bio|capitalize|nonExistentFilter}}, Age: {{profile.age|plus:1}}",
+			expected: "Bio: {{profile.bio|capitalize|nonExistentFilter}}, Age: 30",
+		},
+		{
+			name:     "LastFilterOnNonArray",
+			source:   "Contact: {{profile.contacts|last}}", // Last filter expects an array
+			expected: "Contact: {{profile.contacts|last}}",
+		},
+		{
+			name:     "InvalidNestedVariableWithFilter",
+			source:   "Missing: {{profile.missingDetail|lower}}",
+			expected: "Missing: {{profile.missingDetail|lower}}",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := mockUserProfileContext()
+			parser := NewParser()
+			tmpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+			}
+
+			result, err := tmpl.Execute(ctx)
+			if err == nil {
+				t.Fatalf("Expected an error in %s, but got nil", tc.name)
+			}
+			if result != tc.expected {
+				t.Errorf("Expected '%s', but got '%s'", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestVariablesWithPunctuation(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		context  Context
+		expected string
+	}{
+		{
+			name:     "VariableFollowedByExclamation",
+			source:   "Hello, {{userName}}!",
+			expected: "Hello, JaneDoe!",
+		},
+		{
+			name:     "VariableFollowedByComma",
+			source:   "User: {{userName}}, welcome back!",
+			expected: "User: JaneDoe, welcome back!",
+		},
+		{
+			name:     "VariableFollowedByPeriod",
+			source:   "Your name is {{userName}}.",
+			expected: "Your name is JaneDoe.",
+		},
+		{
+			name:     "VariableFollowedByQuestionMark",
+			source:   "Is {{userName}} your name?",
+			expected: "Is JaneDoe your name?",
+		},
+		{
+			name:     "VariableInsideQuotes",
+			source:   "\"{{userName}}\" is the username.",
+			expected: "\"JaneDoe\" is the username.",
+		},
+		{
+			name:     "MultipleVariablesSeparatedByPunctuation",
+			source:   "{{userName}}, your age is {{profile.age}}.",
+			expected: "JaneDoe, your age is 29.",
+		},
+		{
+			name:     "VariableFollowedByFilterAndPunctuation",
+			source:   "Welcome, {{userName|lower}}!",
+			expected: "Welcome, janedoe!",
+		},
+		{
+			name:     "FilterNotFoundWithPunctuation",
+			source:   "Hello, {{userName|nonExistentFilter}}!",
+			expected: "Hello, {{userName|nonExistentFilter}}!",
+		},
+		{
+			name:     "FilterArgumentMismatchWithPunctuation",
+			source:   "Result: {{profile.age|plus}}.",
+			expected: "Result: {{profile.age|plus}}.",
+		},
+	}
+	ctx := mockUserProfileContext()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+			}
+
+			result := tmpl.MustExecute(ctx)
+
+			if result != tc.expected {
+				t.Errorf("Expected '%s', but got '%s'", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestFiltersWithVariableArguments(t *testing.T) {
+	ctx := mockUserProfileContext()
+	cases := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{
+			"PlusFilterWithVariableArgument",
+			"New age: {{ profile.age|plus:profile.age }}",
+			"New age: 58",
+		},
+		{
+			"MinusFilterWithVariableArgument",
+			"Half age: {{ profile.age|minus:profile.age|plus:2 }}",
+			"Half age: 2",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+			}
+
+			result, err := tmpl.Execute(ctx)
+			if err != nil {
+				t.Fatalf("Failed to execute template in %s: %v", tc.name, err)
+			}
+
+			if result != tc.expected {
+				t.Errorf("Expected '%s', but got '%s' in %s", tc.expected, result, tc.name)
+			}
+		})
+	}
+}
+func TestFiltersWithNumericArguments(t *testing.T) {
+	ctx := mockUserProfileContext()
+	cases := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{
+			"PlusFilterWithNumericArgument",
+			"Age next year: {{ profile.age|plus:1 }}",
+			"Age next year: 30",
+		},
+		{
+			"TimesFilterWithNumericArgument",
+			"Double age: {{ profile.age|times:2 }}",
+			"Double age: 58",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+			}
+
+			result, err := tmpl.Execute(ctx)
+			if err != nil {
+				t.Fatalf("Failed to execute template in %s: %v", tc.name, err)
+			}
+
+			if result != tc.expected {
+				t.Errorf("Expected '%s', but got '%s' in %s", tc.expected, result, tc.name)
+			}
+		})
+	}
+}

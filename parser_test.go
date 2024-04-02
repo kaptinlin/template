@@ -217,7 +217,7 @@ Welcome back!`,
 			&Template{
 				Nodes: []*Node{
 					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Filters: []Filter{{Name: "replace", Args: []string{"Mr.", "Mrs."}}}, Text: `{{username|replace:"Mr.","Mrs."}}`},
+					{Type: "variable", Variable: "username", Filters: []Filter{{Name: "replace", Args: []FilterArg{StringArg{val: "Mr."}, StringArg{val: "Mrs."}}}}, Text: `{{username|replace:"Mr.","Mrs."}}`},
 					{Type: "text", Text: "\nWelcome back!"},
 				},
 			},
@@ -292,6 +292,7 @@ func TestParseVariableNode(t *testing.T) {
 		})
 	}
 }
+
 func TestParseNestedContextVariable(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -526,7 +527,7 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "name",
 						Filters: []Filter{
-							{Name: "append", Args: []string{"!"}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
 						},
 						Text: `{{ name|append:"!" }}`,
 					},
@@ -542,7 +543,7 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "greeting",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"Hello", "Hi"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
 						},
 						Text: `{{ greeting|replace:"Hello","Hi" }}`,
 					},
@@ -558,7 +559,7 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "name",
 						Filters: []Filter{
-							{Name: "append", Args: []string{"!"}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
 							{Name: "uppercase"},
 						},
 						Text: `{{ name|append:"!"|uppercase }}`,
@@ -575,8 +576,8 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "greeting",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"Hello", "Hi"}},
-							{Name: "append", Args: []string{" everyone"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
+							{Name: "append", Args: []FilterArg{StringArg{val: " everyone"}}},
 						},
 						Text: `{{ greeting|replace:"Hello","Hi"|append:" everyone" }}`,
 					},
@@ -592,14 +593,14 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 					{
 						Type:     "variable",
 						Variable: "name",
-						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []string{""}}},
+						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []FilterArg{StringArg{val: ""}}}},
 						Text:     `{{name|capitalize|append:""}}`,
 					},
 					{Type: "text", Text: ", you have "},
 					{
 						Type:     "variable",
 						Variable: "count",
-						Filters:  []Filter{{Name: "pluralize", Args: []string{"item", "items"}}},
+						Filters:  []Filter{{Name: "pluralize", Args: []FilterArg{StringArg{val: "item"}, StringArg{val: "items"}}}},
 						Text:     `{{count|pluralize:"item","items"}}`,
 					},
 					{Type: "text", Text: "."},
@@ -680,7 +681,7 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 					{
 						Type:     "variable",
 						Variable: "firstName",
-						Filters:  []Filter{{Name: "replace", Args: []string{"Mr.", ""}}, {Name: "replace", Args: []string{"Mrs.", ""}}},
+						Filters:  []Filter{{Name: "replace", Args: []FilterArg{StringArg{val: "Mr."}, StringArg{val: ""}}}, {Name: "replace", Args: []FilterArg{StringArg{val: "Mrs."}, StringArg{val: ""}}}},
 						Text:     `{{firstName|replace:"Mr.",""|replace:"Mrs.",""}}`,
 					},
 					{
@@ -734,7 +735,7 @@ func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "name",
 						Filters: []Filter{
-							{Name: "append", Args: []string{"!"}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
 						},
 						Text: `{{ name|append:'!' }}`,
 					},
@@ -750,7 +751,7 @@ func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "greeting",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"Hello", "Hi"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
 						},
 						Text: `{{ greeting|replace:'Hello','Hi' }}`,
 					},
@@ -766,7 +767,7 @@ func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "name",
 						Filters: []Filter{
-							{Name: "append", Args: []string{"!"}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
 							{Name: "uppercase"},
 						},
 						Text: `{{ name|append:'!'|uppercase }}`,
@@ -783,8 +784,8 @@ func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "greeting",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"Hello", "Hi"}},
-							{Name: "append", Args: []string{" everyone"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
+							{Name: "append", Args: []FilterArg{StringArg{val: " everyone"}}},
 						},
 						Text: `{{ greeting|replace:'Hello','Hi'|append:' everyone' }}`,
 					},
@@ -800,14 +801,14 @@ func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
 					{
 						Type:     "variable",
 						Variable: "name",
-						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []string{""}}},
+						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []FilterArg{StringArg{val: ""}}}},
 						Text:     `{{name|capitalize|append:''}}`,
 					},
 					{Type: "text", Text: ", you have "},
 					{
 						Type:     "variable",
 						Variable: "count",
-						Filters:  []Filter{{Name: "pluralize", Args: []string{"item", "items"}}},
+						Filters:  []Filter{{Name: "pluralize", Args: []FilterArg{StringArg{val: "item"}, StringArg{val: "items"}}}},
 						Text:     `{{count|pluralize:'item','items'}}`,
 					},
 					{Type: "text", Text: "."},
@@ -822,7 +823,7 @@ func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
 					{
 						Type:     "variable",
 						Variable: "firstName",
-						Filters:  []Filter{{Name: "replace", Args: []string{"Mr.", ""}}, {Name: "replace", Args: []string{"Mrs.", ""}}},
+						Filters:  []Filter{{Name: "replace", Args: []FilterArg{StringArg{val: "Mr."}, StringArg{val: ""}}}, {Name: "replace", Args: []FilterArg{StringArg{val: "Mrs."}, StringArg{val: ""}}}},
 						Text:     `{{firstName|replace:'Mr.',''|replace:'Mrs.',''}}`,
 					},
 					{
@@ -852,7 +853,6 @@ func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
 				t.Fatalf("Unexpected error for case '%s': %v", tc.name, err)
 			}
 			if !reflect.DeepEqual(tpl, tc.expected) {
-				dump.P(tc.expected)
 				t.Errorf("For case '%s', expected %+v, got %+v", tc.name, tc.expected, tpl)
 			}
 		})
@@ -875,7 +875,7 @@ func TestParseFilterWithMultipleParameters(t *testing.T) {
 						Type:     "variable",
 						Variable: "value",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"hello", "world"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
 						},
 						Text: `{{ value|replace:'hello','world' }}`,
 					},
@@ -892,7 +892,7 @@ func TestParseFilterWithMultipleParameters(t *testing.T) {
 						Type:     "variable",
 						Variable: "value",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"hello", "world"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
 						},
 						Text: `{{ value|replace: 'hello', 'world' }}`,
 					},
@@ -909,8 +909,8 @@ func TestParseFilterWithMultipleParameters(t *testing.T) {
 						Type:     "variable",
 						Variable: "greeting",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"Hello", "Hi"}},
-							{Name: "append", Args: []string{"!", " Have a great day"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}, StringArg{val: " Have a great day"}}},
 						},
 						Text: `{{ greeting|replace:'Hello','Hi'|append: '!', ' Have a great day' }}`,
 					},
@@ -934,7 +934,7 @@ func TestParseFilterWithMultipleParameters(t *testing.T) {
 					{
 						Type:     "variable",
 						Variable: "unread",
-						Filters:  []Filter{{Name: "pluralize", Args: []string{"message", "messages"}}},
+						Filters:  []Filter{{Name: "pluralize", Args: []FilterArg{StringArg{val: "message"}, StringArg{val: "messages"}}}},
 						Text:     `{{ unread|pluralize:"message","messages" }}`,
 					},
 					{Type: "text", Text: "."},
@@ -975,8 +975,8 @@ func TestParseVariableWithMultiplePipelineFiltersWithMultipleParameters(t *testi
 						Type:     "variable",
 						Variable: "username",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"hello", "world"}},
-							{Name: "append", Args: []string{"!"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
 						},
 						Text: `{{ username|replace:"hello","world"|append:"!" }}`,
 					},
@@ -993,8 +993,8 @@ func TestParseVariableWithMultiplePipelineFiltersWithMultipleParameters(t *testi
 						Type:     "variable",
 						Variable: "username",
 						Filters: []Filter{
-							{Name: "replace", Args: []string{"hello", "world"}},
-							{Name: "append", Args: []string{"!"}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
 						},
 						Text: `{{ username | replace:"hello","world" | append:"!" }}`,
 					},
@@ -1011,8 +1011,8 @@ func TestParseVariableWithMultiplePipelineFiltersWithMultipleParameters(t *testi
 						Type:     "variable",
 						Variable: "date",
 						Filters: []Filter{
-							{Name: "date", Args: []string{"YYYY-MM-DD"}},
-							{Name: "prepend", Args: []string{"Date: "}},
+							{Name: "date", Args: []FilterArg{StringArg{val: "YYYY-MM-DD"}}},
+							{Name: "prepend", Args: []FilterArg{StringArg{val: "Date: "}}},
 						},
 						Text: `{{ date|date:"YYYY-MM-DD"|prepend:"Date: " }}`,
 					},
@@ -1031,7 +1031,7 @@ func TestParseVariableWithMultiplePipelineFiltersWithMultipleParameters(t *testi
 						Variable: "name",
 						Filters: []Filter{
 							{Name: "capitalize"},
-							{Name: "append", Args: []string{"!"}},
+							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
 						},
 						Text: `{{ name|capitalize|append:"!" }}`,
 					},
@@ -1040,8 +1040,8 @@ func TestParseVariableWithMultiplePipelineFiltersWithMultipleParameters(t *testi
 						Type:     "variable",
 						Variable: "unread",
 						Filters: []Filter{
-							{Name: "pluralize", Args: []string{"1 message", "%d messages"}},
-							{Name: "replace", Args: []string{"%d", "many"}},
+							{Name: "pluralize", Args: []FilterArg{StringArg{val: "1 message"}, StringArg{val: "%d messages"}}},
+							{Name: "replace", Args: []FilterArg{StringArg{val: "%d"}, StringArg{val: "many"}}},
 						},
 						Text: `{{ unread|pluralize:"1 message","%d messages"|replace:"%d","many" }}`,
 					},
@@ -1137,8 +1137,8 @@ func TestParseMultipleAdjacentVariables(t *testing.T) {
 			"{{user|default:'Anonymous'}}{{age|default:18}}",
 			&Template{
 				Nodes: []*Node{
-					{Type: "variable", Variable: "user", Filters: []Filter{{Name: "default", Args: []string{"Anonymous"}}}, Text: "{{user|default:'Anonymous'}}"},
-					{Type: "variable", Variable: "age", Filters: []Filter{{Name: "default", Args: []string{"18"}}}, Text: "{{age|default:18}}"},
+					{Type: "variable", Variable: "user", Filters: []Filter{{Name: "default", Args: []FilterArg{StringArg{val: "Anonymous"}}}}, Text: "{{user|default:'Anonymous'}}"},
+					{Type: "variable", Variable: "age", Filters: []Filter{{Name: "default", Args: []FilterArg{NumberArg{val: 18}}}}, Text: "{{age|default:18}}"},
 				},
 			},
 		},
@@ -1159,7 +1159,7 @@ func TestParseMultipleAdjacentVariables(t *testing.T) {
 				Nodes: []*Node{
 					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "trim"}}, Text: "{{firstName|trim}}"},
 					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "lower"}, {Name: "capitalize"}}, Text: "{{lastName|lower|capitalize}}"},
-					{Type: "variable", Variable: "age", Filters: []Filter{{Name: "default", Args: []string{"30"}}}, Text: "{{age|default:30}}"},
+					{Type: "variable", Variable: "age", Filters: []Filter{{Name: "default", Args: []FilterArg{NumberArg{val: 30}}}}, Text: "{{age|default:30}}"},
 				},
 			},
 		},
@@ -1239,8 +1239,8 @@ func TestParseMultipleAdjacentVariables(t *testing.T) {
 			"{{firstName|capitalize|replace:'John','Jonathan'}}{{lastName|append:' Smith'}}",
 			&Template{
 				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "capitalize"}, {Name: "replace", Args: []string{"John", "Jonathan"}}}, Text: "{{firstName|capitalize|replace:'John','Jonathan'}}"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "append", Args: []string{" Smith"}}}, Text: "{{lastName|append:' Smith'}}"},
+					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "capitalize"}, {Name: "replace", Args: []FilterArg{StringArg{val: "John"}, StringArg{val: "Jonathan"}}}}, Text: "{{firstName|capitalize|replace:'John','Jonathan'}}"},
+					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "append", Args: []FilterArg{StringArg{val: " Smith"}}}}, Text: "{{lastName|append:' Smith'}}"},
 				},
 			},
 		},
@@ -1251,7 +1251,7 @@ func TestParseMultipleAdjacentVariables(t *testing.T) {
 				Nodes: []*Node{
 					{Type: "variable", Variable: "user.details.address.city", Filters: []Filter{{Name: "capitalize"}}, Text: "{{user.details.address.city|capitalize}}"},
 					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "user.details.phoneNumber", Filters: []Filter{{Name: "default", Args: []string{"N/A"}}}, Text: "{{user.details.phoneNumber|default:'N/A'}}"},
+					{Type: "variable", Variable: "user.details.phoneNumber", Filters: []Filter{{Name: "default", Args: []FilterArg{StringArg{val: "N/A"}}}}, Text: "{{user.details.phoneNumber|default:'N/A'}}"},
 				},
 			},
 		},
@@ -1262,7 +1262,7 @@ func TestParseMultipleAdjacentVariables(t *testing.T) {
 				Nodes: []*Node{
 					{Type: "variable", Variable: "user.address", Filters: []Filter{{Name: "trim"}}, Text: "{{user.address|trim}}"},
 					{Type: "text", Text: " "},
-					{Type: "variable", Variable: "user.phone", Filters: []Filter{{Name: "default", Args: []string{"Unknown"}}, {Name: "upper"}}, Text: "{{user.phone|default:'Unknown'|upper}}"},
+					{Type: "variable", Variable: "user.phone", Filters: []Filter{{Name: "default", Args: []FilterArg{StringArg{val: "Unknown"}}}, {Name: "upper"}}, Text: "{{user.phone|default:'Unknown'|upper}}"},
 				},
 			},
 		},
@@ -1310,7 +1310,7 @@ func TestParseVariableWithFilterHavingCommaInArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "current",
 						Filters: []Filter{
-							{Name: "date", Args: []string{"F j, Y"}},
+							{Name: "date", Args: []FilterArg{StringArg{val: "F j, Y"}}},
 						},
 						Text: `{{ current | date:"F j, Y" }}`,
 					},
@@ -1326,7 +1326,7 @@ func TestParseVariableWithFilterHavingCommaInArguments(t *testing.T) {
 						Type:     "variable",
 						Variable: "current",
 						Filters: []Filter{
-							{Name: "date", Args: []string{"F j, Y"}},
+							{Name: "date", Args: []FilterArg{StringArg{val: "F j, Y"}}},
 						},
 						Text: `{{ current | date:'F j, Y' }}`,
 					},
@@ -1428,142 +1428,72 @@ func TestParseMalformedVariableNodeAsText(t *testing.T) {
 	}
 }
 
-// TestFilterErrorsReturnOriginalVariableText ensures that when a filter encounters an error,
-// the template system gracefully handles it by returning the original variable text.
-func TestFilterErrorsReturnOriginalVariableText(t *testing.T) {
+func TestParserWithMultipleFiltersAndNumericArguments(t *testing.T) {
 	cases := []struct {
 		name     string
 		source   string
-		expected string
+		expected *Template
 	}{
 		{
-			name:     "FilterNotFound",
-			source:   "Welcome, {{userName|nonExistentFilter}}!",
-			expected: "Welcome, {{userName|nonExistentFilter}}!",
+			"MultipleFiltersOnSingleVariable",
+			`{{ price|plus:10|minus:5|times:2|divide:3|round }}`,
+			&Template{
+				Nodes: []*Node{
+					{
+						Type:     "variable",
+						Variable: "price",
+						Filters: []Filter{
+							{Name: "plus", Args: []FilterArg{NumberArg{val: 10}}},
+							{Name: "minus", Args: []FilterArg{NumberArg{val: 5}}},
+							{Name: "times", Args: []FilterArg{NumberArg{val: 2}}},
+							{Name: "divide", Args: []FilterArg{NumberArg{val: 3}}},
+							{Name: "round"},
+						},
+						Text: `{{ price|plus:10|minus:5|times:2|divide:3|round }}`,
+					},
+				},
+			},
 		},
 		{
-			name:     "PlusFilterWithString",
-			source:   "Total: {{tasks | plus:' extra'}}", // Plus expects numerical arguments
-			expected: "Total: {{tasks | plus:' extra'}}",
-		},
-		{
-			name:     "FirstFilterOnString",
-			source:   "First Task: {{userName|first}}", // First filter applied on a string, not an array
-			expected: "First Task: {{userName|first}}",
-		},
-		{
-			name:     "IndexFilterOutOfRange",
-			source:   "Task: {{tasks|index:10}}",
-			expected: "Task: {{tasks|index:10}}",
-		},
-		{
-			name:     "MultipleFiltersWithOneInvalid",
-			source:   "Email: {{profile.contacts.email|lower|nonExistentFilter}}",
-			expected: "Email: {{profile.contacts.email|lower|nonExistentFilter}}",
-		},
-		{
-			name:     "ValidAndInvalidFiltersMixed",
-			source:   "Bio: {{profile.bio|capitalize|nonExistentFilter}}, Age: {{profile.age|plus:1}}",
-			expected: "Bio: {{profile.bio|capitalize|nonExistentFilter}}, Age: 30",
-		},
-		{
-			name:     "LastFilterOnNonArray",
-			source:   "Contact: {{profile.contacts|last}}", // Last filter expects an array
-			expected: "Contact: {{profile.contacts|last}}",
-		},
-		{
-			name:     "InvalidNestedVariableWithFilter",
-			source:   "Missing: {{profile.missingDetail|lower}}",
-			expected: "Missing: {{profile.missingDetail|lower}}",
+			"MultipleVariablesAndFilters",
+			`Total: {{ price|plus:taxes|minus:discount }} and {{ shipping|plus:5 }}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "text", Text: "Total: "},
+					{
+						Type:     "variable",
+						Variable: "price",
+						Filters: []Filter{
+							{Name: "plus", Args: []FilterArg{VariableArg{name: "taxes"}}},
+							{Name: "minus", Args: []FilterArg{VariableArg{name: "discount"}}},
+						},
+						Text: `{{ price|plus:taxes|minus:discount }}`,
+					},
+					{Type: "text", Text: " and "},
+					{
+						Type:     "variable",
+						Variable: "shipping",
+						Filters: []Filter{
+							{Name: "plus", Args: []FilterArg{NumberArg{val: 5}}},
+						},
+						Text: `{{ shipping|plus:5 }}`,
+					},
+				},
+			},
 		},
 	}
 
+	parser := NewParser()
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := mockUserProfileContext()
-			parser := NewParser()
-			tmpl, err := parser.Parse(tc.source)
+			tpl, err := parser.Parse(tc.source)
 			if err != nil {
 				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
 			}
 
-			result, err := tmpl.Execute(ctx)
-			if err == nil {
-				t.Fatalf("Expected an error in %s, but got nil", tc.name)
-			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', but got '%s'", tc.expected, result)
-			}
-		})
-	}
-}
-
-func TestVariablesWithPunctuation(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		context  Context
-		expected string
-	}{
-		{
-			name:     "VariableFollowedByExclamation",
-			source:   "Hello, {{userName}}!",
-			expected: "Hello, JaneDoe!",
-		},
-		{
-			name:     "VariableFollowedByComma",
-			source:   "User: {{userName}}, welcome back!",
-			expected: "User: JaneDoe, welcome back!",
-		},
-		{
-			name:     "VariableFollowedByPeriod",
-			source:   "Your name is {{userName}}.",
-			expected: "Your name is JaneDoe.",
-		},
-		{
-			name:     "VariableFollowedByQuestionMark",
-			source:   "Is {{userName}} your name?",
-			expected: "Is JaneDoe your name?",
-		},
-		{
-			name:     "VariableInsideQuotes",
-			source:   "\"{{userName}}\" is the username.",
-			expected: "\"JaneDoe\" is the username.",
-		},
-		{
-			name:     "MultipleVariablesSeparatedByPunctuation",
-			source:   "{{userName}}, your age is {{profile.age}}.",
-			expected: "JaneDoe, your age is 29.",
-		},
-		{
-			name:     "VariableFollowedByFilterAndPunctuation",
-			source:   "Welcome, {{userName|lower}}!",
-			expected: "Welcome, janedoe!",
-		},
-		{
-			name:     "FilterNotFoundWithPunctuation",
-			source:   "Hello, {{userName|nonExistentFilter}}!",
-			expected: "Hello, {{userName|nonExistentFilter}}!",
-		},
-		{
-			name:     "FilterArgumentMismatchWithPunctuation",
-			source:   "Result: {{profile.age|plus}}.",
-			expected: "Result: {{profile.age|plus}}.",
-		},
-	}
-	ctx := mockUserProfileContext()
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			result := tmpl.MustExecute(ctx)
-
-			if result != tc.expected {
-				t.Errorf("Expected '%s', but got '%s'", tc.expected, result)
+			if !reflect.DeepEqual(tpl, tc.expected) {
+				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
 			}
 		})
 	}

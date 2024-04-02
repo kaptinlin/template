@@ -2,6 +2,7 @@ package template
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -113,31 +114,38 @@ func parseFilters(filterStr string) []Filter {
 	return filters
 }
 
-func splitArgsConsideringQuotes(argsStr string) []string {
-	var args []string
+func splitArgsConsideringQuotes(argsStr string) []FilterArg {
+	var args []FilterArg
 	var currentArg strings.Builder
 	var inQuotes bool
 	var quoteChar rune
 
 	appendArg := func() {
 		arg := currentArg.String()
+		currentArg.Reset()
 		if arg == `""` || arg == "''" {
-			args = append(args, "")
+			args = append(args, StringArg{val: ""})
 		} else if trimmedArg := strings.TrimSpace(arg); len(trimmedArg) > 0 {
-			if len(trimmedArg) >= 2 && ((trimmedArg[0] == '"' && trimmedArg[len(trimmedArg)-1] == '"') || (trimmedArg[0] == '\'' && trimmedArg[len(trimmedArg)-1] == '\'')) {
-				args = append(args, trimmedArg[1:len(trimmedArg)-1])
+			if len(trimmedArg) >= 2 && (trimmedArg[0] == '"' || trimmedArg[0] == '\'') {
+				// String argument
+				args = append(args, StringArg{val: trimmedArg[1 : len(trimmedArg)-1]})
 			} else {
-				args = append(args, trimmedArg)
+				// Check if it's a number
+				if number, err := strconv.ParseFloat(trimmedArg, 64); err == nil {
+					args = append(args, NumberArg{val: number})
+				} else {
+					// Treat as variable
+					args = append(args, VariableArg{name: trimmedArg})
+				}
 			}
 		}
-		currentArg.Reset()
 	}
 
 	for i, char := range argsStr {
 		switch {
 		case char == '"' || char == '\'':
 			if inQuotes && char == quoteChar {
-				currentArg.WriteRune(char)
+				currentArg.WriteRune(char) // Include the quote for simplicity
 				inQuotes = false
 				if i == len(argsStr)-1 || argsStr[i+1] == ',' {
 					appendArg()
@@ -145,7 +153,7 @@ func splitArgsConsideringQuotes(argsStr string) []string {
 			} else if !inQuotes {
 				inQuotes = true
 				quoteChar = char
-				currentArg.WriteRune(char)
+				currentArg.WriteRune(char) // Include the quote for parsing
 			}
 		case char == ',' && !inQuotes:
 			appendArg()

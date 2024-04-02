@@ -39,6 +39,10 @@ func TestApplyFilters(t *testing.T) {
 		t.Fatalf("Failed to register filter: %v", err)
 	}
 
+	// Create a simple context for testing VariableArg
+	ctx := NewContext()
+	ctx.Set("user", "John Doe")
+
 	cases := []struct {
 		name     string
 		value    interface{}
@@ -49,35 +53,38 @@ func TestApplyFilters(t *testing.T) {
 		{
 			name:     "SingleFilterToUpper",
 			value:    "hello",
-			filters:  []Filter{{Name: "mockToUpper", Args: []string{}}},
+			filters:  []Filter{{Name: "mockToUpper", Args: []FilterArg{}}},
 			expected: "HELLO",
 			err:      nil,
 		},
 		{
-			name:     "MultipleFiltersAppendThenToUpper",
-			value:    "hello",
-			filters:  []Filter{{Name: "mockAppend", Args: []string{" world"}}, {Name: "mockToUpper", Args: []string{}}},
+			name:  "MultipleFiltersAppendThenToUpper",
+			value: "hello",
+			filters: []Filter{
+				{Name: "mockAppend", Args: []FilterArg{StringArg{val: " world"}}},
+				{Name: "mockToUpper", Args: []FilterArg{}},
+			},
 			expected: "HELLO WORLD",
 			err:      nil,
 		},
 		{
 			name:     "FilterNotFound",
 			value:    "test",
-			filters:  []Filter{{Name: "nonexistent", Args: []string{}}},
+			filters:  []Filter{{Name: "nonexistent", Args: []FilterArg{}}},
 			expected: "test",
 			err:      ErrFilterNotFound,
 		},
 		{
 			name:     "FilterInvalidInput",
 			value:    123,
-			filters:  []Filter{{Name: "mockToUpper", Args: []string{}}},
+			filters:  []Filter{{Name: "mockToUpper", Args: []FilterArg{}}},
 			expected: nil,
 			err:      ErrFilterInputInvalid,
 		},
 		{
 			name:     "FilterInsufficientArgs",
 			value:    "test",
-			filters:  []Filter{{Name: "mockAppend", Args: []string{}}},
+			filters:  []Filter{{Name: "mockAppend", Args: []FilterArg{}}},
 			expected: nil,
 			err:      ErrInsufficientArgs,
 		},
@@ -85,10 +92,10 @@ func TestApplyFilters(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := ApplyFilters(tc.value, tc.filters, NewContext())
+			result, err := ApplyFilters(tc.value, tc.filters, ctx)
 
 			// Check for expected error
-			if !errors.Is(err, tc.err) {
+			if (err != nil || tc.err != nil) && !errors.Is(err, tc.err) {
 				t.Errorf("%s: expected error %v, got %v", tc.name, tc.err, err)
 			}
 
