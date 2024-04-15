@@ -65,7 +65,7 @@ func executeNode(node *Node, ctx Context, builder *strings.Builder) error {
 			return err
 		}
 	default:
-		return fmt.Errorf("unknown node type: %s", node.Type)
+		return fmt.Errorf("%w: %s", ErrUnknownNodeType, node.Type)
 	}
 	return nil
 }
@@ -88,7 +88,7 @@ func executeVariableNode(node *Node, ctx Context) (string, error) {
 
 	result, err := convertToString(value)
 	if err != nil {
-		return node.Text, nil
+		return node.Text, nil //nolint: nilerr // Return the original variable placeholder.
 	}
 
 	return result, nil
@@ -117,18 +117,20 @@ func convertToString(value interface{}) (string, error) {
 	case []string:
 		return fmt.Sprintf("[%s]", strings.Join(v, ", ")), nil
 	case []int, []int64, []float64, []bool:
-		return fmt.Sprintf("[%s]", strings.Trim(strings.Replace(fmt.Sprint(v), " ", ", ", -1), "[]")), nil
+		formatted := fmt.Sprint(v)                           // Convert slice to string
+		formatted = strings.Trim(formatted, "[]")            // Remove square brackets
+		formatted = strings.ReplaceAll(formatted, " ", ", ") // Replace spaces with commas
+		return fmt.Sprintf("[%s]", formatted), nil
 	case time.Time:
-		// Customize the time format as needed.
+		// Customize the time format as needed
 		return v.Format("2006-01-02 15:04:05"), nil
 	case fmt.Stringer:
 		return v.String(), nil
 	default:
-		// Fallback for more complex or unknown types: use JSON serialization.
+		// Fallback for more complex or unknown types: use JSON serialization
 		jsonBytes, err := json.MarshalIndent(v, "", "  ")
 		if err != nil {
-			// Ensure the error message is correctly formatted and returned.
-			return "", fmt.Errorf("could not convert value to string: %v", err)
+			return "", fmt.Errorf("could not convert value to string: %w", err)
 		}
 		return string(jsonBytes), nil
 	}

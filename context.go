@@ -7,17 +7,6 @@ import (
 	"github.com/kaptinlin/filter"
 )
 
-var (
-	// ErrContextKeyNotFound is returned when a key is not found in the context.
-	ErrContextKeyNotFound = errors.New("key not found in context")
-
-	// ErrContextInvalidKeyType is returned when an unexpected type is encountered while navigating the context.
-	ErrContextInvalidKeyType = errors.New("invalid key type for navigation")
-
-	// ErrContextIndexOutOfRange is returned when an index is out of range in the context.
-	ErrContextIndexOutOfRange = errors.New("index out of range in context")
-)
-
 // Context stores template variables.
 type Context map[string]interface{}
 
@@ -53,11 +42,12 @@ func (c Context) Set(key string, value interface{}) {
 func (c Context) Get(key string) (interface{}, error) {
 	value, err := filter.Extract(c, key)
 	if err != nil {
-		if errors.Is(err, filter.ErrKeyNotFound) {
+		switch {
+		case errors.Is(err, filter.ErrKeyNotFound):
 			return nil, ErrContextKeyNotFound
-		} else if errors.Is(err, filter.ErrInvalidKeyType) {
+		case errors.Is(err, filter.ErrInvalidKeyType):
 			return nil, ErrContextInvalidKeyType
-		} else if errors.Is(err, filter.ErrIndexOutOfRange) {
+		case errors.Is(err, filter.ErrIndexOutOfRange):
 			return nil, ErrContextIndexOutOfRange
 		}
 

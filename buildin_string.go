@@ -2,32 +2,41 @@ package template
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/kaptinlin/filter"
 )
 
 func init() {
 	// Register string-related filters
-	RegisterFilter("default", defaultFilter)
-	RegisterFilter("trim", trimFilter)
-	RegisterFilter("split", splitFilter)
-	RegisterFilter("replace", replaceFilter)
-	RegisterFilter("remove", removeFilter)
-	RegisterFilter("append", appendFilter)
-	RegisterFilter("prepend", prependFilter)
-	RegisterFilter("length", lengthFilter)
-	RegisterFilter("upper", upperFilter)
-	RegisterFilter("lower", lowerFilter)
-	RegisterFilter("titleize", titleizeFilter)
-	RegisterFilter("capitalize", capitalizeFilter)
-	RegisterFilter("camelize", camelizeFilter)
-	RegisterFilter("pascalize", pascalizeFilter)
-	RegisterFilter("dasherize", dasherizeFilter)
-	RegisterFilter("slugify", slugifyFilter)
-	RegisterFilter("pluralize", pluralizeFilter)
-	RegisterFilter("ordinalize", ordinalizeFilter)
-	RegisterFilter("truncate", truncateFilter)
-	RegisterFilter("truncateWords", truncateWordsFilter)
+	filtersToRegister := map[string]FilterFunc{
+		"default":       defaultFilter,
+		"trim":          trimFilter,
+		"split":         splitFilter,
+		"replace":       replaceFilter,
+		"remove":        removeFilter,
+		"append":        appendFilter,
+		"prepend":       prependFilter,
+		"length":        lengthFilter,
+		"upper":         upperFilter,
+		"lower":         lowerFilter,
+		"titleize":      titleizeFilter,
+		"capitalize":    capitalizeFilter,
+		"camelize":      camelizeFilter,
+		"pascalize":     pascalizeFilter,
+		"dasherize":     dasherizeFilter,
+		"slugify":       slugifyFilter,
+		"pluralize":     pluralizeFilter,
+		"ordinalize":    ordinalizeFilter,
+		"truncate":      truncateFilter,
+		"truncateWords": truncateWordsFilter,
+	}
+
+	for name, filterFunc := range filtersToRegister {
+		if err := RegisterFilter(name, filterFunc); err != nil {
+			log.Printf("Error registering filter %s: %v", name, err)
+		}
+	}
 }
 
 // defaultFilter returns a default value if the input string is empty.

@@ -1,19 +1,29 @@
 package template
 
 import (
+	"log"
+
 	"github.com/kaptinlin/filter"
 )
 
 func init() {
 	// Register all date filters
-	RegisterFilter("date", dateFilter)
-	RegisterFilter("day", dayFilter)
-	RegisterFilter("month", monthFilter)
-	RegisterFilter("month_full", monthFullFilter)
-	RegisterFilter("year", yearFilter)
-	RegisterFilter("week", weekFilter)
-	RegisterFilter("weekday", weekdayFilter)
-	RegisterFilter("timeago", timeAgoFilter)
+	filtersToRegister := map[string]FilterFunc{
+		"date":       dateFilter,
+		"day":        dayFilter,
+		"month":      monthFilter,
+		"month_full": monthFullFilter,
+		"year":       yearFilter,
+		"week":       weekFilter,
+		"weekday":    weekdayFilter,
+		"timeago":    timeAgoFilter,
+	}
+
+	for name, filterFunc := range filtersToRegister {
+		if err := RegisterFilter(name, filterFunc); err != nil {
+			log.Printf("Error registering filter %s: %v", name, err)
+		}
+	}
 }
 
 // dateFilter formats a timestamp into a specified format.

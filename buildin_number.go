@@ -2,14 +2,23 @@ package template
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/kaptinlin/filter"
 )
 
 func init() {
 	// Register number-related filters
-	RegisterFilter("number", numberFilter)
-	RegisterFilter("bytes", bytesFilter)
+	filtersToRegister := map[string]FilterFunc{
+		"number": numberFilter,
+		"bytes":  bytesFilter,
+	}
+
+	for name, filterFunc := range filtersToRegister {
+		if err := RegisterFilter(name, filterFunc); err != nil {
+			log.Printf("Error registering filter %s: %v", name, err)
+		}
+	}
 }
 
 // numberFilter formats a numeric value according to the specified format string.

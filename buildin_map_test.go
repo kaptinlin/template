@@ -83,11 +83,12 @@ func TestExtractFilter(t *testing.T) {
 			output, err := Execute(tpl, context)
 			var finalOutput string
 			if err != nil {
-				if errors.Is(err, ErrContextKeyNotFound) {
+				switch {
+				case errors.Is(err, ErrContextKeyNotFound):
 					finalOutput = "ErrContextKeyNotFound"
-				} else if errors.Is(err, ErrContextIndexOutOfRange) {
+				case errors.Is(err, ErrContextIndexOutOfRange):
 					finalOutput = "ErrContextIndexOutOfRange"
-				} else {
+				default:
 					t.Fatalf("Unexpected error during execution: %v", err)
 				}
 			} else {

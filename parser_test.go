@@ -713,7 +713,6 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 			if !reflect.DeepEqual(tpl, tc.expected) {
 				dump.P(tc.expected)
 				t.Errorf("For case '%s', expected %+v, got %+v", tc.name, tc.expected, tpl)
-
 			}
 		})
 	}

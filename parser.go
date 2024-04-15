@@ -33,7 +33,8 @@ func (p *Parser) Parse(src string) (*Template, error) {
 
 // tokenize divides the source string into tokens for easier parsing.
 func (p *Parser) tokenize(src string) []string {
-	var tokens []string
+	tokens := make([]string, 0)
+
 	matches := variableRegex.FindAllStringIndex(src, -1)
 	start := 0
 	for _, match := range matches {
@@ -86,7 +87,8 @@ func (p *Parser) addVariableNode(token string, tpl *Template) {
 	tpl.Nodes = append(tpl.Nodes, node)
 }
 func parseFilters(filterStr string) []Filter {
-	var filters []Filter
+	filters := make([]Filter, 0)
+
 	if filterStr == "" {
 		return filters
 	}
@@ -129,14 +131,11 @@ func splitArgsConsideringQuotes(argsStr string) []FilterArg {
 			if len(trimmedArg) >= 2 && (trimmedArg[0] == '"' || trimmedArg[0] == '\'') {
 				// String argument
 				args = append(args, StringArg{val: trimmedArg[1 : len(trimmedArg)-1]})
+			} else if number, err := strconv.ParseFloat(trimmedArg, 64); err == nil {
+				args = append(args, NumberArg{val: number})
 			} else {
-				// Check if it's a number
-				if number, err := strconv.ParseFloat(trimmedArg, 64); err == nil {
-					args = append(args, NumberArg{val: number})
-				} else {
-					// Treat as variable
-					args = append(args, VariableArg{name: trimmedArg})
-				}
+				// Treat as variable
+				args = append(args, VariableArg{name: trimmedArg})
 			}
 		}
 	}

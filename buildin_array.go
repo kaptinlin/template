@@ -2,25 +2,34 @@ package template
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/kaptinlin/filter"
 )
 
 func init() {
 	// Register all array filters with their corresponding functions
-	RegisterFilter("unique", uniqueFilter)
-	RegisterFilter("join", joinFilter)
-	RegisterFilter("first", firstFilter)
-	RegisterFilter("last", lastFilter)
-	RegisterFilter("random", randomFilter)
-	RegisterFilter("reverse", reverseFilter)
-	RegisterFilter("shuffle", shuffleFilter)
-	RegisterFilter("size", sizeFilter)
-	RegisterFilter("max", maxFilter)
-	RegisterFilter("min", minFilter)
-	RegisterFilter("sum", sumFilter)
-	RegisterFilter("average", averageFilter)
-	RegisterFilter("map", mapFilter)
+	filtersToRegister := map[string]FilterFunc{
+		"unique":  uniqueFilter,
+		"join":    joinFilter,
+		"first":   firstFilter,
+		"last":    lastFilter,
+		"random":  randomFilter,
+		"reverse": reverseFilter,
+		"shuffle": shuffleFilter,
+		"size":    sizeFilter,
+		"max":     maxFilter,
+		"min":     minFilter,
+		"sum":     sumFilter,
+		"average": averageFilter,
+		"map":     mapFilter,
+	}
+
+	for name, filterFunc := range filtersToRegister {
+		if err := RegisterFilter(name, filterFunc); err != nil {
+			log.Printf("Error registering filter %s: %v", name, err)
+		}
+	}
 }
 
 // uniqueFilter removes duplicate elements from a slice.

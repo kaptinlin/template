@@ -2,23 +2,32 @@ package template
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/kaptinlin/filter"
 )
 
 func init() {
 	// Register all math filters
-	RegisterFilter("abs", absFilter)
-	RegisterFilter("atLeast", atLeastFilter)
-	RegisterFilter("atMost", atMostFilter)
-	RegisterFilter("round", roundFilter)
-	RegisterFilter("floor", floorFilter)
-	RegisterFilter("ceil", ceilFilter)
-	RegisterFilter("plus", plusFilter)
-	RegisterFilter("minus", minusFilter)
-	RegisterFilter("times", timesFilter)
-	RegisterFilter("divide", divideFilter)
-	RegisterFilter("modulo", moduloFilter)
+	filtersToRegister := map[string]FilterFunc{
+		"abs":     absFilter,
+		"atLeast": atLeastFilter,
+		"atMost":  atMostFilter,
+		"round":   roundFilter,
+		"floor":   floorFilter,
+		"ceil":    ceilFilter,
+		"plus":    plusFilter,
+		"minus":   minusFilter,
+		"times":   timesFilter,
+		"divide":  divideFilter,
+		"modulo":  moduloFilter,
+	}
+
+	for name, filterFunc := range filtersToRegister {
+		if err := RegisterFilter(name, filterFunc); err != nil {
+			log.Printf("Error registering filter %s: %v", name, err)
+		}
+	}
 }
 
 // absFilter calculates the absolute value of a number.

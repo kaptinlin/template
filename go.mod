@@ -3,12 +3,12 @@ module github.com/kaptinlin/template
 go 1.22.1
 
 require (
-	github.com/golang-module/carbon/v2 v2.3.10
 	github.com/kaptinlin/filter v0.1.1
 	github.com/test-go/testify v1.1.4
 )
 
 require (
+	github.com/golang-module/carbon/v2 v2.3.10 // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/sys v0.15.0 // indirect
