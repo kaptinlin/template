@@ -3,7 +3,7 @@ module github.com/kaptinlin/template
 go 1.22.1
 
 require (
-	github.com/kaptinlin/filter v0.1.1
+	github.com/kaptinlin/filter v0.2.0
 	github.com/test-go/testify v1.1.4
 )
 
