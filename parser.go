@@ -7,7 +7,15 @@ import (
 )
 
 // Regular expression to identify variables.
-var variableRegex = regexp.MustCompile(`{{\s*([\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
+// var variableRegex = regexp.MustCompile(`{{\s*([\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
+var variableRegex = regexp.MustCompile(`{{\s*(?:'[^']*'|"[\s\S]*?"|[\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
+var forRegex = regexp.MustCompile(`{%\s*for\s+([\w\.]+)\s+in\s+([\w\.\[\]]+)\s*%}`)
+var ifRegex = regexp.MustCompile(`{%\s*if\s+` + // if start
+	`([^%]+)` + // Capture any non-% characters (expression part)
+	`\s*%}`) // if end
+var endforRegex = regexp.MustCompile(`{%\s*endfor\s*%}`)
+var endifRegex = regexp.MustCompile(`{%\s*endif\s*%}`)
+var elseRegex = regexp.MustCompile(`{%\s*else\s*%}`)
 
 // Parser analyzes template syntax.
 type Parser struct{}
@@ -17,74 +25,56 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
-// Parse transforms a template string into a Template.
-func (p *Parser) Parse(src string) (*Template, error) {
-	template := NewTemplate()
-	tokens := p.tokenize(src)
-	for _, token := range tokens {
-		if p.isVariable(token) {
-			p.addVariableNode(token, template)
-		} else {
-			p.addTextNode(token, template)
-		}
-	}
-	return template, nil
-}
-
-// tokenize divides the source string into tokens for easier parsing.
-func (p *Parser) tokenize(src string) []string {
-	tokens := make([]string, 0)
-
-	matches := variableRegex.FindAllStringIndex(src, -1)
-	start := 0
-	for _, match := range matches {
-		// Add text between variables as tokens
-		if start < match[0] {
-			tokens = append(tokens, src[start:match[0]])
-		}
-		// Add variable token
-		tokens = append(tokens, src[match[0]:match[1]])
-		start = match[1]
-	}
-	// Add remaining text as a token
-	if start < len(src) {
-		tokens = append(tokens, src[start:])
-	}
-	return tokens
-}
-
-// isVariable checks if a token represents a variable.
-func (p *Parser) isVariable(token string) bool {
-	return strings.HasPrefix(token, "{{") && strings.HasSuffix(token, "}}")
-}
-
 // Updated addVariableNode processes a variable token, parses out any filters, and adds it to the template.
-func (p *Parser) addVariableNode(token string, tpl *Template) {
-	// Extract the inner content of the variable token.
-	innerContent := strings.TrimSpace(token[2 : len(token)-2])
-	// Split the variable name from any filters.
-	parts := strings.SplitN(innerContent, "|", 2)
+func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
+	if tpl != nil {
+		// Extract the inner content of the variable token.
+		innerContent := strings.TrimSpace(token[2 : len(token)-2])
+		// Split the variable name from any filters.
+		parts := strings.SplitN(innerContent, "|", 2)
 
-	varName := strings.TrimSpace(parts[0])
+		varName := strings.TrimSpace(parts[0])
 
-	// Initialize filters slice.
-	var filters []Filter
+		// Initialize filters slice.
+		var filters []Filter
 
-	// Check if there are filters to parse and use parseFilters if so.
-	if len(parts) > 1 {
-		filters = parseFilters(parts[1])
+		// Check if there are filters to parse and use parseFilters if so.
+		if len(parts) > 1 {
+			filters = parseFilters(parts[1])
+		}
+
+		// Create a new variable node with the parsed variable name and filters.
+		node = &Node{
+			Type:     "variable",
+			Variable: varName,
+			Filters:  filters,
+			Text:     token,
+		}
+
+		// Add the new node to the template.
+		tpl.Nodes = append(tpl.Nodes, node)
+	} else {
+		// Extract the inner content of the variable token.
+		innerContent := strings.TrimSpace(token[2 : len(token)-2])
+		// Split the variable name from any filters.
+		parts := strings.SplitN(innerContent, "|", 2)
+
+		varName := strings.TrimSpace(parts[0])
+
+		// Initialize filters slice.
+		var filters []Filter
+
+		// Check if there are filters to parse and use parseFilters if so.
+		if len(parts) > 1 {
+			filters = parseFilters(parts[1])
+		}
+		node.Children = append(node.Children, &Node{
+			Type:     "variable",
+			Variable: varName,
+			Filters:  filters,
+			Text:     token,
+		})
 	}
-
-	// Create a new variable node with the parsed variable name and filters.
-	node := &Node{
-		Type:     "variable",
-		Variable: varName,
-		Filters:  filters,
-		Text:     token,
-	}
-
-	// Add the new node to the template.
-	tpl.Nodes = append(tpl.Nodes, node)
 }
 func parseFilters(filterStr string) []Filter {
 	filters := make([]Filter, 0)
@@ -169,8 +159,411 @@ func splitArgsConsideringQuotes(argsStr string) []FilterArg {
 }
 
 // addTextNode adds a text token to the template
-func (p *Parser) addTextNode(text string, tpl *Template) {
-	if text != "" {
+func (p *Parser) addTextNode(text string, tpl *Template, node *Node) {
+	if text != "" && tpl != nil {
 		tpl.Nodes = append(tpl.Nodes, &Node{Type: "text", Text: text})
+	} else {
+		node.Children = append(node.Children, &Node{Type: "text", Text: text})
 	}
+}
+
+// addForNode adds a for node to the template
+func (p *Parser) addForNode(text string, tpl *Template, node *Node) {
+	matched := endforRegex.MatchString(text)
+	if text != "" && tpl != nil {
+		tpl.Nodes = append(tpl.Nodes, &Node{Type: "text", Text: text})
+	} else if !matched {
+		node.Children = append(node.Children, &Node{Type: "text", Text: text})
+	}
+	if matched {
+		node.Type = "for"
+		node.EndText = text
+		analyzeForParameter(node.Text, node)
+	}
+}
+
+// analyzeForParameter analyzes the for parameter
+func analyzeForParameter(text string, node *Node) {
+	n := len(text)
+	next := 0
+	for next < n {
+		if text[next:next+4] == " in " {
+			left := next
+			right := next + 4
+			for left > 0 {
+				if text[0:left] == "{% for " {
+					node.Variable = text[left:next]
+				}
+				left--
+			}
+			for right < n {
+				if text[right:n] == " %}" {
+					node.Collection = text[next+4 : right]
+				}
+				right++
+			}
+			break
+		}
+		next++
+	}
+}
+
+// addIfNode adds an if node to the template
+func (p *Parser) addIfNode(text string, tpl *Template, node *Node) {
+	matched := endifRegex.MatchString(text)
+	if text != "" && tpl != nil {
+		tpl.Nodes = append(tpl.Nodes, &Node{Type: "text", Text: text})
+	} else if !matched {
+		node.Children = append(node.Children, &Node{Type: "text", Text: text})
+	}
+	if matched {
+		node.Type = "if"
+		node.EndText = text
+	}
+}
+
+// Parse converts a template string into a Template object.
+// It recognizes the following syntax:
+// - Text content
+// - Variable expressions {{ variable }}
+// - Control structures {% if/for ... %}{% endif/endfor %}
+// Returns the parsed template and any error encountered.
+func (p *Parser) Parse(src string) (*Template, error) {
+	n := len(src)
+	template := NewTemplate()
+	prev := 0
+	next := 0
+
+	for next < n {
+		switch {
+		case src[next] == '{' && next+1 < n && src[next+1] == '{':
+			// Handle variable
+			next, prev = p.handleVariable(src, next, prev, template, nil)
+		case next+1 < n && src[next] == '{' && src[next+1] == '%':
+			// Handle for and if
+			next, prev = p.parseControlBlock(src, next, prev, template)
+		default:
+			next++
+		}
+	}
+	// Handle any remaining text
+	p.parseRemainingText(src, prev, next, template)
+
+	return template, nil
+}
+
+// parseControlBlock processes control structures (if/for blocks) in the template.
+// It handles the parsing of opening tags, their content, and closing tags,
+// maintaining the proper nesting structure in the template tree.
+// Returns updated next and prev positions in the source string.
+func (p *Parser) parseControlBlock(src string, next, prev int, template *Template) (int, int) {
+	n := len(src)
+	// Try to match control structure opening tags and determine their type
+	matched, temp, typ := p.matchAppropriateStrings(src, n, next+2, "%}")
+	if matched && typ < 3 { //nolint:nestif
+		// Extract the complete control structure token
+		token := src[next : temp+1]
+		// Handle any text content before the control structure
+		if next > prev {
+			token := src[prev:next]
+			p.addTextNode(token, template, nil)
+		}
+
+		// Add appropriate node based on control structure type (for/if)
+		if typ == 1 {
+			p.addForNode(token, template, nil)
+		} else if typ == 2 {
+			p.addIfNode(token, template, nil)
+		}
+
+		// Get the last added node to process its children
+		node := template.Nodes[len(template.Nodes)-1]
+		// Parse the content between opening and closing tags
+		tempPrev, tempNext := p.parser(src, temp+1, typ, node)
+		tempToken := src[tempPrev : tempNext+1]
+
+		// Process the closing tag of the control structure
+		if typ == 1 {
+			p.addForNode(tempToken, nil, node)
+		} else if typ == 2 {
+			p.addIfNode(tempToken, nil, node)
+		}
+
+		// Update position markers to continue parsing after this block
+		next = tempNext + 1
+		prev = tempNext + 1
+	} else {
+		// If no match found, move to next character
+		next++
+	}
+	return next, prev
+}
+
+func (p *Parser) parseRemainingText(src string, prev, next int, template *Template) {
+	if next > prev {
+		token := src[prev:next]
+		p.addTextNode(token, template, nil)
+	}
+}
+
+// matchAppropriateStrings matches specific syntax structures in the template.
+// It handles two main syntax formats:
+// - Control structure tags {% ... %}
+// - Variable expression tags {{ ... }}
+// Returns:
+// - bool: whether the match was successful
+// - int: ending position of the match
+// - int: syntax type (0:variable, 1:for, 2:if)
+func (p *Parser) matchAppropriateStrings(src string, n int, next int, format string) (bool, int, int) {
+	// Store starting position (excluding the two opening characters)
+	temp := next - 2
+
+	switch format {
+	case "%}":
+		// Handle control structure cases
+		for next+1 < n {
+			// Look for "%}" ending tag
+			if src[next] == '%' && src[next+1] == '}' {
+				// Determine if it's a for or if statement
+				matched, typ := p.judgeBranchingStatements(src, temp, next+2)
+				if matched {
+					return true, next + 1, typ
+				} else {
+					return false, 0, 0
+				}
+			}
+			next++
+		}
+	case "}}":
+		// Handle variable expression cases
+		for next+1 < n {
+			// Look for "}}" ending tag
+			if src[next] == '}' && src[next+1] == '}' {
+				// Extract complete variable expression and validate format
+				token := src[temp : next+2]
+				matched := variableRegex.MatchString(token)
+				return matched, next + 1, 0
+			}
+			next++
+		}
+	default:
+		// Return failure for unsupported formats
+		return false, 0, 0
+	}
+	// Return failure if no match found
+	return false, 0, 0
+}
+
+// judgeBranchingStatements determines the type of control structure by matching against predefined regex patterns.
+// It checks for the following control structures:
+// - for/endfor statements (type 1/4)
+// - if/endif statements (type 2/5)
+// - else statements (type 3)
+// Returns:
+// - bool: whether a valid control structure was matched
+// - int: the type of control structure (1-5) or 0 if no match
+func (p *Parser) judgeBranchingStatements(src string, temp int, next int) (bool, int) {
+	token := src[temp:next]
+	switch {
+	case forRegex.MatchString(token):
+		return true, 1
+	case ifRegex.MatchString(token):
+		return true, 2
+	case elseRegex.MatchString(token):
+		return true, 3
+	case endforRegex.MatchString(token):
+		return true, 4
+	case endifRegex.MatchString(token):
+		return true, 5
+	default:
+		return false, 0
+	}
+}
+
+// parser processes the content within control structure blocks, including nested variables,
+// control structures, and plain text. It recursively handles all nested structures until
+// it encounters the corresponding end tag.
+// Parameters:
+// - src: source template string
+// - prev: current starting position
+// - typ: current control structure type
+// - node: current node being processed
+// Returns:
+// - ending position and position of matched end tag
+func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
+	n := len(src)
+	next := prev
+	// Adjust type value to match end tags (e.g., 1->4 means for->endfor)
+	typ += 3
+	// Flag to track if we've entered an else branch
+	markEnterElse := false
+	// Store reference to if node for else branch handling
+	enterIfNode := node
+
+	for next < n {
+		switch {
+		case src[next] == '{' && next+1 < n && src[next+1] == '{':
+			// Handle variable expressions
+			next, prev = p.handleVariable(src, next, prev, nil, node)
+		case next+1 < n && src[next] == '{' && src[next+1] == '%':
+			// Handle control structures
+			matched, temp, tempType := p.matchAppropriateStrings(src, n, next+2, "%}")
+			switch {
+			case matched && tempType < 3:
+				next, prev = p.handleControlStructure(src, next, prev, temp, tempType, node)
+			case matched && tempType == 3 && typ == 5:
+				next, prev, markEnterElse, node = p.handleElseStructure(src, next, prev, temp, node)
+			case matched && tempType == typ:
+				if next > prev {
+					token := src[prev:next]
+					p.addTextNode(token, nil, node)
+				}
+				if markEnterElse {
+					node = enterIfNode //nolint:staticcheck,ineffassign
+				}
+				return next, temp
+			default:
+				next++
+			}
+		default:
+			next++
+		}
+	}
+	// No matching end tag found
+	return 0, 0
+}
+
+// handleControlStructure processes nested for/if control structures within a parent node.
+// It handles both the opening and closing tags, and processes all content in between.
+// Parameters:
+// - src: source template string
+// - next, prev: current positions in the source
+// - temp: position of the end of opening tag
+// - typ: type of control structure (1:for, 2:if)
+// - node: parent node where this structure belongs
+// Returns updated next and prev positions
+func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, node *Node) (int, int) {
+	// Extract the complete opening tag
+	token := src[next : temp+1]
+
+	// Process any text content before this control structure
+	if next > prev {
+		token := src[prev:next]
+		p.addTextNode(token, nil, node)
+	}
+
+	// Create appropriate node based on control structure type
+	if typ == 1 {
+		p.addForNode(token, nil, node)
+	} else if typ == 2 {
+		p.addIfNode(token, nil, node)
+	}
+
+	// Get the newly created node to process its contents
+	node1 := node.Children[len(node.Children)-1]
+
+	// Recursively parse the content between opening and closing tags
+	tempPrev, tempNext := p.parser(src, temp+1, typ, node1)
+
+	// Extract and process the closing tag
+	tempToken := src[tempPrev : tempNext+1]
+	if typ == 1 {
+		p.addForNode(tempToken, nil, node1)
+	} else if typ == 2 {
+		p.addIfNode(tempToken, nil, node1)
+	}
+
+	// Update positions to continue parsing after this structure
+	next = tempNext + 1
+	prev = tempNext + 1
+
+	return next, prev
+}
+
+// handleElseStructure processes the else branch within an if control structure.
+// It handles the else tag and prepares for processing the else branch content.
+// Parameters:
+// - src: source template string
+// - next, prev: current positions in the source
+// - temp: position of the end of else tag
+// - node: current if node being processed
+// Returns:
+// - updated next and prev positions
+// - markEnterElse flag to indicate else branch
+// - updated node reference for else content
+func (p *Parser) handleElseStructure(src string, next, prev, temp int, node *Node) (int, int, bool, *Node) {
+	// Extract the complete else tag
+	token := src[next : temp+1]
+
+	// Process any text content before the else tag
+	if next > prev {
+		token := src[prev:next]
+		p.addTextNode(token, nil, node)
+	}
+
+	// Add else node as a child of current if node
+	p.addIfNode(token, nil, node)
+
+	// Set flag to indicate we're in else branch
+	markEnterElse := true
+
+	// Get the newly created else node
+	tempNode := node.Children[len(node.Children)-1]
+	node = tempNode
+
+	// Update positions to continue parsing after else tag
+	next = temp + 1
+	prev = temp + 1
+
+	return next, prev, markEnterElse, node
+}
+
+// handleVariable processes variable expressions {{ ... }} in the template.
+// It can handle variables both at the root level (using template) and
+// nested within control structures (using node).
+// Parameters:
+// - src: source template string
+// - next, prev: current positions in the source
+// - template: root template (nil if processing nested variable)
+// - node: parent node (nil if processing root level variable)
+// Returns updated next and prev positions
+func (p *Parser) handleVariable(src string, next, prev int, template *Template, node *Node) (int, int) {
+	n := len(src)
+	// Try to match variable expression ending with "}}"
+	matched, tempNext, _ := p.matchAppropriateStrings(src, n, next+2, "}}")
+
+	if matched { //nolint:nestif
+		// Extract the complete variable expression
+		token := src[next : tempNext+1]
+
+		// Process any text content before the variable
+		if next > prev {
+			token := src[prev:next]
+			if template != nil {
+				// Add text node to root template
+				p.addTextNode(token, template, nil)
+			} else {
+				// Add text node to parent control structure
+				p.addTextNode(token, nil, node)
+			}
+		}
+
+		// Add the variable node to appropriate parent
+		if template != nil {
+			// Add variable to root template
+			p.addVariableNode(token, template, nil)
+		} else {
+			// Add variable to parent control structure
+			p.addVariableNode(token, nil, node)
+		}
+
+		// Update positions to continue after variable
+		prev = tempNext + 1
+		next = tempNext + 1
+	} else {
+		// No valid variable match found, move forward
+		next++
+	}
+
+	return next, prev
 }
