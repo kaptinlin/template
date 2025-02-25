@@ -1497,3 +1497,861 @@ func TestParserWithMultipleFiltersAndNumericArguments(t *testing.T) {
 		})
 	}
 }
+
+func TestParseComplexLoopsAndSorting(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		expected *Template
+	}{
+		{
+			"BasicLoop",
+			`{% for item in simple.multiple_item_list %}{{ item }} {% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for item in simple.multiple_item_list %}",
+						Variable:   "item",
+						Collection: "simple.multiple_item_list",
+						Children: []*Node{
+							{Type: "variable", Variable: "item", Text: "{{ item }}"},
+							{Type: "text", Text: " "},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"StringMapIteration",
+			`{% for key in simple.strmap %}{{ key }} {% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for key in simple.strmap %}",
+						Variable:   "key",
+						Collection: "simple.strmap",
+						Children: []*Node{
+							{Type: "variable", Variable: "key", Text: "{{ key }}"},
+							{Type: "text", Text: " "},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"IntMapIteration",
+			`{% for key in simple.intmap %}{{ key }} {% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for key in simple.intmap %}",
+						Variable:   "key",
+						Collection: "simple.intmap",
+						Children: []*Node{
+							{Type: "variable", Variable: "key", Text: "{{ key }}"},
+							{Type: "text", Text: " "},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"IntListIteration",
+			`{% for key in simple.unsorted_int_list %}{{ key }} {% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for key in simple.unsorted_int_list %}",
+						Variable:   "key",
+						Collection: "simple.unsorted_int_list",
+						Children: []*Node{
+							{Type: "variable", Variable: "key", Text: "{{ key }}"},
+							{Type: "text", Text: " "},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"StringIteration",
+			`{% for char in simple.name %}{{ char }}{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for char in simple.name %}",
+						Variable:   "char",
+						Collection: "simple.name",
+						Children: []*Node{
+							{Type: "variable", Variable: "char", Text: "{{ char }}"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"StringIteration",
+			`{% for char in simple.name %}{{ char }}{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for char in simple.name %}",
+						Variable:   "char",
+						Collection: "simple.name",
+						Children: []*Node{
+							{Type: "variable", Variable: "char", Text: "{{ char }}"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"StringUnicode",
+			`{% for char in simple.chinese_hello_world %}{{ char }}{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for char in simple.chinese_hello_world %}",
+						Variable:   "char",
+						Collection: "simple.chinese_hello_world",
+						Children: []*Node{
+							{Type: "variable", Variable: "char", Text: "{{ char }}"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"StringUnicodeIteration",
+			`{% for char in simple.chinese_hello_world %}{{ char }}{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for char in simple.chinese_hello_world %}",
+						Variable:   "char",
+						Collection: "simple.chinese_hello_world",
+						Children: []*Node{
+							{Type: "variable", Variable: "char", Text: "{{ char }}"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"NestedForLoop",
+			`{% for item in simple.items %}
+				{% for subitem in item.subitems %}
+					{{ subitem.name }}
+				{% endfor %}
+			{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for item in simple.items %}",
+						Variable:   "item",
+						Collection: "simple.items",
+						Children: []*Node{
+							{Type: "text", Text: "\n\t\t\t\t"},
+							{Type: "for",
+								Text:       "{% for subitem in item.subitems %}",
+								Variable:   "subitem",
+								Collection: "item.subitems",
+								Children: []*Node{
+									{Type: "text", Text: "\n\t\t\t\t\t"},
+									{Type: "variable", Variable: "subitem.name", Text: "{{ subitem.name }}"},
+									{Type: "text", Text: "\n\t\t\t\t"},
+								},
+								EndText: "{% endfor %}",
+							},
+							{Type: "text", Text: "\n\t\t\t"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"NestedForLoopWithMultipleVariables",
+			`{% for category in shop.categories %}
+				Category: {{ category.name }}
+				{% for product in category.products %}
+					- {{ product.name }}: ${{ product.price }}
+				{% endfor %}
+			{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for category in shop.categories %}",
+						Variable:   "category",
+						Collection: "shop.categories",
+						Children: []*Node{
+							{Type: "text", Text: "\n\t\t\t\tCategory: "},
+							{Type: "variable", Variable: "category.name", Text: "{{ category.name }}"},
+							{Type: "text", Text: "\n\t\t\t\t"},
+							{Type: "for",
+								Text:       "{% for product in category.products %}",
+								Variable:   "product",
+								Collection: "category.products",
+								Children: []*Node{
+									{Type: "text", Text: "\n\t\t\t\t\t- "},
+									{Type: "variable", Variable: "product.name", Text: "{{ product.name }}"},
+									{Type: "text", Text: ": $"},
+									{Type: "variable", Variable: "product.price", Text: "{{ product.price }}"},
+									{Type: "text", Text: "\n\t\t\t\t"},
+								},
+								EndText: "{% endfor %}",
+							},
+							{Type: "text", Text: "\n\t\t\t"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+	}
+
+	parser := NewParser()
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+			}
+
+			if !reflect.DeepEqual(tpl, tc.expected) {
+				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
+			}
+		})
+	}
+}
+
+func TestParseConditionalStatements(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		expected *Template
+	}{
+		{
+			"BasicIfElse",
+			`{% if nothing %}false{% else %}true{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if nothing %}",
+						Children: []*Node{
+							{Type: "text", Text: "false"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "true"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"BasicIf",
+			`{% if simple %}simple != nil{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple %}",
+						Children: []*Node{
+							{Type: "text", Text: "simple != nil"},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"BasicIfUint",
+			`{% if simple.uint %}uint != 0{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.uint %}",
+						Children: []*Node{
+							{Type: "text", Text: "uint != 0"},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"BasicIfFloat",
+			`{% if simple.float %}float != 0.0{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.float %}",
+						Children: []*Node{
+							{Type: "text", Text: "float != 0.0"},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"IfWithNegationOperator",
+			`{% if !simple %}false{% else %}!simple{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if !simple %}",
+						Children: []*Node{
+							{Type: "text", Text: "false"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "!simple"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"IfWithNegationUint",
+			`{% if !simple.uint %}false{% else %}!simple.uint{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if !simple.uint %}",
+						Children: []*Node{
+							{Type: "text", Text: "false"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "!simple.uint"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"IfWithNegationFloat",
+			`{% if !simple.float %}false{% else %}!simple.float{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if !simple.float %}",
+						Children: []*Node{
+							{Type: "text", Text: "false"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "!simple.float"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"NegationZero",
+			`{% if !0.0 %}!0.0{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if !0.0 %}",
+						Children: []*Node{
+							{Type: "text", Text: "!0.0"},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"NegationZeroInt",
+			`{% if !0 %}!0{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if !0 %}",
+						Children: []*Node{
+							{Type: "text", Text: "!0"},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"NotCondition",
+			`{% if not complex.post %}true{% else %}false{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if not complex.post %}",
+						Children: []*Node{
+							{Type: "text", Text: "true"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "false"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"IfWithEqualityOperator",
+			`{% if simple.number == 43 %}no{% else %}42{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.number == 43 %}",
+						Children: []*Node{
+							{Type: "text", Text: "no"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "42"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"IfWithLessThanOperator",
+			`{% if simple.number < 42 %}false{% else %}no{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.number < 42 %}",
+						Children: []*Node{
+							{Type: "text", Text: "false"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "no"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"LessThanComparison",
+			`{% if simple.number < 42 %}false{% else %}yes{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.number < 42 %}",
+						Children: []*Node{
+							{Type: "text", Text: "false"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "yes"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"IfWithZeroValue",
+			`{% if 0 %}!0{% else %}true{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if 0 %}",
+						Children: []*Node{
+							{Type: "text", Text: "!0"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "true"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"SimpleIfWithZero",
+			`{% if 0 %}!0{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if 0 %}",
+						Children: []*Node{
+							{Type: "text", Text: "!0"},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"NestedIfConditions",
+			`{% if simple.number > 0 %}
+				{% if simple.name %}
+					Number: {{ simple.number }}
+					Name: {{ simple.name }}
+				{% endif %}
+			{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.number > 0 %}",
+						Children: []*Node{
+							{Type: "text", Text: "\n\t\t\t\t"},
+							{Type: "if",
+								Text: "{% if simple.name %}",
+								Children: []*Node{
+									{Type: "text", Text: "\n\t\t\t\t\tNumber: "},
+									{Type: "variable", Variable: "simple.number", Text: "{{ simple.number }}"},
+									{Type: "text", Text: "\n\t\t\t\t\tName: "},
+									{Type: "variable", Variable: "simple.name", Text: "{{ simple.name }}"},
+									{Type: "text", Text: "\n\t\t\t\t"},
+								},
+								EndText: "{% endif %}",
+							},
+							{Type: "text", Text: "\n\t\t\t"},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"NestedIfElseConditions",
+			`{% if user.isAdmin %}
+				Welcome Admin!
+				{% if user.hasFullAccess %}
+					You have full access.
+				{% else %}
+					You have limited admin access.
+				{% endif %}
+			{% else %}
+				{% if user.isAuthenticated %}
+					Welcome User!
+				{% else %}
+					Please log in.
+				{% endif %}
+			{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if user.isAdmin %}",
+						Children: []*Node{
+							{Type: "text", Text: "\n\t\t\t\tWelcome Admin!\n\t\t\t\t"},
+							{Type: "if",
+								Text: "{% if user.hasFullAccess %}",
+								Children: []*Node{
+									{Type: "text", Text: "\n\t\t\t\t\tYou have full access.\n\t\t\t\t"},
+									{Type: "text", Text: "{% else %}", Children: []*Node{
+										{Type: "text", Text: "\n\t\t\t\t\tYou have limited admin access.\n\t\t\t\t"},
+									}},
+								},
+								EndText: "{% endif %}",
+							},
+							{Type: "text", Text: "\n\t\t\t"},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "\n\t\t\t\t"},
+								{Type: "if",
+									Text: "{% if user.isAuthenticated %}",
+									Children: []*Node{
+										{Type: "text", Text: "\n\t\t\t\t\tWelcome User!\n\t\t\t\t"},
+										{Type: "text", Text: "{% else %}", Children: []*Node{
+											{Type: "text", Text: "\n\t\t\t\t\tPlease log in.\n\t\t\t\t"},
+										}},
+									},
+									EndText: "{% endif %}",
+								},
+								{Type: "text", Text: "\n\t\t\t"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+	}
+
+	parser := NewParser()
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+			}
+
+			if !reflect.DeepEqual(tpl, tc.expected) {
+				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
+			}
+		})
+	}
+}
+
+func TestParseMixedIfAndForStatements(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		expected *Template
+	}{
+		{
+			"IfInsideFor",
+			`{% for item in simple.list %}{% if item %}{{ item }}{% endif %}{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for item in simple.list %}",
+						Variable:   "item",
+						Collection: "simple.list",
+						Children: []*Node{
+							{Type: "if",
+								Text: "{% if item %}",
+								Children: []*Node{
+									{Type: "variable", Variable: "item", Text: "{{ item }}"},
+								},
+								EndText: "{% endif %}",
+							},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"ForInsideIf",
+			`{% if simple.list %}{% for item in simple.list %}{{ item }}{% endfor %}{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.list %}",
+						Children: []*Node{
+							{Type: "for",
+								Text:       "{% for item in simple.list %}",
+								Variable:   "item",
+								Collection: "simple.list",
+								Children: []*Node{
+									{Type: "variable", Variable: "item", Text: "{{ item }}"},
+								},
+								EndText: "{% endfor %}",
+							},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"NestedIfAndFor",
+			`{% for item in simple.list %}{% if item.active %}{{ item.name }}{% for subitem in item.sublist %}{{ subitem }}{% endfor %}{% endif %}{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for item in simple.list %}",
+						Variable:   "item",
+						Collection: "simple.list",
+						Children: []*Node{
+							{Type: "if",
+								Text: "{% if item.active %}",
+								Children: []*Node{
+									{Type: "variable", Variable: "item.name", Text: "{{ item.name }}"},
+									{Type: "for",
+										Text:       "{% for subitem in item.sublist %}",
+										Variable:   "subitem",
+										Collection: "item.sublist",
+										Children: []*Node{
+											{Type: "variable", Variable: "subitem", Text: "{{ subitem }}"},
+										},
+										EndText: "{% endfor %}",
+									},
+								},
+								EndText: "{% endif %}",
+							},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"IfElseWithFor",
+			`{% if simple.condition %}{% for item in simple.list %}{{ item }}{% endfor %}{% else %}No items{% endif %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "if",
+						Text: "{% if simple.condition %}",
+						Children: []*Node{
+							{Type: "for",
+								Text:       "{% for item in simple.list %}",
+								Variable:   "item",
+								Collection: "simple.list",
+								Children: []*Node{
+									{Type: "variable", Variable: "item", Text: "{{ item }}"},
+								},
+								EndText: "{% endfor %}",
+							},
+							{Type: "text", Text: "{% else %}", Children: []*Node{
+								{Type: "text", Text: "No items"},
+							}},
+						},
+						EndText: "{% endif %}",
+					},
+				},
+			},
+		},
+		{
+			"DeepNestedForLoops",
+			`{% for x in data.items %}
+				{% for y in x.subitems %}
+					{% for z in y.details %}
+						{{ x.name }}-{{ y.title }}-{{ z }}
+					{% endfor %}
+				{% endfor %}
+			{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for x in data.items %}",
+						Variable:   "x",
+						Collection: "data.items",
+						Children: []*Node{
+							{Type: "text", Text: "\n\t\t\t\t"},
+							{Type: "for",
+								Text:       "{% for y in x.subitems %}",
+								Variable:   "y",
+								Collection: "x.subitems",
+								Children: []*Node{
+									{Type: "text", Text: "\n\t\t\t\t\t"},
+									{Type: "for",
+										Text:       "{% for z in y.details %}",
+										Variable:   "z",
+										Collection: "y.details",
+										Children: []*Node{
+											{Type: "text", Text: "\n\t\t\t\t\t\t"},
+											{Type: "variable", Variable: "x.name", Text: "{{ x.name }}"},
+											{Type: "text", Text: "-"},
+											{Type: "variable", Variable: "y.title", Text: "{{ y.title }}"},
+											{Type: "text", Text: "-"},
+											{Type: "variable", Variable: "z", Text: "{{ z }}"},
+											{Type: "text", Text: "\n\t\t\t\t\t"},
+										},
+										EndText: "{% endfor %}",
+									},
+									{Type: "text", Text: "\n\t\t\t\t"},
+								},
+								EndText: "{% endfor %}",
+							},
+							{Type: "text", Text: "\n\t\t\t"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+		{
+			"ComplexNestedIfFor",
+			`{% for user in users %}
+				{% if user.active %}
+					{{ user.name }}:
+					{% for role in user.roles %}
+						{% if role.enabled %}
+							{% if role.permissions %}
+								{% for perm in role.permissions %}
+									{{ perm.name }}{% if not perm.isLast %}, {% endif %}
+								{% endfor %}
+							{% endif %}
+						{% endif %}
+					{% endfor %}
+				{% endif %}
+			{% endfor %}`,
+			&Template{
+				Nodes: []*Node{
+					{Type: "for",
+						Text:       "{% for user in users %}",
+						Variable:   "user",
+						Collection: "users",
+						Children: []*Node{
+							{Type: "text", Text: "\n\t\t\t\t"},
+							{Type: "if",
+								Text: "{% if user.active %}",
+								Children: []*Node{
+									{Type: "text", Text: "\n\t\t\t\t\t"},
+									{Type: "variable", Variable: "user.name", Text: "{{ user.name }}"},
+									{Type: "text", Text: ":\n\t\t\t\t\t"},
+									{Type: "for",
+										Text:       "{% for role in user.roles %}",
+										Variable:   "role",
+										Collection: "user.roles",
+										Children: []*Node{
+											{Type: "text", Text: "\n\t\t\t\t\t\t"},
+											{Type: "if",
+												Text: "{% if role.enabled %}",
+												Children: []*Node{
+													{Type: "text", Text: "\n\t\t\t\t\t\t\t"},
+													{Type: "if",
+														Text: "{% if role.permissions %}",
+														Children: []*Node{
+															{Type: "text", Text: "\n\t\t\t\t\t\t\t\t"},
+															{Type: "for",
+																Text:       "{% for perm in role.permissions %}",
+																Variable:   "perm",
+																Collection: "role.permissions",
+																Children: []*Node{
+																	{Type: "text", Text: "\n\t\t\t\t\t\t\t\t\t"},
+																	{Type: "variable", Variable: "perm.name", Text: "{{ perm.name }}"},
+																	{Type: "if",
+																		Text: "{% if not perm.isLast %}",
+																		Children: []*Node{
+																			{Type: "text", Text: ", "},
+																		},
+																		EndText: "{% endif %}",
+																	},
+																	{Type: "text", Text: "\n\t\t\t\t\t\t\t\t"},
+																},
+																EndText: "{% endfor %}",
+															},
+															{Type: "text", Text: "\n\t\t\t\t\t\t\t"},
+														},
+														EndText: "{% endif %}",
+													},
+													{Type: "text", Text: "\n\t\t\t\t\t\t"},
+												},
+												EndText: "{% endif %}",
+											},
+											{Type: "text", Text: "\n\t\t\t\t\t"},
+										},
+										EndText: "{% endfor %}",
+									},
+									{Type: "text", Text: "\n\t\t\t\t"},
+								},
+								EndText: "{% endif %}",
+							},
+							{Type: "text", Text: "\n\t\t\t"},
+						},
+						EndText: "{% endfor %}",
+					},
+				},
+			},
+		},
+	}
+
+	parser := NewParser()
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tpl, err := parser.Parse(tc.source)
+			if err != nil {
+				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
+			}
+
+			if !reflect.DeepEqual(tpl, tc.expected) {
+				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
+			}
+		})
+	}
+}

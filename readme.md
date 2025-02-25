@@ -134,6 +134,31 @@ Hello, {{ name|capitalize }}!
 
 Detailed usage can be found in the [documentation](docs/filters.md).
 
+### For Loops
+
+Use `{% for item in collection %}` and `{% endfor %}` to iterate over arrays, maps:
+
+```go
+{% for item in items %}
+    {{ item }}
+{% endfor %}
+```
+
+### If Conditionals
+
+Use `{% if condition %}`, `{% else %}` and `{% endif %}` to conditionally render content based on expressions:
+
+```go
+{% if user.age >= 18 %}
+    Adult
+{% else %}
+    Minor
+{% endif %}
+```
+
+Control structures can be nested and support complex expressions. For more details, see [Control Structures Documentation](docs/control-structure.md).
+
+
 ## Custom Filters
 
 Easily extend functionality by adding custom filters. For example, a filter to capitalize a string:
