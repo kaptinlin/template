@@ -65,6 +65,8 @@ type Value struct {
 	Float float64
 	Str   string
 	Bool  bool
+	Slice interface{}
+	Map   map[string]interface{}
 }
 
 type ValueType int
@@ -74,6 +76,8 @@ const (
 	TypeFloat
 	TypeString
 	TypeBool
+	TypeSlice
+	TypeMap
 )
 
 // FilterExpressionNode defines filter expression node
@@ -377,6 +381,10 @@ func (v *Value) toInterface() interface{} {
 		return v.Str
 	case TypeBool:
 		return v.Bool
+	case TypeSlice:
+		return v.Slice
+	case TypeMap:
+		return v.Map
 	default:
 		return nil
 	}
@@ -395,6 +403,10 @@ func NewValue(v interface{}) (*Value, error) {
 		return &Value{Type: TypeString, Str: val}, nil
 	case bool:
 		return &Value{Type: TypeBool, Bool: val}, nil
+	case []interface{}, []string, []int, []float64, []bool:
+		return &Value{Type: TypeSlice, Slice: val}, nil
+	case map[string]interface{}:
+		return &Value{Type: TypeMap, Map: val}, nil
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedType, v)
 	}
@@ -450,11 +462,12 @@ func (n *UnaryExpressionNode) Evaluate(ctx Context) (*Value, error) {
 		return nil, err
 	}
 
-	switch n.Operator {
-	case "-":
-		return NewValue(-right.toInterface().(float64))
-	case "!":
-		return NewValue(!right.toInterface().(bool))
+	if n.Operator == "!" {
+		rightBool, err := right.toBool()
+		if err != nil {
+			return nil, err
+		}
+		return NewValue(!rightBool)
 	}
 
 	return nil, fmt.Errorf("%w: %s", ErrUnsupportedUnaryOp, n.Operator)
@@ -489,11 +502,9 @@ func (n *VariableNode) Evaluate(ctx Context) (*Value, error) {
 	// Traverse property path
 	for _, part := range parts[1:] {
 		switch v := current.(type) {
+		case []interface{}, []string, []int, []float64, []bool:
+			current = part
 		case map[string]interface{}:
-			if current, ok = v[part]; !ok {
-				return nil, fmt.Errorf("%w: %s in %s", ErrUndefinedProperty, part, n.Name)
-			}
-		case map[interface{}]interface{}: // Support for YAML parsing
 			if current, ok = v[part]; !ok {
 				return nil, fmt.Errorf("%w: %s in %s", ErrUndefinedProperty, part, n.Name)
 			}
@@ -532,6 +543,10 @@ func (v *Value) Add(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
 	case TypeFloat:
 		switch right.Type {
@@ -542,6 +557,10 @@ func (v *Value) Add(right *Value) (*Value, error) {
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		case TypeBool:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
 	case TypeString:
@@ -554,6 +573,10 @@ func (v *Value) Add(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
 	case TypeBool:
 		switch right.Type {
@@ -565,7 +588,15 @@ func (v *Value) Add(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
+	case TypeSlice:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+	case TypeMap:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 	}
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 }
@@ -583,6 +614,10 @@ func (v *Value) Subtract(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
 	case TypeFloat:
 		switch right.Type {
@@ -594,6 +629,10 @@ func (v *Value) Subtract(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
 	case TypeString:
 		switch right.Type {
@@ -605,6 +644,10 @@ func (v *Value) Subtract(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
 	case TypeBool:
 		switch right.Type {
@@ -616,7 +659,15 @@ func (v *Value) Subtract(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 		}
+	case TypeSlice:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
+	case TypeMap:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotAddTypes, v.Type, right.Type)
 	}
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotSubtractTypes, v.Type, right.Type)
 }
@@ -634,6 +685,10 @@ func (v *Value) Multiply(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		}
 	case TypeFloat:
 		switch right.Type {
@@ -644,6 +699,10 @@ func (v *Value) Multiply(right *Value) (*Value, error) {
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		case TypeBool:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		}
 	case TypeString:
@@ -656,6 +715,10 @@ func (v *Value) Multiply(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		}
 	case TypeBool:
 		switch right.Type {
@@ -667,7 +730,15 @@ func (v *Value) Multiply(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 		}
+	case TypeSlice:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
+	case TypeMap:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 	}
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotMultiplyTypes, v.Type, right.Type)
 }
@@ -691,6 +762,10 @@ func (v *Value) Divide(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		}
 	case TypeFloat:
 		switch right.Type {
@@ -708,6 +783,10 @@ func (v *Value) Divide(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		}
 	case TypeString:
 		switch right.Type {
@@ -718,6 +797,10 @@ func (v *Value) Divide(right *Value) (*Value, error) {
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		case TypeBool:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		}
 	case TypeBool:
@@ -730,7 +813,15 @@ func (v *Value) Divide(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 		}
+	case TypeSlice:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
+	case TypeMap:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 	}
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotDivideTypes, v.Type, right.Type)
 }
@@ -772,6 +863,15 @@ func (v *Value) toBool() (bool, error) {
 		return v.Int != 0, nil
 	case TypeFloat:
 		return v.Float != 0, nil
+	case TypeSlice:
+		val := reflect.ValueOf(v.Slice)
+		if val.Kind() == reflect.Slice || val.Kind() == reflect.Array {
+			return val.Len() > 0, nil
+		}
+		return false, nil
+
+	case TypeMap:
+		return len(v.Map) > 0, nil
 	default:
 		return false, fmt.Errorf("%w: %v", ErrCannotConvertToBool, v.Type)
 	}
@@ -790,6 +890,10 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
 	case TypeFloat:
 		switch right.Type {
@@ -800,6 +904,10 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeBool:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
 	case TypeString:
@@ -812,6 +920,10 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
 	case TypeBool:
 		switch right.Type {
@@ -823,7 +935,15 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
+	case TypeSlice:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+	case TypeMap:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 	}
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 }
@@ -850,6 +970,10 @@ func (v *Value) LessThan(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
 	case TypeFloat:
 		switch right.Type {
@@ -860,6 +984,10 @@ func (v *Value) LessThan(right *Value) (*Value, error) {
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeBool:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
 	case TypeString:
@@ -872,6 +1000,10 @@ func (v *Value) LessThan(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeBool:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
 	case TypeBool:
 		switch right.Type {
@@ -883,7 +1015,15 @@ func (v *Value) LessThan(right *Value) (*Value, error) {
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeString:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeSlice:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		case TypeMap:
+			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
+	case TypeSlice:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+	case TypeMap:
+		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 	}
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 }

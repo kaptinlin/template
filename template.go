@@ -3,6 +3,7 @@ package template
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -185,7 +186,7 @@ func convertToString(value interface{}) (string, error) {
 		return v.String(), nil
 	default:
 		// Fallback for more complex or unknown types: use JSON serialization
-		jsonBytes, err := json.MarshalIndent(v, "", "  ")
+		jsonBytes, err := json.Marshal(v)
 		if err != nil {
 			return "", fmt.Errorf("could not convert value to string: %w", err)
 		}
@@ -224,6 +225,15 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 		conditionMet = condition.Int != 0
 	case TypeFloat:
 		conditionMet = condition.Float != 0
+	case TypeSlice:
+		val := reflect.ValueOf(condition.Slice)
+		if val.Kind() == reflect.Slice || val.Kind() == reflect.Array {
+			conditionMet = val.Len() > 0
+		} else {
+			conditionMet = false
+		}
+	case TypeMap:
+		conditionMet = len(condition.Map) > 0
 	default:
 		conditionMet = true
 	}

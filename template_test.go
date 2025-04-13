@@ -105,7 +105,7 @@ func TestConvertToString(t *testing.T) {
 		{
 			name:     "ComplexTypeWithJSONFallback",
 			input:    map[string]interface{}{"name": "John Doe", "age": 30},
-			expected: "{\n  \"age\": 30,\n  \"name\": \"John Doe\"\n}",
+			expected: "{\"age\":30,\"name\":\"John Doe\"}",
 		},
 		{
 			name:     "HandleErrorInJSONFallback",
@@ -414,6 +414,207 @@ func TestIfConditions(t *testing.T) {
 				},
 			},
 			expected: "Not an adult",
+		},
+		{
+			name:     "StringArraySizeCheck",
+			template: "{% if names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
+			context: map[string]interface{}{
+				"names": []string{"John", "Alice", "Bob"},
+			},
+			expected: "More than two names",
+		},
+		{
+			name:     "EmptyIntArrayCheck",
+			template: "{% if !scores %}No scores recorded{% endif %}",
+			context: map[string]interface{}{
+				"scores": []int{},
+			},
+			expected: "No scores recorded",
+		},
+		{
+			name:     "EmptyStringArrayCheck",
+			template: "{% if !names %}No names available{% endif %}",
+			context: map[string]interface{}{
+				"names": []string{},
+			},
+			expected: "No names available",
+		},
+		{
+			name:     "NestedMapWithEmployeeCountCheck",
+			template: "{% if department.employees | size >= 3 %}Large department{% else %}Small department{% endif %}",
+			context: map[string]interface{}{
+				"department": map[string]interface{}{
+					"name": "R&D",
+					"employees": []interface{}{
+						map[string]interface{}{"name": "John", "role": "Developer"},
+						map[string]interface{}{"name": "Alice", "role": "Tester"},
+						map[string]interface{}{"name": "Bob", "role": "Product Manager"},
+					},
+				},
+			},
+			expected: "Large department",
+		},
+		{
+			name:     "NonEmptyMapCheck",
+			template: "{% if !settings %}Has settings{% endif %}",
+			context: map[string]interface{}{
+				"settings": map[string]interface{}{
+					"theme":   "Dark",
+					"High":    "High priority",
+					"enabled": "Feature enabled",
+				},
+			},
+			expected: "",
+		},
+		{
+			name:     "NumericTypeComparison",
+			template: "{% if int_value > float_value %}Integer greater than float{% else %}Float greater than or equal to integer{% endif %}",
+			context: map[string]interface{}{
+				"int_value":   5,
+				"float_value": 5.5,
+			},
+			expected: "Float greater than or equal to integer",
+		},
+		{
+			name:     "EmptyMapCheck",
+			template: "{% if !config %}Configuration needed{% endif %}",
+			context: map[string]interface{}{
+				"config": map[string]interface{}{},
+			},
+			expected: "Configuration needed",
+		},
+		{
+			name:     "BooleanArrayWithTrueValueCheck",
+			template: "{% if !flags %}At least one enabled{% else %}All disabled{% endif %}",
+			context: map[string]interface{}{
+				"flags": []bool{false, false, true, false},
+			},
+			expected: "All disabled",
+		},
+		{
+			name:     "NestedStringArraySizeCheck",
+			template: "{% if struct.names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
+					"names": []string{"John", "Alice", "Bob"},
+				},
+			},
+			expected: "More than two names",
+		},
+		{
+			name:     "NonEmptyStringArrayCondition",
+			template: "{% if struct.names %}name{% endif %}",
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
+					"names": []string{"John", "Alice", "Bob"},
+				},
+			},
+			expected: "name",
+		},
+		{
+			name:     "EmptyStringArrayCondition",
+			template: "{% if struct.names %}name{% endif %}",
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
+					"names": []string{},
+				},
+			},
+			expected: "",
+		},
+		{
+			name:     "EmptyMapCondition",
+			template: "{% if struct.names %}name{% endif %}",
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
+					"names": map[string]interface{}{},
+				},
+			},
+			expected: "",
+		},
+		{
+			name:     "NonEmptyMapCondition",
+			template: "{% if struct.names %}name{% endif %}",
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
+					"names": map[string]interface{}{
+						"theme":   "Dark",
+						"High":    "High priority",
+						"enabled": "Feature enabled",
+					},
+				},
+			},
+			expected: "name",
+		},
+		{
+			name:     "ArrayLengthComparison",
+			template: "{% if shortList | size < longList | size %}Shorter array{% else %}Equal or longer array{% endif %}",
+			context: map[string]interface{}{
+				"shortList": []string{"a", "b"},
+				"longList":  []string{"x", "y", "z"},
+			},
+			expected: "Shorter array",
+		},
+		{
+			name:     "MapKeysEqualityCheck",
+			template: "{% if config1.debug == config2.debug %}Same debug setting{% else %}Different debug settings{% endif %}",
+			context: map[string]interface{}{
+				"config1": map[string]interface{}{"debug": true, "mode": "development"},
+				"config2": map[string]interface{}{"debug": true, "mode": "production"},
+			},
+			expected: "Same debug setting",
+		},
+		{
+			name:     "MapNegationCondition",
+			template: "{% if !emptyMap && !nonEmptyMap %}Both false{% else %}Both true{% endif %}",
+			context: map[string]interface{}{
+				"emptyMap":    map[string]interface{}{},
+				"nonEmptyMap": map[string]interface{}{"key": "value"},
+			},
+			expected: "Both true",
+		},
+		{
+			name:     "ComplexNestedCollectionComparison",
+			template: "{% if data.users | size > data.groups | size %}More users than groups{% else %}Equal or more groups than users{% endif %}",
+			context: map[string]interface{}{
+				"data": map[string]interface{}{
+					"users": []string{"User1", "User2", "User3"},
+					"groups": []interface{}{
+						map[string]interface{}{"name": "Admins"},
+						map[string]interface{}{"name": "Users"},
+					},
+				},
+			},
+			expected: "More users than groups",
+		},
+		{
+			name:     "SliceWithANDOperator",
+			template: "{% if numbers && numbers | sum > 10 %}Non-empty array with sum > 10{% endif %}",
+			context: map[string]interface{}{
+				"numbers": []int{2, 4, 6, 8},
+			},
+			expected: "Non-empty array with sum > 10",
+		},
+		{
+			name:     "MapWithOROperator",
+			template: "{% if emptyConfig || defaultConfig %}Using config{% endif %}",
+			context: map[string]interface{}{
+				"emptyConfig":   map[string]interface{}{},
+				"defaultConfig": map[string]interface{}{"theme": "light"},
+			},
+			expected: "Using config",
+		},
+		{
+			name:     "NestedArraysInNestedMaps",
+			template: "{% if project.teams.developers | size > project.teams.designers | size %}More developers{% else %}Equal or more designers{% endif %}",
+			context: map[string]interface{}{
+				"project": map[string]interface{}{
+					"teams": map[string]interface{}{
+						"developers": []string{"Dev1", "Dev2", "Dev3", "Dev4"},
+						"designers":  []string{"Des1", "Des2"},
+					},
+				},
+			},
+			expected: "More developers",
 		},
 	}
 

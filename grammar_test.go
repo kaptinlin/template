@@ -86,12 +86,6 @@ func TestGrammar(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "Unary operator",
-			input:    "-42",
-			context:  &Context{},
-			expected: float64(-42),
-		},
-		{
 			name:     "Logical NOT operator",
 			input:    "!false",
 			context:  &Context{},
@@ -151,6 +145,10 @@ func TestGrammar(t *testing.T) {
 					got = result.Str
 				case TypeBool:
 					got = result.Bool
+				case TypeSlice:
+					got = result.Slice
+				case TypeMap:
+					got = result.Map
 				}
 
 				if got != tt.expected {
