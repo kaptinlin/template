@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 )
 
 // ExpressionNode is the interface for all expression nodes
@@ -66,7 +65,7 @@ type Value struct {
 	Str   string
 	Bool  bool
 	Slice interface{}
-	Map   map[string]interface{}
+	Map   interface{}
 }
 
 type ValueType int
@@ -403,11 +402,27 @@ func NewValue(v interface{}) (*Value, error) {
 		return &Value{Type: TypeString, Str: val}, nil
 	case bool:
 		return &Value{Type: TypeBool, Bool: val}, nil
-	case []interface{}, []string, []int, []float64, []bool:
-		return &Value{Type: TypeSlice, Slice: val}, nil
-	case map[string]interface{}:
-		return &Value{Type: TypeMap, Map: val}, nil
 	default:
+		rv := reflect.ValueOf(v)
+		kind := rv.Kind()
+
+		if kind == reflect.Slice || kind == reflect.Array {
+			return &Value{Type: TypeSlice, Slice: v}, nil
+		}
+		if kind == reflect.Map {
+			if rv.Type().Key().Kind() == reflect.String {
+				if m, ok := v.(map[string]interface{}); ok {
+					return &Value{Type: TypeMap, Map: m}, nil
+				}
+
+				result := make(map[string]interface{})
+				for _, k := range rv.MapKeys() {
+					result[k.String()] = rv.MapIndex(k).Interface()
+				}
+				return &Value{Type: TypeMap, Map: result}, nil
+			}
+		}
+
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedType, v)
 	}
 }
@@ -490,44 +505,13 @@ func (n *BooleanLiteralNode) Evaluate(ctx Context) (*Value, error) {
 
 // Evaluate method implementation for VariableNode
 func (n *VariableNode) Evaluate(ctx Context) (*Value, error) {
-	parts := strings.Split(n.Name, ".")
-	var current interface{}
-	var ok bool
-
-	// Get root variable
-	if current, ok = ctx[parts[0]]; !ok {
-		return nil, fmt.Errorf("%w: %s", ErrUndefinedVariable, parts[0])
+	value, err := resolveVariable(n.Name, ctx)
+	if err != nil {
+		// Instead of returning an error, return the original variable placeholder.
+		return &Value{Type: TypeString, Str: n.Name}, err
 	}
 
-	// Traverse property path
-	for _, part := range parts[1:] {
-		switch v := current.(type) {
-		case []interface{}, []string, []int, []float64, []bool:
-			current = part
-		case map[string]interface{}:
-			if current, ok = v[part]; !ok {
-				return nil, fmt.Errorf("%w: %s in %s", ErrUndefinedProperty, part, n.Name)
-			}
-		case struct{}, *struct{}:
-			// Use reflection to get struct field
-			val := reflect.ValueOf(current)
-			if val.Kind() == reflect.Ptr {
-				val = val.Elem()
-			}
-			if val.Kind() != reflect.Struct {
-				return nil, fmt.Errorf("%w: %s", ErrNonStructProperty, part)
-			}
-			field := val.FieldByName(part)
-			if !field.IsValid() {
-				return nil, fmt.Errorf("%w: %s in struct %s", ErrUndefinedProperty, part, n.Name)
-			}
-			current = field.Interface()
-		default:
-			return nil, fmt.Errorf("%w: %T", ErrCannotAccessProperty, current)
-		}
-	}
-
-	return NewValue(current)
+	return NewValue(value)
 }
 
 // Add implements addition operation
@@ -871,7 +855,11 @@ func (v *Value) toBool() (bool, error) {
 		return false, nil
 
 	case TypeMap:
-		return len(v.Map) > 0, nil
+		val := reflect.ValueOf(v.Map)
+		if val.Kind() == reflect.Map {
+			return val.Len() > 0, nil
+		}
+		return false, nil
 	default:
 		return false, fmt.Errorf("%w: %v", ErrCannotConvertToBool, v.Type)
 	}

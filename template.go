@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -124,49 +122,6 @@ func resolveVariable(variable string, ctx Context) (interface{}, error) {
 	return value, nil
 }
 
-// resolvForVariable retrieves and formats a variable's value from the context, supporting nested keys.
-func resolvForVariable(variable string, ctx Context) (interface{}, error) {
-	// Directly return string literals.
-	if strings.HasPrefix(variable, "'") && strings.HasSuffix(variable, "'") {
-		return strings.Trim(variable, "'"), nil
-	}
-
-	// Split by dots and traverse the context
-	parts := strings.Split(variable, ".")
-	current := ctx
-
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			return current.Get(part)
-		}
-
-		value, err := current.Get(part)
-		if err != nil {
-			// Return the original variable placeholder.
-			return fmt.Sprintf("{{%s}}", variable), err
-		}
-
-		switch v := value.(type) {
-		case map[string]interface{}:
-			current = Context(v)
-		case []interface{}:
-			// Handle array access
-			index, err := strconv.Atoi(part)
-			if err != nil {
-				return fmt.Sprintf("{{%s}}", variable), fmt.Errorf("%w: %s", ErrInvalidArrayIndex, part)
-			}
-			if index < 0 || index >= len(v) {
-				return fmt.Sprintf("{{%s}}", variable), fmt.Errorf("%w: %d", ErrIndexOutOfRange, index)
-			}
-			return v[index], nil
-		default:
-			return fmt.Sprintf("{{%s}}", variable), fmt.Errorf("%w: %T", ErrNonObjectProperty, value)
-		}
-	}
-
-	return fmt.Sprintf("{{%s}}", variable), fmt.Errorf("%w: %s", ErrInvalidVariableAccess, variable)
-}
-
 // convertToString attempts to convert various types to a string, handling common and complex types distinctly.
 func convertToString(value interface{}) (string, error) {
 	switch v := value.(type) {
@@ -215,27 +170,9 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 	}
 
 	// Convert condition to boolean value
-	var conditionMet bool
-	switch condition.Type {
-	case TypeBool:
-		conditionMet = condition.Bool
-	case TypeString:
-		conditionMet = condition.Str != ""
-	case TypeInt:
-		conditionMet = condition.Int != 0
-	case TypeFloat:
-		conditionMet = condition.Float != 0
-	case TypeSlice:
-		val := reflect.ValueOf(condition.Slice)
-		if val.Kind() == reflect.Slice || val.Kind() == reflect.Array {
-			conditionMet = val.Len() > 0
-		} else {
-			conditionMet = false
-		}
-	case TypeMap:
-		conditionMet = len(condition.Map) > 0
-	default:
-		conditionMet = true
+	conditionMet, err := condition.toBool()
+	if err != nil {
+		return err
 	}
 
 	next := 0
@@ -262,94 +199,68 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 // executeForNode handles loop rendering
 func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) error {
 	// Get collection data
-	collection, err := resolvForVariable(node.Collection, ctx)
+	collection, err := resolveVariable(node.Collection, ctx)
 	if err != nil {
 		return err
 	}
-
 	// Create new context only for the outer loop
 	loopCtx := Context{}
 	if forLayers < 2 {
 		loopCtx = deepCopy(ctx)
 	}
 	// Handle different types of collections
-	switch items := collection.(type) {
-	case []interface{}, []string, []int, []float64, []bool:
-		// Convert all slice types to []interface{}
-		var interfaceSlice []interface{}
-		switch v := items.(type) {
-		case []interface{}:
-			interfaceSlice = v
-		case []string:
-			interfaceSlice = make([]interface{}, len(v))
-			for i, item := range v {
-				interfaceSlice[i] = item
-			}
-		case []int:
-			interfaceSlice = make([]interface{}, len(v))
-			for i, item := range v {
-				interfaceSlice[i] = item
-			}
-		case []float64:
-			interfaceSlice = make([]interface{}, len(v))
-			for i, item := range v {
-				interfaceSlice[i] = item
-			}
-		case []bool:
-			interfaceSlice = make([]interface{}, len(v))
-			for i, item := range v {
-				interfaceSlice[i] = item
-			}
-		}
+	val := reflect.ValueOf(collection)
+	kind := val.Kind()
 
-		// Handle []interface{}
-		for i, item := range interfaceSlice {
-			// Only update loop context without deep copying
-			updateLoopContext(loopCtx, node.Variable, item, i, len(interfaceSlice))
+	if kind == reflect.String {
+		str := val.String()
+		length := len(str)
+		for i, ch := range str {
+			updateLoopContext(loopCtx, node.Variable, string(ch), i, length)
 			err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			forLayers--
 			if err != nil {
 				return err
 			}
 		}
-
-	case map[string]interface{}, map[interface{}]interface{}:
-		var stringMap map[string]interface{}
-		switch v := items.(type) {
-		case map[string]interface{}:
-			stringMap = v
-		case map[interface{}]interface{}:
-			// Convert interface{} keys to string
-			stringMap = make(map[string]interface{})
-			for k, val := range v {
-				stringMap[fmt.Sprint(k)] = val
-			}
-		}
-
-		// Get all keys and sort them to ensure consistent iteration order
-		keys := make([]string, 0, len(stringMap))
-		for k := range stringMap {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-
-		// Iterate over sorted keys
-		for i, key := range keys {
-			updateLoopContext(loopCtx, node.Variable, map[string]interface{}{
-				"key":   key,
-				"value": stringMap[key],
-			}, i, len(stringMap))
-			err := executeNodes(node.Children, loopCtx, builder, forLayers)
-			forLayers--
-			if err != nil {
-				return err
-			}
-		}
-
-	default:
-		return fmt.Errorf("%w: %T", ErrUnsupportedCollectionType, collection)
+		return nil
 	}
-	return nil
+
+	if kind == reflect.Slice || kind == reflect.Array {
+		length := val.Len()
+		for i := 0; i < length; i++ {
+			item := val.Index(i).Interface()
+			updateLoopContext(loopCtx, node.Variable, item, i, length)
+			err := executeNodes(node.Children, loopCtx, builder, forLayers)
+			forLayers--
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if kind == reflect.Map {
+		keys := val.MapKeys()
+
+		for i, key := range keys {
+			keyStr := fmt.Sprint(key.Interface())
+			valueValue := val.MapIndex(key).Interface()
+
+			updateLoopContext(loopCtx, node.Variable, map[string]interface{}{
+				"key":   keyStr,
+				"value": valueValue,
+			}, i, val.Len())
+			err := executeNodes(node.Children, loopCtx, builder, forLayers)
+			forLayers--
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("%w: %T", ErrUnsupportedCollectionType, collection)
 }
 
 // deepCopy deep copy context data
