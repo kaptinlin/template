@@ -260,7 +260,7 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 	n := len(src)
 	// Try to match control structure opening tags and determine their type
 	matched, temp, typ := p.matchAppropriateStrings(src, n, next+2, "%}")
-	if matched && typ < 3 { //nolint:nestif
+	if matched && typ < 3 {
 		// Extract the complete control structure token
 		token := src[next : temp+1]
 		// Handle any text content before the control structure
@@ -270,9 +270,10 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 		}
 
 		// Add appropriate node based on control structure type (for/if)
-		if typ == 1 {
+		switch typ {
+		case 1:
 			p.addForNode(token, template, nil)
-		} else if typ == 2 {
+		case 2:
 			p.addIfNode(token, template, nil)
 		}
 
@@ -283,9 +284,10 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 		tempToken := src[tempPrev : tempNext+1]
 
 		// Process the closing tag of the control structure
-		if typ == 1 {
+		switch typ {
+		case 1:
 			p.addForNode(tempToken, nil, node)
-		} else if typ == 2 {
+		case 2:
 			p.addIfNode(tempToken, nil, node)
 		}
 
@@ -453,9 +455,10 @@ func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, n
 	}
 
 	// Create appropriate node based on control structure type
-	if typ == 1 {
+	switch typ {
+	case 1:
 		p.addForNode(token, nil, node)
-	} else if typ == 2 {
+	case 2:
 		p.addIfNode(token, nil, node)
 	}
 
@@ -467,9 +470,10 @@ func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, n
 
 	// Extract and process the closing tag
 	tempToken := src[tempPrev : tempNext+1]
-	if typ == 1 {
+	switch typ {
+	case 1:
 		p.addForNode(tempToken, nil, node1)
-	} else if typ == 2 {
+	case 2:
 		p.addIfNode(tempToken, nil, node1)
 	}
 

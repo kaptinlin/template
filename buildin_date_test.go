@@ -53,7 +53,7 @@ func TestDateFilters(t *testing.T) {
 		},
 		{
 			name:     "UnixTimestamp",
-			template: "Unix timestamp: {{ current | date:'U' }}",
+			template: "Unix timestamp: {{ current | date:'S' }}",
 			context:  map[string]interface{}{"current": currentTime},
 			expected: "Unix timestamp: 1711811045",
 		},
