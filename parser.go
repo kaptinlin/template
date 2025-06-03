@@ -9,13 +9,33 @@ import (
 // Regular expression to identify variables.
 // var variableRegex = regexp.MustCompile(`{{\s*([\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
 var variableRegex = regexp.MustCompile(`{{\s*(?:'[^']*'|"[\s\S]*?"|[\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
-var forRegex = regexp.MustCompile(`{%\s*for\s+([\w\.]+)\s+in\s+([\w\.\[\]]+)\s*%}`)
+// var forRegex = regexp.MustCompile(`{%\s*for\s+([\w\.]+)\s+in\s+([\w\.\[\]]+)\s*%}`)
 var ifRegex = regexp.MustCompile(`{%\s*if\s+` + // if start
 	`([^%]+)` + // Capture any non-% characters (expression part)
 	`\s*%}`) // if end
 var endforRegex = regexp.MustCompile(`{%\s*endfor\s*%}`)
 var endifRegex = regexp.MustCompile(`{%\s*endif\s*%}`)
 var elseRegex = regexp.MustCompile(`{%\s*else\s*%}`)
+// var forTwoVarsRegex = regexp.MustCompile(
+//     `^{%\s*for\s+` +
+//         `([a-zA-Z_][\w\.]*)` +    
+//         `\s*,\s*` +
+//         `([a-zA-Z_][\w\.]*)` +    
+//         `\s+in\s+` +
+//         `([\w\.$$$$'"]+)` +       
+//     `\s*%}$`,
+// )
+var forRegex = regexp.MustCompile(
+    `{%\s*for\s+` +
+        `(` +
+            `([\w\.]+)` +                     
+            `|` +                            
+            `([\w\.]+)\s*,\s*([\w\.]+)` +    
+        `)` +
+    `\s+in\s+` +
+        `([\w\.$$$$'"]+)` +                 
+    `\s*%}`,
+)
 
 // Parser analyzes template syntax.
 type Parser struct{}
@@ -76,6 +96,7 @@ func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
 		})
 	}
 }
+
 func parseFilters(filterStr string) []Filter {
 	filters := make([]Filter, 0)
 
@@ -242,6 +263,9 @@ func (p *Parser) Parse(src string) (*Template, error) {
 		case next+1 < n && src[next] == '{' && src[next+1] == '%':
 			// Handle for and if
 			next, prev = p.parseControlBlock(src, next, prev, template)
+		case next+1 < n && src[next] == '{' && src[next+1] == '#':
+			// Handle explanatory note
+			next, prev = p.parseExplanatoryNote(src, next, prev, template)
 		default:
 			next++
 		}
@@ -348,6 +372,17 @@ func (p *Parser) matchAppropriateStrings(src string, n int, next int, format str
 			}
 			next++
 		}
+	case "#}":
+		// 处理注释结束标记
+		for next+1 < n {
+			// 寻找"#}"结束标记
+			if src[next] == '#' && src[next+1] == '}' {
+				// 对于注释，我们不需要进行正则表达式匹配验证
+				// 只需要确认找到了结束标记
+				return true, next + 1, 0
+			}
+			next++
+		}
 	default:
 		// Return failure for unsupported formats
 		return false, 0, 0
@@ -425,6 +460,24 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 				}
 				return next, temp
 			default:
+				next++
+			}
+		case next+1 < n && src[next] == '{' && src[next+1] == '#':
+			// 处理注释
+			matched, tempNext, _ := p.matchAppropriateStrings(src, n, next+2, "#}")
+			if matched {
+				// 处理注释前的文本内容
+				if next > prev {
+					token := src[prev:next]
+					p.addTextNode(token, nil, node)
+				}
+
+				// 注释内容不添加到模板中，直接跳过
+
+				// 更新位置到注释之后继续解析
+				next = tempNext + 1
+				prev = tempNext + 1
+			} else {
 				next++
 			}
 		default:
@@ -568,6 +621,35 @@ func (p *Parser) handleVariable(src string, next, prev int, template *Template, 
 		// No valid variable match found, move forward
 		next++
 	}
+
+	return next, prev
+}
+func (p *Parser) parseExplanatoryNote(src string, next, prev int, template *Template) (int, int) {
+	n := len(src)
+	// 寻找注释结束标记 "#}"
+	endPos := next + 2
+	for endPos < n-1 {
+		if src[endPos] == '#' && src[endPos+1] == '}' {
+			// 找到注释结束标记
+
+			// 处理注释前的文本内容
+			if next > prev {
+				textToken := src[prev:next]
+				p.addTextNode(textToken, template, nil)
+			}
+
+			// 注释内容不添加到模板中，直接跳过
+
+			// 更新位置到注释之后继续解析
+			next = endPos + 2
+			prev = next
+			return next, prev
+		}
+		endPos++
+	}
+
+	// 如果没有找到结束标记，只前进一个字符
+	next++
 
 	return next, prev
 }

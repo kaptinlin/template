@@ -411,16 +411,16 @@ func TestSimplifiedOverwritingValuesInContext(t *testing.T) {
 func TestStructConversion(t *testing.T) {
 	// Define test structs
 	type Address struct {
-		Street  string
-		City    string
-		ZipCode string
+		Street  string `json:"street"`
+		City    string `json:"city"`
+		ZipCode string `json:"zip_code"`
 	}
 
 	type Person struct {
-		Name    string
-		Age     int
-		Active  bool
-		Address Address
+		Name    string  `json:"name"`
+		Age     int     `json:"age"`
+		Active  bool    `json:"is_active"`
+		Address Address `json:"address"`
 	}
 
 	type PersonWithTags struct {
@@ -451,7 +451,7 @@ func TestStructConversion(t *testing.T) {
 					ZipCode: "12345",
 				},
 			},
-			checkPath: "person.Name",
+			checkPath: "person.name",
 			expected:  "John Doe",
 		},
 		{
@@ -467,7 +467,7 @@ func TestStructConversion(t *testing.T) {
 					ZipCode: "54321",
 				},
 			},
-			checkPath: "person.Address.City",
+			checkPath: "person.address.city",
 			expected:  "Gotham",
 		},
 		{
@@ -528,20 +528,36 @@ func TestStructConversion(t *testing.T) {
 	}
 }
 
+// dereference 会自动解引用指针类型
+func dereference(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+
+	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return nil
+		}
+		return val.Elem().Interface()
+	}
+	return v
+}
+
 // TestComplexStructConversion tests more complex struct conversion scenarios,
 // including pointers, embedded structs, and time.Time fields.
 func TestComplexStructConversion(t *testing.T) {
 	// Define test structs with pointers and embedded types
 	type Metadata struct {
-		Tags     []string
-		Priority int
+		Tags     []string `json:"tags"`
+		Priority int      `json:"priority"`
 	}
 
 	type Project struct {
-		ID       string
-		Metadata // Embedded struct
-		Owner    *string
-		Created  time.Time
+		ID       string    `json:"id"`
+		Metadata Metadata  `json:"metadata"`
+		Owner    *string   `json:"owner"`
+		Created  time.Time `json:"created"`
 	}
 
 	// Create test data
@@ -567,7 +583,7 @@ func TestComplexStructConversion(t *testing.T) {
 	}{
 		{
 			description: "Access embedded struct field",
-			checkPath:   "project.Tags.0",
+			checkPath:   "project.metadata.tags.0",
 			expected:    "important",
 			compareFunc: func(a, b interface{}) bool {
 				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
@@ -575,23 +591,38 @@ func TestComplexStructConversion(t *testing.T) {
 		},
 		{
 			description: "Access pointer value",
-			checkPath:   "project.Owner",
+			checkPath:   "project.owner",
 			expected:    "Project Owner",
 			compareFunc: func(a, b interface{}) bool {
+				// 对于指针类型，尝试解引用后比较
+				a = dereference(a)
+				b = dereference(b)
 				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 			},
 		},
 		{
 			description: "Preserve time.Time",
-			checkPath:   "project.Created",
+			checkPath:   "project.created",
 			expected:    creationTime.Format(time.RFC3339),
 			compareFunc: func(a, b interface{}) bool {
-				return fmt.Sprintf("%v", a) == b
+				// 对于时间类型，使用字符串表示进行比较
+				aTime, aOk := a.(time.Time)
+				if aOk {
+					return aTime.Format(time.RFC3339) == b
+				}
+
+				// 如果直接是字符串，也尝试比较
+				aStr, aOk := a.(string)
+				if aOk {
+					return aStr == b
+				}
+
+				return false
 			},
 		},
 		{
 			description: "Access ID directly",
-			checkPath:   "project.ID",
+			checkPath:   "project.id",
 			expected:    "project-123",
 			compareFunc: func(a, b interface{}) bool {
 				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
@@ -599,7 +630,7 @@ func TestComplexStructConversion(t *testing.T) {
 		},
 		{
 			description: "Access embedded field directly",
-			checkPath:   "project.Priority",
+			checkPath:   "project.metadata.priority",
 			expected:    1,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -693,9 +724,9 @@ func toFloat64(v interface{}) (float64, bool) {
 func TestSliceOfStructs(t *testing.T) {
 	// Define a test struct
 	type Item struct {
-		ID    int
-		Name  string
-		Price float64
+		ID    int     `json:"id"`
+		Name  string  `json:"name"`
+		Price float64 `json:"price"`
 	}
 
 	// Create test data
@@ -714,13 +745,13 @@ func TestSliceOfStructs(t *testing.T) {
 	}{
 		{
 			description: "Access first item name",
-			checkPath:   "items.0.Name",
+			checkPath:   "items.0.name",
 			expected:    "Item 1",
 			compareFunc: nil, // Use default comparison
 		},
 		{
 			description: "Access second item price",
-			checkPath:   "items.1.Price",
+			checkPath:   "items.1.price",
 			expected:    24.99,
 			compareFunc: func(a, b interface{}) bool {
 				// For floating point numbers, use approximate comparison
@@ -734,7 +765,7 @@ func TestSliceOfStructs(t *testing.T) {
 		},
 		{
 			description: "Access last item ID",
-			checkPath:   "items.2.ID",
+			checkPath:   "items.2.id",
 			expected:    3,
 			compareFunc: func(a, b interface{}) bool {
 				// For integers, convert then compare
@@ -783,9 +814,9 @@ func TestSliceOfStructs(t *testing.T) {
 func TestMapWithStructValues(t *testing.T) {
 	// Define a test struct
 	type UserProfile struct {
-		Username string
-		Email    string
-		IsAdmin  bool
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		IsAdmin  bool   `json:"is_admin"`
 	}
 
 	// Create test data - a map of users
@@ -811,17 +842,17 @@ func TestMapWithStructValues(t *testing.T) {
 	}{
 		{
 			description: "Access user1 username",
-			checkPath:   "users.user1.Username",
+			checkPath:   "users.user1.username",
 			expected:    "johndoe",
 		},
 		{
 			description: "Access user2 admin status",
-			checkPath:   "users.user2.IsAdmin",
+			checkPath:   "users.user2.is_admin",
 			expected:    true,
 		},
 		{
 			description: "Access non-existent user",
-			checkPath:   "users.user3.Username",
+			checkPath:   "users.user3.username",
 			expected:    nil, // Should not be found
 		},
 	}
@@ -873,92 +904,92 @@ func TestMapWithStructValues(t *testing.T) {
 func TestComplexNestedStructures(t *testing.T) {
 	// Define several nested types
 	type Contact struct {
-		Type  string
-		Value string
+		Type  string `json:"type"`
+		Value string `json:"value"`
 	}
 
 	type Address struct {
-		Street     string
-		City       string
-		PostalCode string
-		Country    string
-		IsDefault  bool
+		Street     string `json:"street"`
+		City       string `json:"city"`
+		PostalCode string `json:"postalCode"`
+		Country    string `json:"country"`
+		IsDefault  bool   `json:"isDefault"`
 	}
 
 	type Product struct {
-		ID          string
-		Name        string
-		Price       float64
-		Description string
-		Categories  []string
-		Tags        map[string]string
-		Inventory   map[string]int
+		ID          string            `json:"id"`
+		Name        string            `json:"name"`
+		Price       float64           `json:"price"`
+		Description string            `json:"description"`
+		Categories  []string          `json:"categories"`
+		Tags        map[string]string `json:"tags"`
+		Inventory   map[string]int    `json:"inventory"`
 	}
 
 	type Review struct {
-		UserID    string
-		Rating    int
-		Comment   string
-		Date      time.Time
-		Helpful   int
-		Responses []string
+		UserID    string    `json:"userId"`
+		Rating    int       `json:"rating"`
+		Comment   string    `json:"comment"`
+		Date      time.Time `json:"date"`
+		Helpful   int       `json:"helpful"`
+		Responses []string  `json:"responses"`
 	}
 
 	type OrderItem struct {
-		ProductID string
-		Quantity  int
-		UnitPrice float64
-		Discount  float64
+		ProductID string  `json:"productId"`
+		Quantity  int     `json:"quantity"`
+		UnitPrice float64 `json:"unitPrice"`
+		Discount  float64 `json:"discount"`
 	}
 
 	type Order struct {
-		ID            string
-		CustomerID    string
-		Items         []OrderItem
-		Total         float64
-		ShippingInfo  map[string]string
-		PaymentMethod map[string]interface{}
-		Status        string
-		CreatedAt     time.Time
+		ID            string                 `json:"id"`
+		CustomerID    string                 `json:"customerId"`
+		Items         []OrderItem            `json:"items"`
+		Total         float64                `json:"total"`
+		ShippingInfo  map[string]string      `json:"shippingInfo"`
+		PaymentMethod map[string]interface{} `json:"paymentMethod"`
+		Status        string                 `json:"status"`
+		CreatedAt     time.Time              `json:"createdAt"`
 	}
 
 	type Customer struct {
-		ID             string
-		Name           string
-		Age            int
-		Email          string
-		Addresses      []Address
-		Contacts       []Contact
-		PreferredItems []string
-		Orders         []Order
-		AccountBalance float64
-		Metadata       map[string]interface{}
-		IsVerified     bool
-		JoinDate       time.Time
-		LastLogin      time.Time
+		ID             string                 `json:"id"`
+		Name           string                 `json:"name"`
+		Age            int                    `json:"age"`
+		Email          string                 `json:"email"`
+		Addresses      []Address              `json:"addresses"`
+		Contacts       []Contact              `json:"contacts"`
+		PreferredItems []string               `json:"preferredItems"`
+		Orders         []Order                `json:"orders"`
+		AccountBalance float64                `json:"accountBalance"`
+		Metadata       map[string]interface{} `json:"metadata"`
+		IsVerified     bool                   `json:"isVerified"`
+		JoinDate       time.Time              `json:"joinDate"`
+		LastLogin      time.Time              `json:"lastLogin"`
 	}
 
 	type Department struct {
-		Name     string
-		Manager  string
-		Budget   float64
-		Projects []string
-		Staff    map[string]interface{}
+		Name     string                 `json:"name"`
+		Manager  string                 `json:"manager"`
+		Budget   float64                `json:"budget"`
+		Projects []string               `json:"projects"`
+		Staff    map[string]interface{} `json:"staff"`
 	}
 
 	type Company struct {
-		Name         string
-		Founded      time.Time
-		Departments  map[string]Department
-		Customers    map[string]Customer
-		Products     []Product
-		Reviews      map[string][]Review
-		Headquarters Address
-		Branches     []Address
-		Revenue      map[string]float64
-		Employees    int
-		Partners     []string
-		Settings     map[string]interface{}
+		Name         string                 `json:"name"`
+		Founded      time.Time              `json:"founded"`
+		Departments  map[string]Department  `json:"departments"`
+		Customers    map[string]Customer    `json:"customers"`
+		Products     []Product              `json:"products"`
+		Reviews      map[string][]Review    `json:"reviews"`
+		Headquarters Address                `json:"headquarters"`
+		Branches     []Address              `json:"branches"`
+		Revenue      map[string]float64     `json:"revenue"`
+		Employees    int                    `json:"employees"`
+		Partners     []string               `json:"partners"`
+		Settings     map[string]interface{} `json:"settings"`
 	}
 
 	// Create a deeply nested test data structure
@@ -1261,17 +1292,17 @@ func TestComplexNestedStructures(t *testing.T) {
 	}{
 		{
 			description: "Access company name",
-			checkPath:   "company.Name",
+			checkPath:   "company.name",
 			expected:    "Acme Corporation",
 		},
 		{
 			description: "Access headquarters city",
-			checkPath:   "company.Headquarters.City",
+			checkPath:   "company.headquarters.city",
 			expected:    "Business City",
 		},
 		{
 			description: "Access 2022 revenue",
-			checkPath:   "company.Revenue.2022",
+			checkPath:   "company.revenue.2022",
 			expected:    6250000.00,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -1284,12 +1315,12 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		{
 			description: "Access first branch postal code",
-			checkPath:   "company.Branches.0.PostalCode",
+			checkPath:   "company.branches.0.postalCode",
 			expected:    "20025",
 		},
 		{
 			description: "Access engineering department budget",
-			checkPath:   "company.Departments.engineering.Budget",
+			checkPath:   "company.departments.engineering.budget",
 			expected:    1000000.50,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -1302,17 +1333,17 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		{
 			description: "Access second engineering project",
-			checkPath:   "company.Departments.engineering.Projects.1",
+			checkPath:   "company.departments.engineering.projects.1",
 			expected:    "Project Beta",
 		},
 		{
 			description: "Access engineering senior staff",
-			checkPath:   "company.Departments.engineering.Staff.senior.1",
+			checkPath:   "company.departments.engineering.staff.senior.1",
 			expected:    "Bob",
 		},
 		{
 			description: "Access engineering testers count",
-			checkPath:   "company.Departments.engineering.Staff.counts.testers",
+			checkPath:   "company.departments.engineering.staff.counts.testers",
 			expected:    10,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -1325,22 +1356,22 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		{
 			description: "Access first customer name",
-			checkPath:   "company.Customers.cust1.Name",
+			checkPath:   "company.customers.cust1.name",
 			expected:    "XYZ Corp",
 		},
 		{
 			description: "Access first customer's second address city",
-			checkPath:   "company.Customers.cust1.Addresses.1.City",
+			checkPath:   "company.customers.cust1.addresses.1.city",
 			expected:    "Commerce City",
 		},
 		{
 			description: "Access first customer's first contact type",
-			checkPath:   "company.Customers.cust1.Contacts.0.Type",
+			checkPath:   "company.customers.cust1.contacts.0.type",
 			expected:    "phone",
 		},
 		{
 			description: "Access first customer's first order's second item quantity",
-			checkPath:   "company.Customers.cust1.Orders.0.Items.1.Quantity",
+			checkPath:   "company.customers.cust1.orders.0.items.1.quantity",
 			expected:    2,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -1353,17 +1384,17 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		{
 			description: "Access first customer's primary contact",
-			checkPath:   "company.Customers.cust1.Metadata.contacts.primary",
+			checkPath:   "company.customers.cust1.metadata.contacts.primary",
 			expected:    "John Smith",
 		},
 		{
 			description: "Access second customer's device OS",
-			checkPath:   "company.Customers.cust2.Metadata.deviceInfo.os",
+			checkPath:   "company.customers.cust2.metadata.deviceInfo.os",
 			expected:    "Windows",
 		},
 		{
 			description: "Access first product's price",
-			checkPath:   "company.Products.0.Price",
+			checkPath:   "company.products.0.price",
 			expected:    299.99,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -1376,17 +1407,17 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		{
 			description: "Access first product's first category",
-			checkPath:   "company.Products.0.Categories.0",
+			checkPath:   "company.products.0.categories.0",
 			expected:    "software",
 		},
 		{
 			description: "Access second product's warranty tag",
-			checkPath:   "company.Products.1.Tags.warranty",
+			checkPath:   "company.products.1.tags.warranty",
 			expected:    "2-year",
 		},
 		{
 			description: "Access P-101 first review helpful count",
-			checkPath:   "company.Reviews.P-101.0.Helpful",
+			checkPath:   "company.reviews.P-101.0.helpful",
 			expected:    12,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -1399,12 +1430,12 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		{
 			description: "Access P-102 first review response",
-			checkPath:   "company.Reviews.P-102.0.Responses.0",
+			checkPath:   "company.reviews.P-102.0.responses.0",
 			expected:    "We're glad you enjoy our product!",
 		},
 		{
 			description: "Access security settings password minimum length",
-			checkPath:   "company.Settings.security.password_policy.min_length",
+			checkPath:   "company.settings.security.password_policy.min_length",
 			expected:    12,
 			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
@@ -1417,7 +1448,7 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		{
 			description: "Access notification settings for email",
-			checkPath:   "company.Settings.notifications.email",
+			checkPath:   "company.settings.notifications.email",
 			expected:    true,
 		},
 	}

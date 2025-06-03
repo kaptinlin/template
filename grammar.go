@@ -59,13 +59,14 @@ type VariableNode struct {
 
 // Value defines the value type
 type Value struct {
-	Type  ValueType
-	Int   int64
-	Float float64
-	Str   string
-	Bool  bool
-	Slice interface{}
-	Map   interface{}
+	Type   ValueType
+	Int    int64
+	Float  float64
+	Str    string
+	Bool   bool
+	Slice  interface{}
+	Map    interface{}
+	Struct interface{}
 }
 
 type ValueType int
@@ -77,6 +78,8 @@ const (
 	TypeBool
 	TypeSlice
 	TypeMap
+	TypeNil
+	TypeStruct
 )
 
 // FilterExpressionNode defines filter expression node
@@ -389,8 +392,20 @@ func (v *Value) toInterface() interface{} {
 	}
 }
 
-// NewValue creates a new Value
 func NewValue(v interface{}) (*Value, error) {
+	if reflect.TypeOf(v) != nil {
+		rv := reflect.ValueOf(v)
+		for rv.Kind() == reflect.Ptr {
+			if rv.IsNil() {
+				return &Value{Type: TypeBool, Bool: false}, nil
+			}
+			rv = rv.Elem()
+		}
+		if reflect.TypeOf(v).Kind() == reflect.Ptr {
+			return NewValue(rv.Interface())
+		}
+	}
+
 	switch val := v.(type) {
 	case int:
 		return &Value{Type: TypeInt, Int: int64(val)}, nil
@@ -421,6 +436,9 @@ func NewValue(v interface{}) (*Value, error) {
 				}
 				return &Value{Type: TypeMap, Map: result}, nil
 			}
+		}
+		if kind == reflect.Struct {
+			return &Value{Type: TypeStruct, Struct: v}, nil
 		}
 
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedType, v)
@@ -860,6 +878,21 @@ func (v *Value) toBool() (bool, error) {
 			return val.Len() > 0, nil
 		}
 		return false, nil
+	case TypeStruct:
+		if v.Struct == nil {
+			return false, nil
+		}
+
+		val := reflect.ValueOf(v.Struct)
+
+		isZero := true
+		for i := 0; i < val.NumField(); i++ {
+			if !val.Field(i).IsZero() {
+				isZero = false
+				break
+			}
+		}
+		return !isZero, nil
 	default:
 		return false, fmt.Errorf("%w: %v", ErrCannotConvertToBool, v.Type)
 	}

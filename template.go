@@ -214,9 +214,8 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 
 	if kind == reflect.String {
 		str := val.String()
-		length := len(str)
 		for i, ch := range str {
-			updateLoopContext(loopCtx, node.Variable, string(ch), i, length)
+			updateLoopContext(loopCtx, node.Variable, "", string(ch), i)
 			err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			forLayers--
 			if err != nil {
@@ -230,7 +229,7 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 		length := val.Len()
 		for i := 0; i < length; i++ {
 			item := val.Index(i).Interface()
-			updateLoopContext(loopCtx, node.Variable, item, i, length)
+			updateLoopContext(loopCtx, node.Variable, "", item, i)
 			err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			forLayers--
 			if err != nil {
@@ -247,10 +246,25 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 			keyStr := fmt.Sprint(key.Interface())
 			valueValue := val.MapIndex(key).Interface()
 
-			updateLoopContext(loopCtx, node.Variable, map[string]interface{}{
-				"key":   keyStr,
-				"value": valueValue,
-			}, i, val.Len())
+			// Check if we have a single variable name or multiple variable names
+			varNames := strings.Split(node.Variable, ",")
+			for j := range varNames {
+				varNames[j] = strings.TrimSpace(varNames[j])
+			}
+
+			var item interface{}
+			if len(varNames) == 1 {
+				// For single variable, create an object with key and value
+				item = map[string]interface{}{
+					"key":   keyStr,
+					"value": valueValue,
+				}
+				updateLoopContext(loopCtx, node.Variable, "", item, i)
+			} else {
+				// For two variables, use the original behavior
+				updateLoopContext(loopCtx, node.Variable, keyStr, valueValue, i)
+			}
+
 			err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			forLayers--
 			if err != nil {
@@ -318,17 +332,25 @@ func deepCopyValue(v interface{}) interface{} {
 }
 
 // updateLoopContext updates loop context information
-func updateLoopContext(ctx Context, varName string, item interface{}, index, total int) {
-	ctx.Set(varName, item)
-	ctx.Set("loop", map[string]interface{}{
-		"index":     index + 1,         // 1-based index
-		"index0":    index,             // 0-based index
-		"first":     index == 0,        // Whether it is the first element
-		"last":      index == total-1,  // Whether it is the last element
-		"length":    total,             // Total length of the collection
-		"revindex":  total - index,     // Reverse index (1-based)
-		"revindex0": total - index - 1, // Reverse index (0-based)
-	})
+func updateLoopContext(ctx Context, varName string, keyStr string, item interface{}, index int) {
+	// Split variable name into multiple variables if needed
+	varNames := strings.Split(varName, ",")
+	// Trim spaces from each variable name
+	for i := range varNames {
+		varNames[i] = strings.TrimSpace(varNames[i])
+	}
+
+	if len(varNames) == 1 {
+		ctx.Set(varNames[0], item)
+	} else if len(varNames) == 2 {
+		if keyStr != "" {
+			ctx.Set(varNames[0], keyStr)
+			ctx.Set(varNames[1], item)
+		} else {
+			ctx.Set(varNames[0], index)
+			ctx.Set(varNames[1], item)
+		}
+	}
 }
 
 // Disassemble expression
