@@ -204,9 +204,11 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 		return err
 	}
 	// Create new context only for the outer loop
-	loopCtx := Context{}
+	var loopCtx Context
 	if forLayers < 2 {
 		loopCtx = deepCopy(ctx)
+	} else {
+		loopCtx = ctx
 	}
 	// Handle different types of collections
 	val := reflect.ValueOf(collection)

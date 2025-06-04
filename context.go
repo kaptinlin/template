@@ -23,7 +23,6 @@ func NewContext() Context {
 // Values are recursively processed, with structs converted to maps to enable dot-notation access in templates.
 func (c Context) Set(key string, value interface{}) {
 	// Process the value, ensuring structs are converted to maps
-	//value = recursivelyProcessValue(value)
 
 	// Split the key by dot to create nested structure
 	parts := strings.Split(key, ".")
@@ -50,7 +49,6 @@ func (c Context) Set(key string, value interface{}) {
 			currentMap = currentMap[part].(map[string]interface{})
 		}
 	}
-
 }
 
 // Get retrieves a value from the Context for the specified key, supporting nested key access.

@@ -2911,11 +2911,9 @@ Member: "Carol Brown"
 						t.Errorf("Output contains forbidden string: %s\nGot:\n%s", forbidden, result)
 					}
 				}
-			} else {
+			} else if result != tc.exactMatch {
 				// Exact match
-				if result != tc.exactMatch {
-					t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.exactMatch, result)
-				}
+				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.exactMatch, result)
 			}
 		})
 	}
@@ -3436,7 +3434,10 @@ func TestComplexNestedDataStructuresWithTemplateFeatures(t *testing.T) {
 	company.Employees[1].Projects = []*Project{company.Projects["active"][1], company.Projects["completed"][0]}
 
 	// Set department project references
-	company.Departments[0].Projects = append(company.Projects["active"], company.Projects["completed"]...)
+	var allProjects []*Project
+	allProjects = append(allProjects, company.Projects["active"]...)
+	allProjects = append(allProjects, company.Projects["completed"]...)
+	company.Departments[0].Projects = allProjects
 
 	// Create organizational structure (after company creation)
 	company.Organizations = map[string]*Organization{
@@ -3877,11 +3878,9 @@ Team:
 						t.Errorf("Output contains forbidden content: %s\nActual output:\n%s", forbidden, result)
 					}
 				}
-			} else {
+			} else if strings.TrimSpace(result) != strings.TrimSpace(tc.expected) {
 				// Exact match
-				if strings.TrimSpace(result) != strings.TrimSpace(tc.expected) {
-					t.Errorf("Template output mismatch\nExpected:\n%s\nActual:\n%s", tc.expected, result)
-				}
+				t.Errorf("Template output mismatch\nExpected:\n%s\nActual:\n%s", tc.expected, result)
 			}
 		})
 	}

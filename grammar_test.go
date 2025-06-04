@@ -149,6 +149,10 @@ func TestGrammar(t *testing.T) {
 					got = result.Slice
 				case TypeMap:
 					got = result.Map
+				case TypeNil:
+					got = nil
+				case TypeStruct:
+					got = result.Struct
 				}
 
 				if got != tt.expected {

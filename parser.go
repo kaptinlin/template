@@ -8,7 +8,10 @@ import (
 
 // Regular expression to identify variables.
 // var variableRegex = regexp.MustCompile(`{{\s*([\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
-var variableRegex = regexp.MustCompile(`{{\s*(?:'[^']*'|"[\s\S]*?"|[\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
+var variableRegex = regexp.MustCompile(
+	`{{\s*(?:'[^']*'|"[\s\S]*?"|[\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`,
+)
+
 // var forRegex = regexp.MustCompile(`{%\s*for\s+([\w\.]+)\s+in\s+([\w\.\[\]]+)\s*%}`)
 var ifRegex = regexp.MustCompile(`{%\s*if\s+` + // if start
 	`([^%]+)` + // Capture any non-% characters (expression part)
@@ -16,25 +19,28 @@ var ifRegex = regexp.MustCompile(`{%\s*if\s+` + // if start
 var endforRegex = regexp.MustCompile(`{%\s*endfor\s*%}`)
 var endifRegex = regexp.MustCompile(`{%\s*endif\s*%}`)
 var elseRegex = regexp.MustCompile(`{%\s*else\s*%}`)
+
 // var forTwoVarsRegex = regexp.MustCompile(
-//     `^{%\s*for\s+` +
-//         `([a-zA-Z_][\w\.]*)` +    
-//         `\s*,\s*` +
-//         `([a-zA-Z_][\w\.]*)` +    
-//         `\s+in\s+` +
-//         `([\w\.$$$$'"]+)` +       
-//     `\s*%}$`,
+//
+//	`^{%\s*for\s+` +
+//	    `([a-zA-Z_][\w\.]*)` +
+//	    `\s*,\s*` +
+//	    `([a-zA-Z_][\w\.]*)` +
+//	    `\s+in\s+` +
+//	    `([\w\.$$$$'"]+)` +
+//	`\s*%}$`,
+//
 // )
 var forRegex = regexp.MustCompile(
-    `{%\s*for\s+` +
-        `(` +
-            `([\w\.]+)` +                     
-            `|` +                            
-            `([\w\.]+)\s*,\s*([\w\.]+)` +    
-        `)` +
-    `\s+in\s+` +
-        `([\w\.$$$$'"]+)` +                 
-    `\s*%}`,
+	`{%\s*for\s+` +
+		`(` +
+		`([\w\.]+)` +
+		`|` +
+		`([\w\.]+)\s*,\s*([\w\.]+)` +
+		`)` +
+		`\s+in\s+` +
+		`([\w\.$$$$'"]+)` +
+		`\s*%}`,
 )
 
 // Parser analyzes template syntax.
