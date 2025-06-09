@@ -1,11 +1,10 @@
 module github.com/kaptinlin/template
 
-go 1.23
-
-toolchain go1.24.3
+go 1.24.3
 
 require (
 	github.com/kaptinlin/filter v0.2.2
+	github.com/kaptinlin/jsonpointer v0.4.3
 	github.com/test-go/testify v1.1.4
 )
 
