@@ -19,34 +19,40 @@ func NewContext() Context {
 }
 
 // Set inserts a value into the Context with the specified key, supporting dot-notation (.) for nested keys.
-// For example: ctx.Set("user.profile.name", "John") creates a nested map structure.
-// Values are recursively processed, with structs converted to maps to enable dot-notation access in templates.
+// This method preserves original data types for top-level keys and creates minimal map structures
+// only when needed for nested access. Relies on jsonpointer's powerful reading capabilities.
 func (c Context) Set(key string, value interface{}) {
-	// Process the value, ensuring structs are converted to maps
+	if key == "" {
+		return // Silently ignore empty keys for backward compatibility
+	}
 
-	// Split the key by dot to create nested structure
-	parts := strings.Split(key, ".")
+	// Convert dot notation to path components compatible with jsonpointer
+	parts := convertDotToPath(key)
+
+	// For top-level keys, always store the original type directly
+	// This preserves structs, slices, arrays, and other complex types
 	if len(parts) == 1 {
 		c[key] = value
 		return
 	}
 
-	// Create or update nested structure
-	var currentMap map[string]interface{} = c
+	// For nested keys, create a simple nested map structure
+	// jsonpointer will handle reading from complex types, but for setting
+	// we need a predictable map structure
+	current := c
 	for i, part := range parts {
 		if i == len(parts)-1 {
-			// Last part, set the actual value
-			currentMap[part] = value
+			// Last part: set the actual value
+			current[part] = value
 		} else {
-			// Intermediate parts, ensure they are map types
-			if _, exists := currentMap[part]; !exists {
-				currentMap[part] = make(map[string]interface{})
-			} else if _, ok := currentMap[part].(map[string]interface{}); !ok {
-				// If exists but not a map type, override with a new map
-				currentMap[part] = make(map[string]interface{})
+			// Intermediate parts: ensure they are map types
+			if _, exists := current[part]; !exists {
+				current[part] = make(map[string]interface{})
+			} else if _, ok := current[part].(map[string]interface{}); !ok {
+				// If exists but not a map, replace with map for nested access
+				current[part] = make(map[string]interface{})
 			}
-			// Descend to the next level map
-			currentMap = currentMap[part].(map[string]interface{})
+			current = current[part].(map[string]interface{})
 		}
 	}
 }

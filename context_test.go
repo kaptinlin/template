@@ -7,6 +7,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1487,4 +1488,113 @@ func TestComplexNestedStructures(t *testing.T) {
 // lastYear returns a date from one year ago
 func lastYear(t time.Time) time.Time {
 	return t.AddDate(-1, 0, 0)
+}
+
+// TestSetPreservesOriginalTypes tests that Set method preserves original data types
+// and jsonpointer can read them correctly
+func TestSetPreservesOriginalTypes(t *testing.T) {
+	type User struct {
+		Name  string `json:"name"`
+		Age   int    `json:"age"`
+		Email string `json:"email"`
+	}
+
+	type Company struct {
+		Name      string          `json:"name"`
+		Employees []User          `json:"employees"`
+		Settings  map[string]bool `json:"settings"`
+	}
+
+	tests := []struct {
+		name     string
+		key      string
+		value    interface{}
+		getKey   string
+		expected interface{}
+	}{
+		{
+			name:     "Set struct directly",
+			key:      "user",
+			value:    User{Name: "John", Age: 30, Email: "john@example.com"},
+			getKey:   "user.name",
+			expected: "John",
+		},
+		{
+			name:     "Set slice of structs",
+			key:      "users",
+			value:    []User{{Name: "Alice", Age: 25}, {Name: "Bob", Age: 35}},
+			getKey:   "users.1.name",
+			expected: "Bob",
+		},
+		{
+			name: "Set complex nested structure",
+			key:  "company",
+			value: Company{
+				Name: "TechCorp",
+				Employees: []User{
+					{Name: "Charlie", Age: 28, Email: "charlie@techcorp.com"},
+					{Name: "Diana", Age: 32, Email: "diana@techcorp.com"},
+				},
+				Settings: map[string]bool{"remote": true, "flexible": false},
+			},
+			getKey:   "company.employees.0.email",
+			expected: "charlie@techcorp.com",
+		},
+		{
+			name:     "Set map directly",
+			key:      "config",
+			value:    map[string]interface{}{"debug": true, "port": 8080},
+			getKey:   "config.port",
+			expected: 8080,
+		},
+		{
+			name:     "Set nested with preserved types",
+			key:      "nested.data",
+			value:    []map[string]string{{"type": "test", "value": "data"}},
+			getKey:   "nested.data.0.type",
+			expected: "test",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := NewContext()
+
+			// Set the value
+			ctx.Set(tt.key, tt.value)
+
+			// Try to get the nested value using jsonpointer-compatible Get method
+			result, err := ctx.Get(tt.getKey)
+			if err != nil {
+				t.Fatalf("Failed to get value for key '%s': %v", tt.getKey, err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, result)
+			}
+
+			// Also verify that the top-level value maintains its original type
+			topLevelKey := strings.Split(tt.key, ".")[0]
+			topLevelValue, err := ctx.Get(topLevelKey)
+			if err != nil {
+				t.Fatalf("Failed to get top-level value for key '%s': %v", topLevelKey, err)
+			}
+
+			// The type should be preserved
+			switch tt.value.(type) {
+			case User:
+				if _, ok := topLevelValue.(User); !ok {
+					t.Errorf("Expected User type to be preserved, got %T", topLevelValue)
+				}
+			case []User:
+				if _, ok := topLevelValue.([]User); !ok {
+					t.Errorf("Expected []User type to be preserved, got %T", topLevelValue)
+				}
+			case Company:
+				if _, ok := topLevelValue.(Company); !ok {
+					t.Errorf("Expected Company type to be preserved, got %T", topLevelValue)
+				}
+			}
+		})
+	}
 }
