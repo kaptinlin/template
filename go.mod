@@ -3,14 +3,14 @@ module github.com/kaptinlin/template
 go 1.24.3
 
 require (
-	github.com/kaptinlin/filter v0.2.2
+	github.com/kaptinlin/filter v0.3.0
 	github.com/kaptinlin/jsonpointer v0.4.3
 	github.com/test-go/testify v1.1.4
 )
 
 require (
-	github.com/dromara/carbon/v2 v2.6.6 // indirect
-	github.com/golang-module/carbon/v2 v2.6.6 // indirect
+	github.com/dromara/carbon/v2 v2.6.7 // indirect
+	github.com/golang-module/carbon/v2 v2.6.7 // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/sys v0.28.0 // indirect
