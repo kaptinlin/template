@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 )
@@ -410,41 +411,45 @@ func NewValue(v interface{}) (*Value, error) {
 		}
 	}
 
-	switch val := v.(type) {
-	case int:
-		return &Value{Type: TypeInt, Int: int64(val)}, nil
-	case int64:
-		return &Value{Type: TypeInt, Int: val}, nil
-	case float64:
-		return &Value{Type: TypeFloat, Float: val}, nil
-	case string:
-		return &Value{Type: TypeString, Str: val}, nil
-	case bool:
-		return &Value{Type: TypeBool, Bool: val}, nil
-	default:
-		rv := reflect.ValueOf(v)
-		kind := rv.Kind()
+	rv := reflect.ValueOf(v)
+	kind := rv.Kind()
 
-		if kind == reflect.Slice || kind == reflect.Array {
-			return &Value{Type: TypeSlice, Slice: v}, nil
+	// Use reflect to check the underlying type to handle alias types
+	//nolint:exhaustive // Only handle types supported by the template engine
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return &Value{Type: TypeInt, Int: rv.Int()}, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		uintVal := rv.Uint()
+		// Check for overflow before converting uint64 to int64
+		if uintVal > math.MaxInt64 {
+			return nil, fmt.Errorf("%w: %d", ErrIntegerOverflow, uintVal)
 		}
-		if kind == reflect.Map {
-			if rv.Type().Key().Kind() == reflect.String {
-				if m, ok := v.(map[string]interface{}); ok {
-					return &Value{Type: TypeMap, Map: m}, nil
-				}
-
-				result := make(map[string]interface{})
-				for _, k := range rv.MapKeys() {
-					result[k.String()] = rv.MapIndex(k).Interface()
-				}
-				return &Value{Type: TypeMap, Map: result}, nil
+		return &Value{Type: TypeInt, Int: int64(uintVal)}, nil
+	case reflect.Float32, reflect.Float64:
+		return &Value{Type: TypeFloat, Float: rv.Float()}, nil
+	case reflect.String:
+		return &Value{Type: TypeString, Str: rv.String()}, nil
+	case reflect.Bool:
+		return &Value{Type: TypeBool, Bool: rv.Bool()}, nil
+	case reflect.Slice, reflect.Array:
+		return &Value{Type: TypeSlice, Slice: v}, nil
+	case reflect.Map:
+		if rv.Type().Key().Kind() == reflect.String {
+			if m, ok := v.(map[string]interface{}); ok {
+				return &Value{Type: TypeMap, Map: m}, nil
 			}
-		}
-		if kind == reflect.Struct {
-			return &Value{Type: TypeStruct, Struct: v}, nil
-		}
 
+			result := make(map[string]interface{})
+			for _, k := range rv.MapKeys() {
+				result[k.String()] = rv.MapIndex(k).Interface()
+			}
+			return &Value{Type: TypeMap, Map: result}, nil
+		}
+		return nil, fmt.Errorf("%w: map with non-string key type %T", ErrUnsupportedType, v)
+	case reflect.Struct:
+		return &Value{Type: TypeStruct, Struct: v}, nil
+	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedType, v)
 	}
 }
@@ -511,17 +516,17 @@ func (n *UnaryExpressionNode) Evaluate(ctx Context) (*Value, error) {
 }
 
 // Evaluate method implementation for NumberLiteralNode
-func (n *NumberLiteralNode) Evaluate(ctx Context) (*Value, error) {
+func (n *NumberLiteralNode) Evaluate(_ Context) (*Value, error) {
 	return NewValue(n.Value)
 }
 
 // Evaluate method implementation for StringLiteralNode
-func (n *StringLiteralNode) Evaluate(ctx Context) (*Value, error) {
+func (n *StringLiteralNode) Evaluate(_ Context) (*Value, error) {
 	return NewValue(n.Value)
 }
 
 // Evaluate method implementation for BooleanLiteralNode
-func (n *BooleanLiteralNode) Evaluate(ctx Context) (*Value, error) {
+func (n *BooleanLiteralNode) Evaluate(_ Context) (*Value, error) {
 	return NewValue(n.Value)
 }
 

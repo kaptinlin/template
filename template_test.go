@@ -81,22 +81,22 @@ func TestConvertToString(t *testing.T) {
 		{
 			name:     "SliceOfString",
 			input:    []string{"apple", "banana", "cherry"},
-			expected: "[apple, banana, cherry]",
+			expected: "[apple,banana,cherry]",
 		},
 		{
 			name:     "SliceOfInt",
 			input:    []int{1, 2, 3},
-			expected: "[1, 2, 3]",
+			expected: "[1,2,3]",
 		},
 		{
 			name:     "SliceOfFloat64",
 			input:    []float64{1.1, 2.2, 3.3},
-			expected: "[1.1, 2.2, 3.3]",
+			expected: "[1.1,2.2,3.3]",
 		},
 		{
 			name:     "SliceOfBool",
 			input:    []bool{true, false, true},
-			expected: "[true, false, true]",
+			expected: "[true,false,true]",
 		},
 		{
 			name:     "Time",
@@ -142,7 +142,7 @@ func TestIfConditions(t *testing.T) {
 			context: map[string]interface{}{
 				"message": "one,two,three",
 			},
-			expected: "[one, two, three]",
+			expected: "[one,two,three]",
 		},
 		{
 			name:     "Simple condition",
@@ -1075,7 +1075,7 @@ Address split: {{ address_str | split:"," }}`,
 				"address_str": "Shanghai,Pudong,Zhangjiang",
 			},
 			expected: `// Split filter structure testing
-Address split: [Shanghai, Pudong, Zhangjiang]`,
+Address split: [Shanghai,Pudong,Zhangjiang]`,
 		},
 		{
 			name: "Trim filter with structs",
@@ -1461,7 +1461,7 @@ func TestComplexNestedConditions(t *testing.T) {
 
 	// Verify output contains all expected values
 	expectedValues := []string{
-		"Hello, [UserProfile, PersonalInfo]!", "Hello, [AccountInfo, SecurityInfo]!", "Hello, StudentInfo2!",
+		"Hello, [UserProfile,PersonalInfo]!", "Hello, [AccountInfo,SecurityInfo]!", "Hello, StudentInfo2!",
 		"Hello, {\"info\":\"TeacherInfo2\"}!", "Math score: 85!", "Language score: 88!",
 		"Theme: {\"value\":1}!", "Layout: {\"value\":2}!", "Option1: false!", "Option2: false!",
 	}
@@ -1797,7 +1797,7 @@ Second element: {{ user.address.slice.1 }}`,
 				},
 			},
 			expected: `Slice test:
-Slice: [item1, item2, item3]
+Slice: [item1,item2,item3]
 First element: item1
 Second element: item2`,
 		},
@@ -1818,7 +1818,7 @@ Array in level 2: {{ user.address.mapSlice.level1.sublevel.0 }}`,
 			expected: `MapSlice test:
 MapSlice: {"level1":{"sublevel":["deepitem1","deepitem2","deepitem3"]}}
 Level 1 key: {"sublevel":["deepitem1","deepitem2","deepitem3"]}
-Level 2 key: [deepitem1, deepitem2, deepitem3]
+Level 2 key: [deepitem1,deepitem2,deepitem3]
 Array in level 2: deepitem1`,
 		},
 		{
@@ -1898,7 +1898,7 @@ Department SliceMap: {{ user.address.department.sliceMap }}`,
 Department street: 123 Main St	
 Department city: New York
 Department Map: {"key1":"value1","key2":"value2"}
-Department Slice: [item1, item2, item3]
+Department Slice: [item1,item2,item3]
 Department MapSlice: {"level1":{"sublevel":["deepitem1","deepitem2","deepitem3"]}}
 Department SliceMap: [[{"key1":"nestedvalue1","key2":"nestedvalue2"},{"key1":"nestedvalue3","key2":"nestedvalue4"}],[{"key1":"nestedvalue5","key2":"nestedvalue6"}]]`,
 		},
@@ -2250,7 +2250,7 @@ First item: {{ user.address.mapSlice.level1.sublevel.0 }}`,
 			expected: `// MapSlice direct access (more reliable than iteration)
 MapSlice access:
 Level1 data: {"sublevel":["deepitem1","deepitem2","deepitem3"]}
-Sublevel data: [deepitem1, deepitem2, deepitem3]
+Sublevel data: [deepitem1,deepitem2,deepitem3]
 First item: deepitem1`,
 		},
 		{
@@ -3881,6 +3881,364 @@ Team:
 			} else if strings.TrimSpace(result) != strings.TrimSpace(tc.expected) {
 				// Exact match
 				t.Errorf("Template output mismatch\nExpected:\n%s\nActual:\n%s", tc.expected, result)
+			}
+		})
+	}
+}
+
+// TestAliasTypes tests the handling of alias types in templates
+func TestAliasTypes(t *testing.T) {
+	// Define alias types
+	type UserID string
+	type Age int
+	type Score float64
+	type IsActive bool
+	type Department string
+	type Priority int
+
+	// Define struct using alias types
+	type User struct {
+		ID         UserID     `json:"id"`
+		Name       string     `json:"name"`
+		Age        Age        `json:"age"`
+		Score      Score      `json:"score"`
+		IsActive   IsActive   `json:"is_active"`
+		Department Department `json:"department"`
+		Priority   Priority   `json:"priority"`
+	}
+
+	// Define slice of alias types
+	type TagList []string
+	type ScoreList []Score
+	type IDList []UserID
+	type StatusList []IsActive
+
+	// Create test data with alias types
+	users := []User{
+		{
+			ID:         UserID("user-001"),
+			Name:       "Alice Johnson",
+			Age:        Age(30),
+			Score:      Score(95.5),
+			IsActive:   IsActive(true),
+			Department: Department("Engineering"),
+			Priority:   Priority(1),
+		},
+		{
+			ID:         UserID("user-002"),
+			Name:       "Bob Smith",
+			Age:        Age(25),
+			Score:      Score(87.2),
+			IsActive:   IsActive(false),
+			Department: Department("Marketing"),
+			Priority:   Priority(2),
+		},
+		{
+			ID:         UserID("user-003"),
+			Name:       "Carol Brown",
+			Age:        Age(35),
+			Score:      Score(92.8),
+			IsActive:   IsActive(true),
+			Department: Department("HR"),
+			Priority:   Priority(3),
+		},
+	}
+
+	// Test data with alias slices
+	tags := TagList{"important", "urgent", "high-priority"}
+	scores := ScoreList{Score(88.5), Score(92.0), Score(85.7)}
+	userIDs := IDList{UserID("admin-001"), UserID("admin-002")}
+	statusList := StatusList{IsActive(true), IsActive(false), IsActive(true)}
+
+	testCases := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name: "Basic alias type rendering",
+			template: `User Information:
+ID: {{ user.id }}
+Name: {{ user.name }}
+Age: {{ user.age }}
+Score: {{ user.score }}
+Active: {{ user.is_active }}
+Department: {{ user.department }}
+Priority: {{ user.priority }}`,
+			context: map[string]interface{}{
+				"user": users[0],
+			},
+			expected: `User Information:
+ID: user-001
+Name: Alice Johnson
+Age: 30
+Score: 95.5
+Active: true
+Department: Engineering
+Priority: 1`,
+		},
+		{
+			name: "Alias types in if conditions",
+			template: `User Status Report:
+{% if user.is_active %}{{ user.name }} is active{% else %}{{ user.name }} is inactive{% endif %}
+{% if user.age >= 30 %}{{ user.name }} is senior ({{ user.age }} years old){% else %}{{ user.name }} is junior ({{ user.age }} years old){% endif %}
+{% if user.score > 90 %}{{ user.name }} has excellent score: {{ user.score }}{% endif %}
+{% if user.department == "Engineering" %}{{ user.name }} works in {{ user.department }}{% endif %}
+{% if user.priority <= 2 %}{{ user.name }} has high priority: {{ user.priority }}{% endif %}`,
+			context: map[string]interface{}{
+				"user": users[0],
+			},
+			expected: `User Status Report:
+Alice Johnson is active
+Alice Johnson is senior (30 years old)
+Alice Johnson has excellent score: 95.5
+Alice Johnson works in Engineering
+Alice Johnson has high priority: 1`,
+		},
+		{
+			name: "Alias types in for loops",
+			template: `All Users:
+{% for user in users %}
+- {{ user.name }} ({{ user.id }}): Age {{ user.age }}, Score {{ user.score }}, Department {{ user.department }}
+  {% if user.is_active %}Status: Active{% else %}Status: Inactive{% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": users,
+			},
+			expected: `All Users:
+
+- Alice Johnson (user-001): Age 30, Score 95.5, Department Engineering
+  Status: Active
+
+- Bob Smith (user-002): Age 25, Score 87.2, Department Marketing
+  Status: Inactive
+
+- Carol Brown (user-003): Age 35, Score 92.8, Department HR
+  Status: Active
+`,
+		},
+		{
+			name: "Alias slice types in for loops",
+			template: `Tags:
+{% for tag in tags %}
+- {{ tag }}
+{% endfor %}
+
+Scores:
+{% for score in scores %}
+- {{ score }}
+{% endfor %}
+
+User IDs:
+{% for id in userIDs %}
+- {{ id }}
+{% endfor %}
+
+Status List:
+{% for status in statusList %}
+- {{ status }}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"tags":       tags,
+				"scores":     scores,
+				"userIDs":    userIDs,
+				"statusList": statusList,
+			},
+			expected: `Tags:
+
+- important
+
+- urgent
+
+- high-priority
+
+
+Scores:
+
+- 88.5
+
+- 92
+
+- 85.7
+
+
+User IDs:
+
+- admin-001
+
+- admin-002
+
+
+Status List:
+
+- true
+
+- false
+
+- true
+`,
+		},
+		{
+			name: "Complex conditions with alias types",
+			template: `Active High-Performing Users:
+{% for user in users %}
+{% if user.is_active && user.score > 90 && user.age >= 25 %}
+
+★ {{ user.name }}
+  ID: {{ user.id }}
+  Age: {{ user.age }} years
+  Score: {{ user.score }}
+  Department: {{ user.department }}
+  Priority: {{ user.priority }}
+{% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": users,
+			},
+			expected: `Active High-Performing Users:
+
+
+
+★ Alice Johnson
+  ID: user-001
+  Age: 30 years
+  Score: 95.5
+  Department: Engineering
+  Priority: 1
+
+
+
+
+
+
+★ Carol Brown
+  ID: user-003
+  Age: 35 years
+  Score: 92.8
+  Department: HR
+  Priority: 3
+
+`,
+		},
+		{
+			name: "Alias types with filters",
+			template: `User Summary:
+{% for user in users %}
+{{ user.name | upper }}:
+  ID: {{ user.id | upper }}
+  Department: {{ user.department | lower }}
+  {% if user.score >= 85 %}Long score: {{ user.score }}{% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": users,
+			},
+			expected: `User Summary:
+
+ALICE JOHNSON:
+  ID: USER-001
+  Department: engineering
+  Long score: 95.5
+
+BOB SMITH:
+  ID: USER-002
+  Department: marketing
+  Long score: 87.2
+
+CAROL BROWN:
+  ID: USER-003
+  Department: hr
+  Long score: 92.8
+`,
+		},
+		{
+			name: "Alias types comparison and arithmetic",
+			template: `User Comparison:
+{% for user in users %}
+{{ user.name }}:
+  {% if user.age > 28 %}Age category: Senior{% else %}Age category: Junior{% endif %}
+  {% if user.score >= 90 %}Performance: Excellent{% else %}Performance: Good{% endif %}
+  {% if user.priority == 1 %}Priority: Highest{% else %}Priority: {{ user.priority }}{% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": users,
+			},
+			expected: `User Comparison:
+
+Alice Johnson:
+  Age category: Senior
+  Performance: Excellent
+  Priority: Highest
+
+Bob Smith:
+  Age category: Junior
+  Performance: Good
+  Priority: 2
+
+Carol Brown:
+  Age category: Senior
+  Performance: Excellent
+  Priority: 3
+`,
+		},
+		{
+			name: "Mixed alias and regular types",
+			template: `Department Statistics:
+{% for user in users %}
+{{ user.department }} Department:
+  Employee: {{ user.name }} (ID: {{ user.id }})
+  Details: {{ user.age }} years old, Score: {{ user.score }}
+  Status: {% if user.is_active %}Active{% else %}Inactive{% endif %}
+  Priority Level: {{ user.priority }}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": users,
+			},
+			expected: `Department Statistics:
+
+Engineering Department:
+  Employee: Alice Johnson (ID: user-001)
+  Details: 30 years old, Score: 95.5
+  Status: Active
+  Priority Level: 1
+
+Marketing Department:
+  Employee: Bob Smith (ID: user-002)
+  Details: 25 years old, Score: 87.2
+  Status: Inactive
+  Priority Level: 2
+
+HR Department:
+  Employee: Carol Brown (ID: user-003)
+  Details: 35 years old, Score: 92.8
+  Status: Active
+  Priority Level: 3
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpl := NewTemplate()
+			parser := NewParser()
+			tpl, err := parser.Parse(tc.template)
+			if err != nil {
+				t.Fatalf("Template parsing failed: %v", err)
+			}
+			tmpl.Nodes = tpl.Nodes
+
+			ctx := NewContext()
+			for k, v := range tc.context {
+				ctx.Set(k, v)
+			}
+
+			result, err := tmpl.Execute(ctx)
+			if err != nil {
+				t.Fatalf("Template execution failed: %v", err)
+			}
+
+			if result != tc.expected {
+				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
 			}
 		})
 	}

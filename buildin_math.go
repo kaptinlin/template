@@ -31,7 +31,7 @@ func init() {
 }
 
 // absFilter calculates the absolute value of a number.
-func absFilter(value interface{}, args ...string) (interface{}, error) {
+func absFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Abs(value)
 }
 
@@ -40,8 +40,8 @@ func atLeastFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: atLeast filter requires one argument", ErrInsufficientArgs)
 	}
-	min := args[0]
-	return filter.AtLeast(value, min)
+	minValue := args[0]
+	return filter.AtLeast(value, minValue)
 }
 
 // atMostFilter ensures the number is no larger than the maximum value provided.
@@ -49,8 +49,8 @@ func atMostFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: atMost filter requires one argument", ErrInsufficientArgs)
 	}
-	max := args[0]
-	return filter.AtMost(value, max)
+	maxValue := args[0]
+	return filter.AtMost(value, maxValue)
 }
 
 // roundFilter rounds the input to the specified number of decimal places.
@@ -63,12 +63,12 @@ func roundFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // floorFilter rounds the input down to the nearest whole number.
-func floorFilter(value interface{}, args ...string) (interface{}, error) {
+func floorFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Floor(value)
 }
 
 // ceilFilter rounds the input up to the nearest whole number.
-func ceilFilter(value interface{}, args ...string) (interface{}, error) {
+func ceilFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Ceil(value)
 }
 

@@ -122,26 +122,58 @@ func resolveVariable(variable string, ctx Context) (interface{}, error) {
 	return value, nil
 }
 
-// convertToString attempts to convert various types to a string, handling common and complex types distinctly.
+// convertToString attempts to convert various types to a string, handling all types including aliases uniformly.
 func convertToString(value interface{}) (string, error) {
-	switch v := value.(type) {
-	case string:
-		return v, nil
-	case []string:
-		return fmt.Sprintf("[%s]", strings.Join(v, ", ")), nil
-	case []int, []int64, []float64, []bool:
-		formatted := fmt.Sprint(v)                           // Convert slice to string
-		formatted = strings.Trim(formatted, "[]")            // Remove square brackets
-		formatted = strings.ReplaceAll(formatted, " ", ", ") // Replace spaces with commas
-		return fmt.Sprintf("[%s]", formatted), nil
-	case time.Time:
-		// Customize the time format as needed
-		return v.Format("2006-01-02 15:04:05"), nil
-	case fmt.Stringer:
-		return v.String(), nil
+	// Handle special interfaces first
+	if t, ok := value.(time.Time); ok {
+		return t.Format("2006-01-02 15:04:05"), nil
+	}
+	if s, ok := value.(fmt.Stringer); ok {
+		return s.String(), nil
+	}
+
+	// Use reflect for uniform handling of all types including aliases
+	rv := reflect.ValueOf(value)
+	if !rv.IsValid() {
+		return "", nil
+	}
+
+	//nolint:exhaustive // Only handle types supported by the template engine
+	switch rv.Kind() {
+	case reflect.String:
+		return rv.String(), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return fmt.Sprintf("%d", rv.Int()), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return fmt.Sprintf("%d", rv.Uint()), nil
+	case reflect.Float32, reflect.Float64:
+		return fmt.Sprintf("%g", rv.Float()), nil
+	case reflect.Bool:
+		return fmt.Sprintf("%t", rv.Bool()), nil
+	case reflect.Slice, reflect.Array:
+		length := rv.Len()
+		if length == 0 {
+			return "[]", nil
+		}
+
+		var parts []string
+		for i := 0; i < length; i++ {
+			item := rv.Index(i).Interface()
+			str, err := convertToString(item)
+			if err != nil {
+				// Fallback to JSON for complex items
+				jsonBytes, err := json.Marshal(item)
+				if err != nil {
+					return "", fmt.Errorf("could not convert slice item to string: %w", err)
+				}
+				str = string(jsonBytes)
+			}
+			parts = append(parts, str)
+		}
+		return fmt.Sprintf("[%s]", strings.Join(parts, ",")), nil
 	default:
-		// Fallback for more complex or unknown types: use JSON serialization
-		jsonBytes, err := json.Marshal(v)
+		// Fallback for complex types: use JSON serialization
+		jsonBytes, err := json.Marshal(value)
 		if err != nil {
 			return "", fmt.Errorf("could not convert value to string: %w", err)
 		}

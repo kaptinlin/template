@@ -128,4 +128,7 @@ var (
 
 	// ErrUnterminatedString is returned when a string literal is not properly terminated.
 	ErrUnterminatedString = errors.New("unterminated string literal")
+
+	// ErrIntegerOverflow is returned when an unsigned integer value exceeds the maximum int64 value.
+	ErrIntegerOverflow = errors.New("unsigned integer value exceeds maximum int64 value")
 )

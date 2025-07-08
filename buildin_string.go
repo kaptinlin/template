@@ -49,7 +49,7 @@ func defaultFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // trimFilter removes leading and trailing whitespace from the string.
-func trimFilter(value interface{}, args ...string) (interface{}, error) {
+func trimFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Trim(toString(value)), nil
 }
 
@@ -67,8 +67,8 @@ func replaceFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("%w: replace filter requires two arguments (old and new substrings)", ErrInsufficientArgs)
 	}
-	old, new := args[0], args[1]
-	return filter.Replace(toString(value), old, new), nil
+	oldStr, newStr := args[0], args[1]
+	return filter.Replace(toString(value), oldStr, newStr), nil
 }
 
 // removeFilter eliminates all occurrences of a specified substring.
@@ -99,47 +99,47 @@ func prependFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // lengthFilter returns the number of characters in a string.
-func lengthFilter(value interface{}, args ...string) (interface{}, error) {
+func lengthFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Length(toString(value)), nil
 }
 
 // upperFilter converts all characters in a string to uppercase.
-func upperFilter(value interface{}, args ...string) (interface{}, error) {
+func upperFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Upper(toString(value)), nil
 }
 
 // lowerFilter converts all characters in a string to lowercase.
-func lowerFilter(value interface{}, args ...string) (interface{}, error) {
+func lowerFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Lower(toString(value)), nil
 }
 
 // titleizeFilter capitalizes the first letter of each word in a string.
-func titleizeFilter(value interface{}, args ...string) (interface{}, error) {
+func titleizeFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Titleize(toString(value)), nil
 }
 
 // capitalizeFilter capitalizes the first letter of a string.
-func capitalizeFilter(value interface{}, args ...string) (interface{}, error) {
+func capitalizeFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Capitalize(toString(value)), nil
 }
 
 // camelizeFilter converts a string to camelCase.
-func camelizeFilter(value interface{}, args ...string) (interface{}, error) {
+func camelizeFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Camelize(toString(value)), nil
 }
 
 // pascalizeFilter converts a string to PascalCase.
-func pascalizeFilter(value interface{}, args ...string) (interface{}, error) {
+func pascalizeFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Pascalize(toString(value)), nil
 }
 
 // dasherizeFilter transforms a string into a lowercased, dash-separated format.
-func dasherizeFilter(value interface{}, args ...string) (interface{}, error) {
+func dasherizeFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Dasherize(toString(value)), nil
 }
 
 // slugifyFilter converts a string into a URL-friendly "slug".
-func slugifyFilter(value interface{}, args ...string) (interface{}, error) {
+func slugifyFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Slugify(toString(value)), nil
 }
 
@@ -157,7 +157,7 @@ func pluralizeFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // ordinalizeFilter converts a number to its ordinal English form.
-func ordinalizeFilter(value interface{}, args ...string) (interface{}, error) {
+func ordinalizeFilter(value interface{}, _ ...string) (interface{}, error) {
 	number, err := toInteger(value)
 	if err != nil {
 		return nil, err

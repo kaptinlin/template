@@ -20,7 +20,7 @@ func init() {
 }
 
 // jsonFilter serializes an input object into its JSON representation.
-func jsonFilter(input interface{}, args ...string) (interface{}, error) {
+func jsonFilter(input interface{}, _ ...string) (interface{}, error) {
 	jsonBytes, err := json.Marshal(input)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling to JSON: %w", err)

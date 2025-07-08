@@ -360,9 +360,8 @@ func (p *Parser) matchAppropriateStrings(src string, n int, next int, format str
 				matched, typ := p.judgeBranchingStatements(src, temp, next+2)
 				if matched {
 					return true, next + 1, typ
-				} else {
-					return false, 0, 0
 				}
+				return false, 0, 0
 			}
 			next++
 		}

@@ -31,6 +31,6 @@ func numberFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // bytesFilter converts a numeric value into a human-readable byte format.
-func bytesFilter(value interface{}, args ...string) (interface{}, error) {
+func bytesFilter(value interface{}, _ ...string) (interface{}, error) {
 	return filter.Bytes(value)
 }

@@ -1,6 +1,7 @@
 package template
 
 import (
+	"math"
 	"testing"
 )
 
@@ -157,6 +158,72 @@ func TestGrammar(t *testing.T) {
 
 				if got != tt.expected {
 					t.Errorf("Evaluate() got = %v, want %v", got, tt.expected)
+				}
+			}
+		})
+	}
+}
+
+// TestUnsignedIntegerOverflow tests that NewValue correctly handles
+// unsigned integer values that would overflow when converted to int64
+func TestUnsignedIntegerOverflow(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       interface{}
+		expectError bool
+	}{
+		{
+			name:        "Valid uint64 within int64 range",
+			value:       uint64(math.MaxInt64),
+			expectError: false,
+		},
+		{
+			name:        "Valid uint32 value",
+			value:       uint32(1000),
+			expectError: false,
+		},
+		{
+			name:        "Valid uint16 value",
+			value:       uint16(500),
+			expectError: false,
+		},
+		{
+			name:        "Valid uint8 value",
+			value:       uint8(255),
+			expectError: false,
+		},
+		{
+			name:        "Overflow uint64 max value",
+			value:       uint64(math.MaxUint64),
+			expectError: true,
+		},
+		{
+			name:        "Overflow uint64 near max",
+			value:       uint64(math.MaxInt64 + 1),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := NewValue(tt.value)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error for value %v, but got none", tt.value)
+				}
+				if result != nil {
+					t.Errorf("Expected nil result on error, but got %v", result)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for value %v: %v", tt.value, err)
+				}
+				if result == nil {
+					t.Errorf("Expected valid result for value %v, but got nil", tt.value)
+				}
+				if result != nil && result.Type != TypeInt {
+					t.Errorf("Expected TypeInt for value %v, but got %v", tt.value, result.Type)
 				}
 			}
 		})
