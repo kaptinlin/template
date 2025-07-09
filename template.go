@@ -117,6 +117,9 @@ func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers in
 			return ControlFlowNone, ErrContinueOutsideLoop
 		}
 		return ControlFlowContinue, nil
+	case "elif", "else":
+		// For elif/else nodes, execute their children but skip the tag itself
+		return executeNodes(node.Children, ctx, builder, forLayers)
 	default:
 		return ControlFlowNone, fmt.Errorf("%w: %s", ErrUnknownNodeType, node.Type)
 	}
@@ -221,51 +224,99 @@ func convertToString(value interface{}) (string, error) {
 	}
 }
 
-// executeIfNode handles conditional rendering
-func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
-	// Parse condition expression
-	expression := disassembleExpression(node.Text)
+// parseCondition parses a condition expression and returns a boolean value
+func parseCondition(text string, ctx Context) (bool, error) {
+	expression := disassembleExpression(text)
 	lexer := &Lexer{input: expression}
 	tokens, err := lexer.Lex()
 	if err != nil {
-		return ControlFlowNone, err
+		return false, err
 	}
 
 	grammar := NewGrammar(tokens)
 	ast, err := grammar.Parse()
 	if err != nil {
-		return ControlFlowNone, err
+		return false, err
 	}
+
 	condition, err := ast.Evaluate(ctx)
 	if err != nil {
+		return false, err
+	}
+
+	return condition.toBool()
+}
+
+// executeIfBranch executes if branch content until the first else/elif
+func executeIfBranch(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
+	for _, child := range node.Children {
+		if child.Type == "else" || child.Type == "elif" {
+			break
+		}
+		controlFlow, err := executeNode(child, ctx, builder, forLayers)
+		if err != nil {
+			return ControlFlowNone, err
+		}
+		if controlFlow != ControlFlowNone {
+			return controlFlow, nil
+		}
+	}
+	return ControlFlowNone, nil
+}
+
+// validateIfElseStructure validates that an if node has at most one else branch
+func validateIfElseStructure(node *Node) error {
+	elseCount := 0
+	for _, child := range node.Children {
+		if child.Type == "else" {
+			elseCount++
+			if elseCount > 1 {
+				return ErrMultipleElseStatements
+			}
+		}
+	}
+	return nil
+}
+
+// executeIfNode handles conditional rendering with support for elif branches
+func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
+	// Validate the if-else structure before execution
+	if err := validateIfElseStructure(node); err != nil {
 		return ControlFlowNone, err
 	}
 
-	// Convert condition to boolean value
-	conditionMet, err := condition.toBool()
+	// 1. Evaluate main if condition
+	conditionMet, err := parseCondition(node.Text, ctx)
 	if err != nil {
 		return ControlFlowNone, err
 	}
 
-	next := 0
-	ElseExists := false
-	for next < len(node.Children) {
-		if node.Children[next].Text == "{% else %}" {
-			ElseExists = true
-			break
-		}
-		next++
+	if conditionMet {
+		// Execute if branch content (until first else/elif)
+		return executeIfBranch(node, ctx, builder, forLayers)
 	}
 
-	// Execute corresponding child nodes based on condition
-	switch {
-	case conditionMet:
-		return executeNodes(node.Children[:next], ctx, builder, forLayers)
-	case ElseExists:
-		return executeNodes(node.Children[next].Children, ctx, builder, forLayers)
-	default:
-		return ControlFlowNone, nil
+	// 2. Evaluate elif conditions (short-circuit mechanism)
+	for _, child := range node.Children {
+		if child.Type == "elif" {
+			elifCondition, err := parseCondition(child.Text, ctx)
+			if err != nil {
+				return ControlFlowNone, err
+			}
+			if elifCondition {
+				return executeNodes(child.Children, ctx, builder, forLayers)
+			}
+		}
 	}
+
+	// 3. Check for else branch
+	for _, child := range node.Children {
+		if child.Type == "else" {
+			return executeNodes(child.Children, ctx, builder, forLayers)
+		}
+	}
+
+	return ControlFlowNone, nil
 }
 
 // executeForNode handles loop rendering
@@ -448,7 +499,7 @@ func updateLoopContext(ctx Context, varName string, keyStr string, item interfac
 	}
 }
 
-// Disassemble expression
+// Disassemble expression from if or elif statements
 func disassembleExpression(expression string) string {
 	n := len(expression)
 	prev := 0
@@ -457,13 +508,14 @@ func disassembleExpression(expression string) string {
 		tokenPrev := expression[0:prev]
 		tokenNext := expression[next:n]
 
-		if tokenPrev != "{% if " && tokenPrev != "{%if " {
+		// Check for both if and elif patterns
+		if tokenPrev != "{% if " && tokenPrev != "{%if " && tokenPrev != "{% elif " && tokenPrev != "{%elif " {
 			prev++
 		}
 		if tokenNext != " %}" {
 			next++
 		}
-		if (tokenPrev == "{% if " || tokenPrev == "{%if ") && tokenNext == " %}" {
+		if (tokenPrev == "{% if " || tokenPrev == "{%if " || tokenPrev == "{% elif " || tokenPrev == "{%elif ") && tokenNext == " %}" {
 			break
 		}
 	}

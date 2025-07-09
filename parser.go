@@ -16,6 +16,9 @@ var ifRegex = regexp.MustCompile(`{%\s*if\s+` + // if start
 var endforRegex = regexp.MustCompile(`{%\s*endfor\s*%}`)
 var endifRegex = regexp.MustCompile(`{%\s*endif\s*%}`)
 var elseRegex = regexp.MustCompile(`{%\s*else\s*%}`)
+var elifRegex = regexp.MustCompile(`{%\s*elif\s+` + // elif start
+	`([^%]+)` + // Capture any non-% characters (expression part)
+	`\s*%}`) // elif end
 var forRegex = regexp.MustCompile(
 	`{%\s*for\s+` +
 		`(` +
@@ -228,7 +231,7 @@ func analyzeForParameter(text string, node *Node) {
 func (p *Parser) addIfNode(text string, tpl *Template, node *Node) {
 	matched := endifRegex.MatchString(text)
 	if text != "" && tpl != nil {
-		tpl.Nodes = append(tpl.Nodes, &Node{Type: "text", Text: text})
+		tpl.Nodes = append(tpl.Nodes, &Node{Type: "if", Text: text})
 	} else if !matched {
 		node.Children = append(node.Children, &Node{Type: "text", Text: text})
 	}
@@ -249,6 +252,21 @@ func (p *Parser) addControlFlowNode(text string, tpl *Template, node *Node, node
 		// Adding to a parent node
 		node.Children = append(node.Children, newNode)
 	}
+}
+
+// addConditionalBranchNode adds a conditional branch node (else/elif) to the template
+func (p *Parser) addConditionalBranchNode(text string, tpl *Template, node *Node, nodeType string) *Node {
+	newNode := &Node{Type: nodeType, Text: text}
+
+	if tpl != nil {
+		// Adding to template root
+		tpl.Nodes = append(tpl.Nodes, newNode)
+	} else if node != nil {
+		// Adding to a parent node
+		node.Children = append(node.Children, newNode)
+	}
+
+	return newNode
 }
 
 // Parse converts a template string into a Template object.
@@ -292,7 +310,7 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 	n := len(src)
 	// Try to match control structure opening tags and determine their type
 	matched, temp, typ := p.matchAppropriateStrings(src, n, next+2, "%}")
-	if matched && typ < 8 {
+	if matched && typ <= 8 {
 		// Extract the complete control structure token
 		token := src[next : temp+1]
 		// Handle any text content before the control structure
@@ -424,6 +442,8 @@ func (p *Parser) judgeBranchingStatements(src string, temp int, next int) (bool,
 		return true, 2
 	case elseRegex.MatchString(token):
 		return true, 3
+	case elifRegex.MatchString(token):
+		return true, 8
 	case endforRegex.MatchString(token):
 		return true, 4
 	case endifRegex.MatchString(token):
@@ -469,7 +489,29 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 			case matched && tempType < 3:
 				next, prev = p.handleControlStructure(src, next, prev, temp, tempType, node)
 			case matched && tempType == 3 && typ == 5:
-				next, prev, markEnterElse, node = p.handleElseStructure(src, next, prev, temp, node)
+				if markEnterElse {
+					// We're in an elif/else branch and found another else
+					// Add any remaining text to current branch and return to if node
+					if next > prev {
+						token := src[prev:next]
+						p.addTextNode(token, nil, node)
+					}
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 3, enterIfNode)
+				} else {
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 3, node)
+				}
+			case matched && tempType == 8 && typ == 5:
+				if markEnterElse {
+					// We're in an elif/else branch and found another elif
+					// Add any remaining text to current branch and return to if node
+					if next > prev {
+						token := src[prev:next]
+						p.addTextNode(token, nil, node)
+					}
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 8, enterIfNode)
+				} else {
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 8, node)
+				}
 			case matched && (tempType == 6 || tempType == 7):
 				// Handle break/continue control flow
 				token := src[next : temp+1]
@@ -572,42 +614,51 @@ func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, n
 	return next, prev
 }
 
-// handleElseStructure processes the else branch within an if control structure.
-// It handles the else tag and prepares for processing the else branch content.
+// handleConditionalBranch processes conditional branches (else/elif) within an if control structure.
+// It handles the else/elif tag and prepares for processing the branch content.
 // Parameters:
 // - src: source template string
 // - next, prev: current positions in the source
-// - temp: position of the end of else tag
+// - temp: position of the end of else/elif tag
+// - branchType: type of conditional branch (3: else, 8: elif)
 // - node: current if node being processed
 // Returns:
 // - updated next and prev positions
-// - markEnterElse flag to indicate else branch
-// - updated node reference for else content
-func (p *Parser) handleElseStructure(src string, next, prev, temp int, node *Node) (int, int, bool, *Node) {
-	// Extract the complete else tag
+// - markEnterElse flag to indicate conditional branch
+// - updated node reference for branch content
+func (p *Parser) handleConditionalBranch(src string, next, prev, temp, branchType int, node *Node) (int, int, bool, *Node) {
+	// Extract the complete else/elif tag
 	token := src[next : temp+1]
 
-	// Process any text content before the else tag
+	// Process any text content before the conditional branch tag
 	if next > prev {
-		token := src[prev:next]
-		p.addTextNode(token, nil, node)
+		textToken := src[prev:next]
+		p.addTextNode(textToken, nil, node)
 	}
 
-	// Add else node as a child of current if node
-	p.addIfNode(token, nil, node)
+	// Create appropriate node type based on branch type
+	var nodeType string
+	switch branchType {
+	case 3:
+		nodeType = "else"
+	case 8:
+		nodeType = "elif"
+	default:
+		nodeType = "text"
+	}
 
-	// Set flag to indicate we're in else branch
+	// Add conditional branch node as a child of the if node
+	tempNode := p.addConditionalBranchNode(token, nil, node, nodeType)
+
+	// Set flag to indicate we're in conditional branch
 	markEnterElse := true
 
-	// Get the newly created else node
-	tempNode := node.Children[len(node.Children)-1]
-	node = tempNode
-
-	// Update positions to continue parsing after else tag
+	// Return the newly created conditional branch node for content parsing
+	// but don't update the main node reference
 	next = temp + 1
 	prev = temp + 1
 
-	return next, prev, markEnterElse, node
+	return next, prev, markEnterElse, tempNode
 }
 
 // handleVariable processes variable expressions {{ ... }} in the template.

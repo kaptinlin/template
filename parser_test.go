@@ -1748,7 +1748,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if nothing %}",
 						Children: []*Node{
 							{Type: "text", Text: "false"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "true"},
 							}},
 						},
@@ -1811,7 +1811,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if !simple %}",
 						Children: []*Node{
 							{Type: "text", Text: "false"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "!simple"},
 							}},
 						},
@@ -1829,7 +1829,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if !simple.uint %}",
 						Children: []*Node{
 							{Type: "text", Text: "false"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "!simple.uint"},
 							}},
 						},
@@ -1847,7 +1847,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if !simple.float %}",
 						Children: []*Node{
 							{Type: "text", Text: "false"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "!simple.float"},
 							}},
 						},
@@ -1895,7 +1895,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if not complex.post %}",
 						Children: []*Node{
 							{Type: "text", Text: "true"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "false"},
 							}},
 						},
@@ -1913,7 +1913,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if simple.number == 43 %}",
 						Children: []*Node{
 							{Type: "text", Text: "no"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "42"},
 							}},
 						},
@@ -1931,7 +1931,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if simple.number < 42 %}",
 						Children: []*Node{
 							{Type: "text", Text: "false"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "no"},
 							}},
 						},
@@ -1949,7 +1949,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if simple.number < 42 %}",
 						Children: []*Node{
 							{Type: "text", Text: "false"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "yes"},
 							}},
 						},
@@ -1967,7 +1967,7 @@ func TestParseConditionalStatements(t *testing.T) {
 						Text: "{% if 0 %}",
 						Children: []*Node{
 							{Type: "text", Text: "!0"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "true"},
 							}},
 						},
@@ -2049,20 +2049,20 @@ func TestParseConditionalStatements(t *testing.T) {
 								Text: "{% if user.hasFullAccess %}",
 								Children: []*Node{
 									{Type: "text", Text: "\n\t\t\t\t\tYou have full access.\n\t\t\t\t"},
-									{Type: "text", Text: "{% else %}", Children: []*Node{
+									{Type: "else", Text: "{% else %}", Children: []*Node{
 										{Type: "text", Text: "\n\t\t\t\t\tYou have limited admin access.\n\t\t\t\t"},
 									}},
 								},
 								EndText: "{% endif %}",
 							},
 							{Type: "text", Text: "\n\t\t\t"},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "\n\t\t\t\t"},
 								{Type: "if",
 									Text: "{% if user.isAuthenticated %}",
 									Children: []*Node{
 										{Type: "text", Text: "\n\t\t\t\t\tWelcome User!\n\t\t\t\t"},
-										{Type: "text", Text: "{% else %}", Children: []*Node{
+										{Type: "else", Text: "{% else %}", Children: []*Node{
 											{Type: "text", Text: "\n\t\t\t\t\tPlease log in.\n\t\t\t\t"},
 										}},
 									},
@@ -2195,7 +2195,7 @@ func TestParseMixedIfAndForStatements(t *testing.T) {
 								},
 								EndText: "{% endfor %}",
 							},
-							{Type: "text", Text: "{% else %}", Children: []*Node{
+							{Type: "else", Text: "{% else %}", Children: []*Node{
 								{Type: "text", Text: "No items"},
 							}},
 						},

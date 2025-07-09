@@ -4880,3 +4880,844 @@ func TestBreakContinueEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// TestElifBasic tests basic elif functionality with different branch conditions
+func TestElifBasic(t *testing.T) {
+	cases := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "If true, elif ignored",
+			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			context: map[string]interface{}{
+				"score": 95,
+			},
+			expected: "Excellent",
+		},
+		{
+			name:     "If false, first elif true",
+			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			context: map[string]interface{}{
+				"score": 85,
+			},
+			expected: "Good",
+		},
+		{
+			name:     "If false, first elif false, second elif true",
+			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			context: map[string]interface{}{
+				"score": 65,
+			},
+			expected: "Pass",
+		},
+		{
+			name:     "All conditions false, else branch",
+			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			context: map[string]interface{}{
+				"score": 45,
+			},
+			expected: "Fail",
+		},
+		{
+			name:     "No else branch, all conditions false",
+			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% endif %}",
+			context: map[string]interface{}{
+				"score": 45,
+			},
+			expected: "",
+		},
+		{
+			name:     "Single elif with variables",
+			template: "{% if age < 18 %}Minor{% elif age >= 65 %}Senior{% else %}Adult{% endif %}",
+			context: map[string]interface{}{
+				"age": 70,
+			},
+			expected: "Senior",
+		},
+		{
+			name:     "Complex conditions with filters",
+			template: "{% if name | length > 10 %}Long name{% elif name | length > 5 %}Medium name{% else %}Short name{% endif %}",
+			context: map[string]interface{}{
+				"name": "Alexander",
+			},
+			expected: "Medium name",
+		},
+		{
+			name:     "Nested variables in elif",
+			template: "{% if user.age < 18 %}Minor{% elif user.age >= 65 %}Senior{% else %}Adult{% endif %}",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"age": 25,
+				},
+			},
+			expected: "Adult",
+		},
+		{
+			name:     "String comparison in elif",
+			template: "{% if status == 'active' %}Active User{% elif status == 'inactive' %}Inactive User{% else %}Unknown Status{% endif %}",
+			context: map[string]interface{}{
+				"status": "inactive",
+			},
+			expected: "Inactive User",
+		},
+		{
+			name:     "Boolean conditions in elif",
+			template: "{% if is_admin %}Admin{% elif is_moderator %}Moderator{% else %}User{% endif %}",
+			context: map[string]interface{}{
+				"is_admin":     false,
+				"is_moderator": true,
+			},
+			expected: "Moderator",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := Context(tc.context)
+			result, err := Render(tc.template, ctx)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if result != tc.expected {
+				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			}
+		})
+	}
+}
+
+// TestElifNested tests nested elif structures and if-elif-else combinations
+func TestElifNested(t *testing.T) {
+	cases := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name: "Nested if-elif inside if",
+			template: `{% if category == 'student' %}
+				{% if age < 18 %}Child student{% elif age < 25 %}Young student{% else %}Adult student{% endif %}
+			{% else %}
+				Not a student
+			{% endif %}`,
+			context: map[string]interface{}{
+				"category": "student",
+				"age":      20,
+			},
+			expected: "\n\t\t\t\tYoung student\n\t\t\t",
+		},
+		{
+			name: "Nested if-elif inside elif",
+			template: `{% if role == 'admin' %}
+				Administrator
+			{% elif role == 'user' %}
+				{% if level == 'premium' %}Premium user{% elif level == 'basic' %}Basic user{% else %}Guest user{% endif %}
+			{% else %}
+				Unknown role
+			{% endif %}`,
+			context: map[string]interface{}{
+				"role":  "user",
+				"level": "premium",
+			},
+			expected: "\n\t\t\t\tPremium user\n\t\t\t",
+		},
+		{
+			name: "Nested if-elif inside else",
+			template: `{% if type == 'vip' %}
+				VIP member
+			{% else %}
+				{% if score >= 90 %}Excellent{% elif score >= 70 %}Good{% else %}Average{% endif %}
+			{% endif %}`,
+			context: map[string]interface{}{
+				"type":  "regular",
+				"score": 85,
+			},
+			expected: "\n\t\t\t\tGood\n\t\t\t",
+		},
+		{
+			name: "Multiple nested levels",
+			template: `{% if department == 'engineering' %}
+				{% if level == 'senior' %}
+					{% if experience >= 5 %}Senior Engineer{% elif experience >= 3 %}Mid-level Engineer{% else %}Junior Engineer{% endif %}
+				{% elif level == 'junior' %}
+					Junior Engineer
+				{% else %}
+					Engineer
+				{% endif %}
+			{% else %}
+				Non-engineering role
+			{% endif %}`,
+			context: map[string]interface{}{
+				"department": "engineering",
+				"level":      "senior",
+				"experience": 4,
+			},
+			expected: "\n\t\t\t\t\n\t\t\t\t\tMid-level Engineer\n\t\t\t\t\n\t\t\t",
+		},
+		{
+			name: "Nested with complex conditions",
+			template: `{% if user.type == 'premium' %}
+				{% if user.subscription.active %}
+					{% if user.subscription.plan == 'pro' %}Pro subscriber{% elif user.subscription.plan == 'basic' %}Basic subscriber{% else %}Unknown plan{% endif %}
+				{% else %}
+					Inactive premium user
+				{% endif %}
+			{% elif user.type == 'free' %}
+				Free user
+			{% else %}
+				Unknown user type
+			{% endif %}`,
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"type": "premium",
+					"subscription": map[string]interface{}{
+						"active": true,
+						"plan":   "pro",
+					},
+				},
+			},
+			expected: "\n\t\t\t\t\n\t\t\t\t\tPro subscriber\n\t\t\t\t\n\t\t\t",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := Context(tc.context)
+			result, err := Render(tc.template, ctx)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if result != tc.expected {
+				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			}
+		})
+	}
+}
+
+// TestElifComplexExpressions tests elif with complex condition expressions
+func TestElifComplexExpressions(t *testing.T) {
+	cases := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Multiple AND conditions in elif",
+			template: "{% if score < 50 %}Fail{% elif score >= 80 && grade == 'A' %}Excellent{% elif score >= 60 && grade == 'B' %}Good{% else %}Average{% endif %}",
+			context: map[string]interface{}{
+				"score": 85,
+				"grade": "A",
+			},
+			expected: "Excellent",
+		},
+		{
+			name:     "Multiple OR conditions in elif",
+			template: "{% if age < 18 %}Minor{% elif status == 'vip' || points >= 1000 %}Premium{% elif status == 'member' || points >= 500 %}Regular{% else %}Guest{% endif %}",
+			context: map[string]interface{}{
+				"age":    25,
+				"status": "member",
+				"points": 300,
+			},
+			expected: "Regular",
+		},
+		{
+			name:     "Complex logical expressions",
+			template: "{% if (age >= 18 && age <= 65) && (income > 50000 || education == 'college') %}Qualified{% elif age > 65 && savings >= 100000 %}Senior qualified{% else %}Not qualified{% endif %}",
+			context: map[string]interface{}{
+				"age":       30,
+				"income":    45000,
+				"education": "college",
+				"savings":   50000,
+			},
+			expected: "Qualified",
+		},
+		{
+			name:     "Filter expressions in elif",
+			template: "{% if name | length < 3 %}Too short{% elif name | length > 10 %}Too long{% elif name | upper == 'ADMIN' %}Administrator{% else %}Valid name{% endif %}",
+			context: map[string]interface{}{
+				"name": "admin",
+			},
+			expected: "Administrator",
+		},
+		{
+			name:     "Multiple filters in elif",
+			template: "{% if text | trim | length == 0 %}Empty{% elif text | trim | upper | length > 5 %}Long text{% elif text | trim | lower == 'hello' %}Greeting{% else %}Regular text{% endif %}",
+			context: map[string]interface{}{
+				"text": "  HELLO  ",
+			},
+			expected: "Greeting",
+		},
+		{
+			name:     "Nested object access in elif",
+			template: "{% if user.profile.level == 'admin' %}Admin{% elif user.profile.level == 'moderator' && user.profile.permissions.write %}Moderator{% elif user.profile.active %}Active user{% else %}Inactive user{% endif %}",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"profile": map[string]interface{}{
+						"level":  "moderator",
+						"active": true,
+						"permissions": map[string]interface{}{
+							"write": true,
+						},
+					},
+				},
+			},
+			expected: "Moderator",
+		},
+		{
+			name:     "Array operations in elif",
+			template: "{% if items | size == 0 %}Empty list{% elif items | size > 10 %}Large list{% elif items | size > 5 %}Medium list{% else %}Small list{% endif %}",
+			context: map[string]interface{}{
+				"items": []string{"a", "b", "c", "d", "e", "f", "g"},
+			},
+			expected: "Medium list",
+		},
+		{
+			name:     "Mixed arithmetic and comparison in elif",
+			template: "{% if score * 2 < 100 %}Low{% elif score + bonus >= 150 %}High{% elif score - penalty > 80 %}Medium{% else %}Average{% endif %}",
+			context: map[string]interface{}{
+				"score":   90,
+				"bonus":   70,
+				"penalty": 5,
+			},
+			expected: "High",
+		},
+		{
+			name:     "String comparison with filters",
+			template: "{% if status | lower == 'active' %}Active{% elif status | lower == 'pending' %}Pending{% elif status | lower == 'inactive' %}Inactive{% else %}Unknown{% endif %}",
+			context: map[string]interface{}{
+				"status": "PENDING",
+			},
+			expected: "Pending",
+		},
+		{
+			name:     "Complex boolean expressions",
+			template: "{% if (is_admin || is_moderator) && is_active %}Privileged{% elif is_user && (has_subscription || trial_active) %}Subscriber{% elif is_guest %}Guest{% else %}Unknown{% endif %}",
+			context: map[string]interface{}{
+				"is_admin":         false,
+				"is_moderator":     false,
+				"is_user":          true,
+				"is_active":        true,
+				"has_subscription": false,
+				"trial_active":     true,
+				"is_guest":         false,
+			},
+			expected: "Subscriber",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := Context(tc.context)
+			result, err := Render(tc.template, ctx)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if result != tc.expected {
+				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			}
+		})
+	}
+}
+
+// TestElifComplexNestedWithLoops tests complex nested if-elif-else structures with for loops and control flow
+func TestElifComplexNestedWithLoops(t *testing.T) {
+	cases := []struct {
+		name        string
+		template    string
+		context     map[string]interface{}
+		expected    string
+		expectError bool
+	}{
+		{
+			name: "Complex nested if-elif-else with for loops and break/continue",
+			template: `{% for user in users %}
+User: {{ user.name }}
+{% if user.role == 'admin' %}
+  Admin Level: {% if user.level >= 3 %}Senior Admin{% elif user.level >= 2 %}Mid Admin{% else %}Junior Admin{% endif %}
+  {% for permission in user.permissions %}
+    {% if permission == 'read' %}{% continue %}{% endif %}
+    {% if permission == 'delete' %}DELETE ACCESS{% break %}{% endif %}
+    Permission: {{ permission }}
+  {% endfor %}
+{% elif user.role == 'user' %}
+  User Type: {% if user.active %}Active{% else %}Inactive{% endif %}
+  {% if user.subscription %}
+    Plan: {% if user.subscription.type == 'premium' %}Premium{% elif user.subscription.type == 'basic' %}Basic{% else %}Free{% endif %}
+  {% endif %}
+{% else %}
+  Unknown Role
+{% endif %}
+---
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": []map[string]interface{}{
+					{
+						"name":        "Alice",
+						"role":        "admin",
+						"level":       3,
+						"permissions": []string{"read", "write", "delete", "admin"},
+					},
+					{
+						"name":   "Bob",
+						"role":   "user",
+						"active": true,
+						"subscription": map[string]interface{}{
+							"type": "premium",
+						},
+					},
+					{
+						"name":   "Charlie",
+						"role":   "user",
+						"active": false,
+						"subscription": map[string]interface{}{
+							"type": "basic",
+						},
+					},
+				},
+			},
+			expected: `
+User: Alice
+
+  Admin Level: Senior Admin
+  
+    
+    
+    
+    Permission: write
+  
+    
+    DELETE ACCESS
+
+---
+
+User: Bob
+
+  User Type: Active
+  
+    Plan: Premium
+  
+
+---
+
+User: Charlie
+
+  User Type: Inactive
+  
+    Plan: Basic
+  
+
+---
+`,
+			expectError: false,
+		},
+		{
+			name: "Nested elif with complex conditions and loops",
+			template: `{% for item in items %}
+Item: {{ item.name }}
+{% if item.category == 'electronics' %}
+  {% if item.price >= 1000 %}
+    Expensive Electronics
+    {% for feature in item.features %}
+      {% if feature | length < 3 %}{% continue %}{% endif %}
+      Feature: {{ feature }}
+      {% if feature == 'wireless' %}{% break %}{% endif %}
+    {% endfor %}
+  {% elif item.price >= 500 %}
+    Mid-range Electronics
+  {% else %}
+    Budget Electronics
+  {% endif %}
+{% elif item.category == 'books' %}
+  {% if item.pages >= 500 %}Heavy Read{% elif item.pages >= 200 %}Medium Read{% else %}Light Read{% endif %}
+{% elif item.category == 'clothing' %}
+  {% if item.size == 'XL' || item.size == 'XXL' %}Large Size{% else %}Regular Size{% endif %}
+{% else %}
+  Unknown Category
+{% endif %}
+---
+{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []map[string]interface{}{
+					{
+						"name":     "Laptop",
+						"category": "electronics",
+						"price":    1200,
+						"features": []string{"SSD", "4K", "wireless", "bluetooth"},
+					},
+					{
+						"name":     "Novel",
+						"category": "books",
+						"pages":    350,
+					},
+					{
+						"name":     "Shirt",
+						"category": "clothing",
+						"size":     "L",
+					},
+				},
+			},
+			expected: `
+Item: Laptop
+
+  
+    Expensive Electronics
+    
+      
+      Feature: SSD
+      
+    
+      
+      
+      Feature: wireless
+      
+  
+
+---
+
+Item: Novel
+
+  Medium Read
+
+---
+
+Item: Shirt
+
+  Regular Size
+
+---
+`,
+			expectError: false,
+		},
+		{
+			name: "Deep nested if-elif-else with multiple conditions",
+			template: `{% for company in companies %}
+Company: {{ company.name }}
+{% if company.size == 'large' %}
+  Large Company
+  {% for dept in company.departments %}
+    Dept: {{ dept.name }}
+    {% if dept.budget >= 1000000 %}
+      High Budget Department
+      {% if dept.manager.experience >= 10 %}
+        Experienced Manager
+      {% elif dept.manager.experience >= 5 %}
+        Mid-level Manager
+      {% else %}
+        Junior Manager
+      {% endif %}
+    {% elif dept.budget >= 500000 %}
+      Medium Budget Department
+    {% else %}
+      Low Budget Department
+    {% endif %}
+  {% endfor %}
+{% elif company.size == 'medium' %}
+  Medium Company
+{% else %}
+  Small Company
+{% endif %}
+---
+{% endfor %}`,
+			context: map[string]interface{}{
+				"companies": []map[string]interface{}{
+					{
+						"name": "TechCorp",
+						"size": "large",
+						"departments": []map[string]interface{}{
+							{
+								"name":   "Engineering",
+								"budget": 1500000,
+								"manager": map[string]interface{}{
+									"experience": 12,
+								},
+							},
+							{
+								"name":   "Marketing",
+								"budget": 300000,
+								"manager": map[string]interface{}{
+									"experience": 3,
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `
+Company: TechCorp
+
+  Large Company
+  
+    Dept: Engineering
+    
+      High Budget Department
+      
+        Experienced Manager
+      
+    
+  
+    Dept: Marketing
+    
+      Low Budget Department
+    
+  
+
+---
+`,
+			expectError: false,
+		},
+		{
+			name: "Multiple nested loops with complex elif chains",
+			template: `{% for category in categories %}
+Category: {{ category.name }}
+{% for product in category.products %}
+  Product: {{ product.name }}
+  {% if product.rating >= 4.5 %}
+    Excellent Product
+    {% for review in product.reviews %}
+      {% if review.rating < 4 %}{% continue %}{% endif %}
+      {% if review.verified %}
+        Verified Review: {{ review.comment }}
+      {% elif review.helpful_count > 10 %}
+        Helpful Review: {{ review.comment }}
+      {% else %}
+        Regular Review: {{ review.comment }}
+      {% endif %}
+      {% if review.featured %}{% break %}{% endif %}
+    {% endfor %}
+  {% elif product.rating >= 3.5 %}
+    Good Product
+  {% elif product.rating >= 2.5 %}
+    Average Product
+  {% else %}
+    Poor Product
+  {% endif %}
+{% endfor %}
+---
+{% endfor %}`,
+			context: map[string]interface{}{
+				"categories": []map[string]interface{}{
+					{
+						"name": "Electronics",
+						"products": []map[string]interface{}{
+							{
+								"name":   "Smartphone",
+								"rating": 4.6,
+								"reviews": []map[string]interface{}{
+									{
+										"rating":        5,
+										"comment":       "Great phone!",
+										"verified":      true,
+										"helpful_count": 5,
+										"featured":      false,
+									},
+									{
+										"rating":        4,
+										"comment":       "Good value",
+										"verified":      false,
+										"helpful_count": 15,
+										"featured":      true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `
+Category: Electronics
+
+  Product: Smartphone
+  
+    Excellent Product
+    
+      
+      
+        Verified Review: Great phone!
+      
+      
+    
+      
+      
+        Helpful Review: Good value
+      
+      
+  
+
+---
+`,
+			expectError: false,
+		},
+		{
+			name: "Error case: elif without matching if",
+			template: `{% for item in items %}
+  Item: {{ item.name }}
+  {% elif item.active %}
+    Active item
+  {% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []map[string]interface{}{
+					{"name": "Item1", "active": true},
+				},
+			},
+			expected: `
+  Item: Item1
+  {% elif item.active %}
+    Active item
+  {% endif %}
+`,
+			expectError: false,
+		},
+		{
+			name: "Error case: else without matching if",
+			template: `{% for user in users %}
+  User: {{ user.name }}
+  {% else %}
+    No users
+  {% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": []map[string]interface{}{
+					{"name": "User1"},
+				},
+			},
+			expected: `
+  User: User1
+  {% else %}
+    No users
+  {% endif %}
+`,
+			expectError: false,
+		},
+		{
+			name: "Error case: nested elif without matching if",
+			template: `{% for category in categories %}
+  Category: {{ category.name }}
+  {% for product in category.products %}
+    Product: {{ product.name }}
+    {% elif product.featured %}
+      Featured product
+    {% endif %}
+  {% endfor %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"categories": []map[string]interface{}{
+					{
+						"name": "Electronics",
+						"products": []map[string]interface{}{
+							{"name": "Phone", "featured": true},
+						},
+					},
+				},
+			},
+			expected: `
+  Category: Electronics
+  
+    Product: Phone
+    {% elif product.featured %}
+      Featured product
+    {% endif %}
+  
+`,
+			expectError: false,
+		},
+		{
+			name: "Error case: multiple else statements",
+			template: `{% for item in items %}
+  {% if item.active %}
+    Active
+  {% else %}
+    Inactive
+  {% else %}
+    Another else
+  {% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []map[string]interface{}{
+					{"active": true},
+				},
+			},
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name: "Error case: multiple else statements in nested if",
+			template: `{% if condition1 %}
+  {% if condition2 %}
+    Inner if
+  {% else %}
+    First else
+  {% else %}
+    Second else
+  {% endif %}
+{% endif %}`,
+			context: map[string]interface{}{
+				"condition1": true,
+				"condition2": false,
+			},
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name: "Error case: three else statements",
+			template: `{% if condition %}
+  If branch
+{% else %}
+  First else
+{% else %}
+  Second else
+{% else %}
+  Third else
+{% endif %}`,
+			context: map[string]interface{}{
+				"condition": false,
+			},
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name: "Valid case: single else with multiple elif",
+			template: `{% if score >= 90 %}
+  Excellent
+{% elif score >= 80 %}
+  Good
+{% elif score >= 70 %}
+  Average
+{% else %}
+  Poor
+{% endif %}`,
+			context: map[string]interface{}{
+				"score": 65,
+			},
+			expected: `
+  Poor
+`,
+			expectError: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := Context(tc.context)
+			result, err := Render(tc.template, ctx)
+
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("Expected error but got none. Result: %s", result)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if result != tc.expected {
+				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			}
+		})
+	}
+}

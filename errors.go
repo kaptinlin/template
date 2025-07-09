@@ -137,4 +137,7 @@ var (
 
 	// ErrContinueOutsideLoop is returned when a continue statement is used outside of a loop.
 	ErrContinueOutsideLoop = errors.New("continue statement outside of loop")
+
+	// ErrMultipleElseStatements indicates that multiple else statements are found in an if block
+	ErrMultipleElseStatements = errors.New("multiple 'else' statements found in if block. Use 'elif' for additional conditions")
 )
