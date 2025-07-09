@@ -3896,6 +3896,13 @@ func TestAliasTypes(t *testing.T) {
 	type Department string
 	type Priority int
 
+	// Define pointer alias types
+	type UserIDPtr *string
+	type AgePtr *int
+	type ScorePtr *float64
+	type IsActivePtr *bool
+	type DepartmentPtr *string
+
 	// Define struct using alias types
 	type User struct {
 		ID         UserID     `json:"id"`
@@ -3905,6 +3912,17 @@ func TestAliasTypes(t *testing.T) {
 		IsActive   IsActive   `json:"is_active"`
 		Department Department `json:"department"`
 		Priority   Priority   `json:"priority"`
+	}
+
+	// Define struct using pointer alias types
+	type UserWithPointers struct {
+		ID         UserIDPtr     `json:"id"`
+		Name       *string       `json:"name"`
+		Age        AgePtr        `json:"age"`
+		Score      ScorePtr      `json:"score"`
+		IsActive   IsActivePtr   `json:"is_active"`
+		Department DepartmentPtr `json:"department"`
+		Manager    *User         `json:"manager"`
 	}
 
 	// Define slice of alias types
@@ -3949,6 +3967,43 @@ func TestAliasTypes(t *testing.T) {
 	scores := ScoreList{Score(88.5), Score(92.0), Score(85.7)}
 	userIDs := IDList{UserID("admin-001"), UserID("admin-002")}
 	statusList := StatusList{IsActive(true), IsActive(false), IsActive(true)}
+
+	// Helper function to create string pointers
+	stringPtr := func(s string) *string { return &s }
+	intPtr := func(i int) *int { return &i }
+	float64Ptr := func(f float64) *float64 { return &f }
+	boolPtr := func(b bool) *bool { return &b }
+
+	// Test data with pointer aliases
+	usersWithPointers := []UserWithPointers{
+		{
+			ID:         UserIDPtr(stringPtr("ptr-user-001")),
+			Name:       stringPtr("Alice Pointer"),
+			Age:        AgePtr(intPtr(28)),
+			Score:      ScorePtr(float64Ptr(93.5)),
+			IsActive:   IsActivePtr(boolPtr(true)),
+			Department: DepartmentPtr(stringPtr("Engineering")),
+			Manager:    &users[0],
+		},
+		{
+			ID:         UserIDPtr(stringPtr("ptr-user-002")),
+			Name:       stringPtr("Bob Pointer"),
+			Age:        AgePtr(intPtr(32)),
+			Score:      ScorePtr(float64Ptr(89.2)),
+			IsActive:   IsActivePtr(boolPtr(false)),
+			Department: DepartmentPtr(stringPtr("Marketing")),
+			Manager:    &users[1],
+		},
+		{
+			ID:         nil, // Test nil pointer
+			Name:       stringPtr("Carol Pointer"),
+			Age:        nil, // Test nil pointer
+			Score:      ScorePtr(float64Ptr(91.8)),
+			IsActive:   IsActivePtr(boolPtr(true)),
+			Department: nil, // Test nil pointer
+			Manager:    &users[2],
+		},
+	}
 
 	testCases := []struct {
 		name     string
@@ -4215,6 +4270,118 @@ HR Department:
   Priority Level: 3
 `,
 		},
+		{
+			name: "Pointer alias types basic rendering",
+			template: `User with Pointers:
+ID: {{ user.id }}
+Name: {{ user.name }}
+Age: {{ user.age }}
+Score: {{ user.score }}
+Active: {{ user.is_active }}
+Department: {{ user.department }}
+Manager: {{ user.manager.name }}`,
+			context: map[string]interface{}{
+				"user": usersWithPointers[0],
+			},
+			expected: `User with Pointers:
+ID: "ptr-user-001"
+Name: "Alice Pointer"
+Age: 28
+Score: 93.5
+Active: true
+Department: "Engineering"
+Manager: Alice Johnson`,
+		},
+		{
+			name: "Pointer alias types with nil values",
+			template: `User with Nil Pointers:
+ID: {% if user.id %}{{ user.id }}{% else %}N/A{% endif %}
+Name: {{ user.name }}
+Age: {% if user.age %}{{ user.age }}{% else %}N/A{% endif %}
+Score: {{ user.score }}
+Active: {{ user.is_active }}
+Department: {% if user.department %}{{ user.department }}{% else %}N/A{% endif %}
+Manager: {{ user.manager.name }}`,
+			context: map[string]interface{}{
+				"user": usersWithPointers[2],
+			},
+			expected: `User with Nil Pointers:
+ID: N/A
+Name: "Carol Pointer"
+Age: N/A
+Score: 91.8
+Active: true
+Department: N/A
+Manager: Carol Brown`,
+		},
+		{
+			name: "Pointer alias types in for loops",
+			template: `All Users with Pointers:
+{% for user in users %}
+- {{ user.name }}{% if user.id %} ({{ user.id }}){% endif %}
+  Age: {% if user.age %}{{ user.age }}{% else %}N/A{% endif %}
+  Score: {{ user.score }}
+  Department: {% if user.department %}{{ user.department }}{% else %}N/A{% endif %}
+  Manager: {{ user.manager.name }}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": usersWithPointers,
+			},
+			expected: `All Users with Pointers:
+
+- "Alice Pointer" ("ptr-user-001")
+  Age: 28
+  Score: 93.5
+  Department: "Engineering"
+  Manager: Alice Johnson
+
+- "Bob Pointer" ("ptr-user-002")
+  Age: 32
+  Score: 89.2
+  Department: "Marketing"
+  Manager: Bob Smith
+
+- "Carol Pointer"
+  Age: N/A
+  Score: 91.8
+  Department: N/A
+  Manager: Carol Brown
+`,
+		},
+		{
+			name: "Pointer alias types in conditions",
+			template: `Pointer Alias Conditions:
+{% for user in users %}
+{{ user.name }}:
+  {% if user.id %}Has ID: {{ user.id }}{% else %}No ID{% endif %}
+  {% if user.age %}Age: {{ user.age }}{% else %}Age: Unknown{% endif %}
+  {% if user.department %}Department: {{ user.department }}{% else %}Department: Unknown{% endif %}
+  {% if user.is_active %}Status: Active{% else %}Status: Inactive{% endif %}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"users": usersWithPointers,
+			},
+			expected: `Pointer Alias Conditions:
+
+"Alice Pointer":
+  Has ID: "ptr-user-001"
+  Age: 28
+  Department: "Engineering"
+  Status: Active
+
+"Bob Pointer":
+  Has ID: "ptr-user-002"
+  Age: 32
+  Department: "Marketing"
+  Status: Inactive
+
+"Carol Pointer":
+  No ID
+  Age: Unknown
+  Department: Unknown
+  Status: Active
+`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -4239,6 +4406,476 @@ HR Department:
 
 			if result != tc.expected {
 				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestBasicBreakContinue(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  Context
+		expected string
+	}{
+		{
+			name:     "Basic break in for loop",
+			template: `{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "12",
+		},
+		{
+			name:     "Basic continue in for loop",
+			template: `{% for i in nums %}{% if i == 3 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "1245",
+		},
+		{
+			name:     "Break at beginning",
+			template: `{% for i in nums %}{% break %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "",
+		},
+		{
+			name:     "Continue all iterations",
+			template: `{% for i in nums %}{% continue %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "",
+		},
+		{
+			name:     "Multiple breaks (only first one executes)",
+			template: `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% if i == 4 %}{% break %}{% endif %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "1",
+		},
+		{
+			name:     "Break in string iteration",
+			template: `{% for char in str %}{% if char == 'c' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
+			context:  Context{"str": "abcdef"},
+			expected: "ab",
+		},
+		{
+			name:     "Continue in string iteration",
+			template: `{% for char in str %}{% if char == 'c' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
+			context:  Context{"str": "abcdef"},
+			expected: "abdef",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.context)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestNestedBreakContinue(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  Context
+		expected string
+	}{
+		{
+			name:     "Break in inner loop only",
+			template: `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "1-1|2-1|3-1|",
+		},
+		{
+			name:     "Continue in inner loop only",
+			template: `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "1-1|1-3|2-1|2-3|3-1|3-3|",
+		},
+		{
+			name:     "Break in outer loop",
+			template: `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "1-1|1-2|1-3|",
+		},
+		{
+			name:     "Continue in outer loop",
+			template: `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "1-1|1-2|1-3|3-1|3-2|3-3|",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.context)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestBreakContinueErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		template    string
+		context     Context
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "Break outside of loop",
+			template:    `Hello {% break %} World`,
+			context:     Context{},
+			expectError: true,
+			errorMsg:    "break statement outside of loop",
+		},
+		{
+			name:        "Continue outside of loop",
+			template:    `Hello {% continue %} World`,
+			context:     Context{},
+			expectError: true,
+			errorMsg:    "continue statement outside of loop",
+		},
+		{
+			name:        "Break in if condition outside loop",
+			template:    `{% if true %}{% break %}{% endif %}`,
+			context:     Context{},
+			expectError: true,
+			errorMsg:    "break statement outside of loop",
+		},
+		{
+			name:        "Continue in if condition outside loop",
+			template:    `{% if true %}{% continue %}{% endif %}`,
+			context:     Context{},
+			expectError: true,
+			errorMsg:    "continue statement outside of loop",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.context)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error containing %q, got nil error and result %q", tt.errorMsg, result)
+				} else if !contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing %q, got %q", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAdvancedBreakContinue(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  Context
+		expected string
+	}{
+		{
+			name:     "Break and continue in same loop",
+			template: `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% if i == 4 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "13",
+		},
+		{
+			name:     "Break with complex condition",
+			template: `{% for i in nums %}{% if i > 2 && i < 5 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "12",
+		},
+		{
+			name:     "Continue with complex condition",
+			template: `{% for i in nums %}{% if i > 1 && i < 4 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "145",
+		},
+		{
+			name:     "Break in empty array",
+			template: `{% for i in empty %}{% break %}{{ i }}{% endfor %}Done`,
+			context:  Context{"empty": []int{}},
+			expected: "Done",
+		},
+		{
+			name:     "Continue in single element",
+			template: `{% for i in single %}{% continue %}{{ i }}{% endfor %}Done`,
+			context:  Context{"single": []int{1}},
+			expected: "Done",
+		},
+		{
+			name:     "Break with filter",
+			template: `{% for item in items %}{% if item | length > 3 %}{% break %}{% endif %}{{ item }}|{% endfor %}`,
+			context:  Context{"items": []string{"a", "bb", "ccc", "dddd", "eeeee"}},
+			expected: "a|bb|ccc|",
+		},
+		{
+			name:     "Continue with filter",
+			template: `{% for item in items %}{% if item | length == 2 %}{% continue %}{% endif %}{{ item }}|{% endfor %}`,
+			context:  Context{"items": []string{"a", "bb", "ccc", "dd", "e"}},
+			expected: "a|ccc|e|",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.context)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestDeepNestedBreakContinue(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  Context
+		expected string
+	}{
+		{
+			name:     "Three level nested with break",
+			template: `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2}},
+			expected: "1-1-1|1-2-1|2-1-1|2-2-1|",
+		},
+		{
+			name:     "Three level nested with continue",
+			template: `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "1-1-1|1-1-3|1-2-1|1-2-3|1-3-1|1-3-3|2-1-1|2-1-3|2-2-1|2-2-3|2-3-1|2-3-3|3-1-1|3-1-3|3-2-1|3-2-3|3-3-1|3-3-3|",
+		},
+		{
+			name:     "Middle level break affects only that level",
+			template: `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{% for k in nums %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "1-1-1|1-1-2|1-1-3|2-1-1|2-1-2|2-1-3|3-1-1|3-1-2|3-1-3|",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.context)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestComplexControlFlowScenarios(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  Context
+		expected string
+	}{
+		{
+			name:     "Break in nested if conditions",
+			template: `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% break %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "1",
+		},
+		{
+			name:     "Continue in nested if conditions",
+			template: `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% continue %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "145",
+		},
+		{
+			name:     "Break in if-else",
+			template: `{% for i in nums %}{% if i == 3 %}{% break %}{% else %}{{ i }}{% endif %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "12",
+		},
+		{
+			name:     "Continue in if-else",
+			template: `{% for i in nums %}{% if i == 3 %}{% continue %}{% else %}{{ i }}{% endif %}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "1245",
+		},
+		{
+			name:     "Multiple loops with different control flow",
+			template: `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% endfor %}-{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ j }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "1-13",
+		},
+		{
+			name:     "Break in loop inside if",
+			template: `{% if true %}{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}{% endif %}`,
+			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			expected: "12",
+		},
+		{
+			name:     "Array of maps with break",
+			template: `{% for item in items %}{% if item.skip %}{% break %}{% endif %}{{ item.name }}|{% endfor %}`,
+			context: Context{
+				"items": []map[string]interface{}{
+					{"name": "a", "skip": false},
+					{"name": "b", "skip": false},
+					{"name": "c", "skip": true},
+					{"name": "d", "skip": false},
+				},
+			},
+			expected: "a|b|",
+		},
+		{
+			name:     "Array of maps with continue",
+			template: `{% for item in items %}{% if item.skip %}{% continue %}{% endif %}{{ item.name }}|{% endfor %}`,
+			context: Context{
+				"items": []map[string]interface{}{
+					{"name": "a", "skip": false},
+					{"name": "b", "skip": true},
+					{"name": "c", "skip": false},
+					{"name": "d", "skip": true},
+				},
+			},
+			expected: "a|c|",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.context)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestBreakContinueEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  Context
+		expected string
+	}{
+		{
+			name:     "Break immediately in nested loop",
+			template: `{% for i in nums %}{% for j in nums %}{% break %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "123",
+		},
+		{
+			name:     "Continue immediately in nested loop",
+			template: `{% for i in nums %}{% for j in nums %}{% continue %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
+			context:  Context{"nums": []int{1, 2, 3}},
+			expected: "123",
+		},
+		{
+			name:     "Break with boolean array",
+			template: `{% for flag in flags %}{% if flag %}{% break %}{% endif %}{{ flag }}{% endfor %}`,
+			context:  Context{"flags": []bool{false, false, true, false}},
+			expected: "falsefalse",
+		},
+		{
+			name:     "Continue with boolean array",
+			template: `{% for flag in flags %}{% if flag %}{% continue %}{% endif %}{{ flag }}{% endfor %}`,
+			context:  Context{"flags": []bool{false, true, false, true}},
+			expected: "falsefalse",
+		},
+		{
+			name:     "Break in string with unicode",
+			template: `{% for char in str %}{% if char == '界' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
+			context:  Context{"str": "世界你好"},
+			expected: "世",
+		},
+		{
+			name:     "Continue in string with unicode",
+			template: `{% for char in str %}{% if char == '界' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
+			context:  Context{"str": "世界你好"},
+			expected: "世你好",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.context)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
 			}
 		})
 	}

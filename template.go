@@ -19,6 +19,21 @@ type Node struct {
 	EndText    string
 }
 
+// ControlFlow represents the type of control flow operation
+type ControlFlow int
+
+const (
+	ControlFlowNone ControlFlow = iota
+	ControlFlowBreak
+	ControlFlowContinue
+)
+
+// Node type constants
+const (
+	NodeTypeBreak    = "break"
+	NodeTypeContinue = "continue"
+)
+
 // Template represents a structured template that can be executed with a given context.
 type Template struct {
 	Nodes []*Node
@@ -33,7 +48,8 @@ func NewTemplate() *Template {
 func (t *Template) Execute(ctx Context) (string, error) {
 	var builder strings.Builder
 	forLayers := 0
-	if err := executeNodes(t.Nodes, ctx, &builder, forLayers); err != nil {
+	_, err := executeNodes(t.Nodes, ctx, &builder, forLayers)
+	if err != nil {
 		return builder.String(), err
 	}
 	return builder.String(), nil
@@ -46,19 +62,23 @@ func (t *Template) MustExecute(ctx Context) string {
 }
 
 // executeNodes recursively processes a slice of nodes, appending the result to the builder.
-func executeNodes(nodes []*Node, ctx Context, builder *strings.Builder, forLayers int) error {
+func executeNodes(nodes []*Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	var firstErr error
 	for _, node := range nodes {
-		err := executeNode(node, ctx, builder, forLayers)
+		controlFlow, err := executeNode(node, ctx, builder, forLayers)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
+		// If a control flow signal is received, return it immediately
+		if controlFlow != ControlFlowNone {
+			return controlFlow, firstErr
+		}
 	}
-	return firstErr
+	return ControlFlowNone, firstErr
 }
 
 // executeNode executes a single node, handling text and variable nodes differently.
-func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) error {
+func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	switch node.Type {
 	case "text":
 		builder.WriteString(node.Text)
@@ -66,21 +86,41 @@ func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers in
 		value, err := executeVariableNode(node, ctx)
 		builder.WriteString(value)
 		if err != nil {
-			return err
+			return ControlFlowNone, err
 		}
 	case "if":
-		if err := executeIfNode(node, ctx, builder, forLayers); err != nil {
-			return err
+		controlFlow, err := executeIfNode(node, ctx, builder, forLayers)
+		if err != nil {
+			return ControlFlowNone, err
+		}
+		if controlFlow != ControlFlowNone {
+			return controlFlow, nil
 		}
 	case "for":
 		forLayers++
-		if err := executeForNode(node, ctx, builder, forLayers); err != nil {
-			return err
+		controlFlow, err := executeForNode(node, ctx, builder, forLayers)
+		if err != nil {
+			return ControlFlowNone, err
 		}
+		if controlFlow != ControlFlowNone {
+			return controlFlow, nil
+		}
+	case NodeTypeBreak:
+		// Check if we're in a loop
+		if forLayers <= 0 {
+			return ControlFlowNone, ErrBreakOutsideLoop
+		}
+		return ControlFlowBreak, nil
+	case NodeTypeContinue:
+		// Check if we're in a loop
+		if forLayers <= 0 {
+			return ControlFlowNone, ErrContinueOutsideLoop
+		}
+		return ControlFlowContinue, nil
 	default:
-		return fmt.Errorf("%w: %s", ErrUnknownNodeType, node.Type)
+		return ControlFlowNone, fmt.Errorf("%w: %s", ErrUnknownNodeType, node.Type)
 	}
-	return nil
+	return ControlFlowNone, nil
 }
 
 // executeVariableNode resolves and processes a variable node, applying any filters.
@@ -182,29 +222,29 @@ func convertToString(value interface{}) (string, error) {
 }
 
 // executeIfNode handles conditional rendering
-func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) error {
+func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	// Parse condition expression
 	expression := disassembleExpression(node.Text)
 	lexer := &Lexer{input: expression}
 	tokens, err := lexer.Lex()
 	if err != nil {
-		return err
+		return ControlFlowNone, err
 	}
 
 	grammar := NewGrammar(tokens)
 	ast, err := grammar.Parse()
 	if err != nil {
-		return err
+		return ControlFlowNone, err
 	}
 	condition, err := ast.Evaluate(ctx)
 	if err != nil {
-		return err
+		return ControlFlowNone, err
 	}
 
 	// Convert condition to boolean value
 	conditionMet, err := condition.toBool()
 	if err != nil {
-		return err
+		return ControlFlowNone, err
 	}
 
 	next := 0
@@ -224,16 +264,16 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 	case ElseExists:
 		return executeNodes(node.Children[next].Children, ctx, builder, forLayers)
 	default:
-		return nil
+		return ControlFlowNone, nil
 	}
 }
 
 // executeForNode handles loop rendering
-func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) error {
+func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	// Get collection data
 	collection, err := resolveVariable(node.Collection, ctx)
 	if err != nil {
-		return err
+		return ControlFlowNone, err
 	}
 	// Create new context only for the outer loop
 	var loopCtx Context
@@ -250,13 +290,20 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 		str := val.String()
 		for i, ch := range str {
 			updateLoopContext(loopCtx, node.Variable, "", string(ch), i)
-			err := executeNodes(node.Children, loopCtx, builder, forLayers)
-			forLayers--
+			controlFlow, err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			if err != nil {
-				return err
+				return ControlFlowNone, err
+			}
+			switch controlFlow {
+			case ControlFlowBreak:
+				return ControlFlowNone, nil
+			case ControlFlowContinue:
+				continue
+			case ControlFlowNone:
+				// Normal flow, continue iteration
 			}
 		}
-		return nil
+		return ControlFlowNone, nil
 	}
 
 	if kind == reflect.Slice || kind == reflect.Array {
@@ -264,13 +311,20 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 		for i := 0; i < length; i++ {
 			item := val.Index(i).Interface()
 			updateLoopContext(loopCtx, node.Variable, "", item, i)
-			err := executeNodes(node.Children, loopCtx, builder, forLayers)
-			forLayers--
+			controlFlow, err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			if err != nil {
-				return err
+				return ControlFlowNone, err
+			}
+			switch controlFlow {
+			case ControlFlowBreak:
+				return ControlFlowNone, nil
+			case ControlFlowContinue:
+				continue
+			case ControlFlowNone:
+				// Normal flow, continue iteration
 			}
 		}
-		return nil
+		return ControlFlowNone, nil
 	}
 
 	if kind == reflect.Map {
@@ -299,16 +353,23 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 				updateLoopContext(loopCtx, node.Variable, keyStr, valueValue, i)
 			}
 
-			err := executeNodes(node.Children, loopCtx, builder, forLayers)
-			forLayers--
+			controlFlow, err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			if err != nil {
-				return err
+				return ControlFlowNone, err
+			}
+			switch controlFlow {
+			case ControlFlowBreak:
+				return ControlFlowNone, nil
+			case ControlFlowContinue:
+				continue
+			case ControlFlowNone:
+				// Normal flow, continue iteration
 			}
 		}
-		return nil
+		return ControlFlowNone, nil
 	}
 
-	return fmt.Errorf("%w: %T", ErrUnsupportedCollectionType, collection)
+	return ControlFlowNone, fmt.Errorf("%w: %T", ErrUnsupportedCollectionType, collection)
 }
 
 // deepCopy deep copy context data

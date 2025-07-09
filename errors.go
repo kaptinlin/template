@@ -131,4 +131,10 @@ var (
 
 	// ErrIntegerOverflow is returned when an unsigned integer value exceeds the maximum int64 value.
 	ErrIntegerOverflow = errors.New("unsigned integer value exceeds maximum int64 value")
+
+	// ErrBreakOutsideLoop is returned when a break statement is used outside of a loop.
+	ErrBreakOutsideLoop = errors.New("break statement outside of loop")
+
+	// ErrContinueOutsideLoop is returned when a continue statement is used outside of a loop.
+	ErrContinueOutsideLoop = errors.New("continue statement outside of loop")
 )

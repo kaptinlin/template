@@ -7,30 +7,15 @@ import (
 )
 
 // Regular expression to identify variables.
-// var variableRegex = regexp.MustCompile(`{{\s*([\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`)
 var variableRegex = regexp.MustCompile(
 	`{{\s*(?:'[^']*'|"[\s\S]*?"|[\w\.]+)((?:\s*\|\s*[\w\:\,]+(?:\s*:\s*[^}]+)?)*)\s*}}`,
 )
-
-// var forRegex = regexp.MustCompile(`{%\s*for\s+([\w\.]+)\s+in\s+([\w\.\[\]]+)\s*%}`)
 var ifRegex = regexp.MustCompile(`{%\s*if\s+` + // if start
 	`([^%]+)` + // Capture any non-% characters (expression part)
 	`\s*%}`) // if end
 var endforRegex = regexp.MustCompile(`{%\s*endfor\s*%}`)
 var endifRegex = regexp.MustCompile(`{%\s*endif\s*%}`)
 var elseRegex = regexp.MustCompile(`{%\s*else\s*%}`)
-
-// var forTwoVarsRegex = regexp.MustCompile(
-//
-//	`^{%\s*for\s+` +
-//	    `([a-zA-Z_][\w\.]*)` +
-//	    `\s*,\s*` +
-//	    `([a-zA-Z_][\w\.]*)` +
-//	    `\s+in\s+` +
-//	    `([\w\.$$$$'"]+)` +
-//	`\s*%}$`,
-//
-// )
 var forRegex = regexp.MustCompile(
 	`{%\s*for\s+` +
 		`(` +
@@ -42,6 +27,10 @@ var forRegex = regexp.MustCompile(
 		`([\w\.$$$$'"]+)` +
 		`\s*%}`,
 )
+
+// Regular expressions for break/continue control flow
+var breakRegex = regexp.MustCompile(`{%\s*break\s*%}`)
+var continueRegex = regexp.MustCompile(`{%\s*continue\s*%}`)
 
 // Parser analyzes template syntax.
 type Parser struct{}
@@ -249,6 +238,19 @@ func (p *Parser) addIfNode(text string, tpl *Template, node *Node) {
 	}
 }
 
+// addControlFlowNode adds a control flow node (break/continue) to the template
+func (p *Parser) addControlFlowNode(text string, tpl *Template, node *Node, nodeType string) {
+	newNode := &Node{Type: nodeType, Text: text}
+
+	if tpl != nil {
+		// Adding to template root
+		tpl.Nodes = append(tpl.Nodes, newNode)
+	} else if node != nil {
+		// Adding to a parent node
+		node.Children = append(node.Children, newNode)
+	}
+}
+
 // Parse converts a template string into a Template object.
 // It recognizes the following syntax:
 // - Text content
@@ -290,7 +292,7 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 	n := len(src)
 	// Try to match control structure opening tags and determine their type
 	matched, temp, typ := p.matchAppropriateStrings(src, n, next+2, "%}")
-	if matched && typ < 3 {
+	if matched && typ < 8 {
 		// Extract the complete control structure token
 		token := src[next : temp+1]
 		// Handle any text content before the control structure
@@ -299,31 +301,42 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 			p.addTextNode(token, template, nil)
 		}
 
-		// Add appropriate node based on control structure type (for/if)
+		// Add appropriate node based on control structure type
 		switch typ {
 		case 1:
 			p.addForNode(token, template, nil)
 		case 2:
 			p.addIfNode(token, template, nil)
+		case 6: // break
+			p.addControlFlowNode(token, template, nil, NodeTypeBreak)
+		case 7: // continue
+			p.addControlFlowNode(token, template, nil, NodeTypeContinue)
 		}
 
-		// Get the last added node to process its children
-		node := template.Nodes[len(template.Nodes)-1]
-		// Parse the content between opening and closing tags
-		tempPrev, tempNext := p.parser(src, temp+1, typ, node)
-		tempToken := src[tempPrev : tempNext+1]
+		// Handle control structures that need end tags (for/if)
+		if typ < 3 {
+			// Get the last added node to process its children
+			node := template.Nodes[len(template.Nodes)-1]
+			// Parse the content between opening and closing tags
+			tempPrev, tempNext := p.parser(src, temp+1, typ, node)
+			tempToken := src[tempPrev : tempNext+1]
 
-		// Process the closing tag of the control structure
-		switch typ {
-		case 1:
-			p.addForNode(tempToken, nil, node)
-		case 2:
-			p.addIfNode(tempToken, nil, node)
+			// Process the closing tag of the control structure
+			switch typ {
+			case 1:
+				p.addForNode(tempToken, nil, node)
+			case 2:
+				p.addIfNode(tempToken, nil, node)
+			}
+
+			// Update position markers to continue parsing after this block
+			next = tempNext + 1
+			prev = tempNext + 1
+		} else {
+			// For break/continue, just move past the current token
+			next = temp + 1
+			prev = temp + 1
 		}
-
-		// Update position markers to continue parsing after this block
-		next = tempNext + 1
-		prev = tempNext + 1
 	} else {
 		// If no match found, move to next character
 		next++
@@ -378,12 +391,8 @@ func (p *Parser) matchAppropriateStrings(src string, n int, next int, format str
 			next++
 		}
 	case "#}":
-		// 处理注释结束标记
 		for next+1 < n {
-			// 寻找"#}"结束标记
 			if src[next] == '#' && src[next+1] == '}' {
-				// 对于注释，我们不需要进行正则表达式匹配验证
-				// 只需要确认找到了结束标记
 				return true, next + 1, 0
 			}
 			next++
@@ -401,9 +410,11 @@ func (p *Parser) matchAppropriateStrings(src string, n int, next int, format str
 // - for/endfor statements (type 1/4)
 // - if/endif statements (type 2/5)
 // - else statements (type 3)
+// - break statements (type 6)
+// - continue statements (type 7)
 // Returns:
 // - bool: whether a valid control structure was matched
-// - int: the type of control structure (1-5) or 0 if no match
+// - int: the type of control structure (1-7) or 0 if no match
 func (p *Parser) judgeBranchingStatements(src string, temp int, next int) (bool, int) {
 	token := src[temp:next]
 	switch {
@@ -417,6 +428,10 @@ func (p *Parser) judgeBranchingStatements(src string, temp int, next int) (bool,
 		return true, 4
 	case endifRegex.MatchString(token):
 		return true, 5
+	case breakRegex.MatchString(token):
+		return true, 6
+	case continueRegex.MatchString(token):
+		return true, 7
 	default:
 		return false, 0
 	}
@@ -455,6 +470,21 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 				next, prev = p.handleControlStructure(src, next, prev, temp, tempType, node)
 			case matched && tempType == 3 && typ == 5:
 				next, prev, markEnterElse, node = p.handleElseStructure(src, next, prev, temp, node)
+			case matched && (tempType == 6 || tempType == 7):
+				// Handle break/continue control flow
+				token := src[next : temp+1]
+				if next > prev {
+					textToken := src[prev:next]
+					p.addTextNode(textToken, nil, node)
+				}
+				// Add break or continue node
+				if tempType == 6 {
+					p.addControlFlowNode(token, nil, node, NodeTypeBreak)
+				} else {
+					p.addControlFlowNode(token, nil, node, NodeTypeContinue)
+				}
+				next = temp + 1
+				prev = temp + 1
 			case matched && tempType == typ:
 				if next > prev {
 					token := src[prev:next]

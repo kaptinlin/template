@@ -398,20 +398,22 @@ func (v *Value) toInterface() interface{} {
 }
 
 func NewValue(v interface{}) (*Value, error) {
-	if reflect.TypeOf(v) != nil {
-		rv := reflect.ValueOf(v)
-		for rv.Kind() == reflect.Ptr {
-			if rv.IsNil() {
-				return &Value{Type: TypeBool, Bool: false}, nil
-			}
-			rv = rv.Elem()
-		}
-		if reflect.TypeOf(v).Kind() == reflect.Ptr {
-			return NewValue(rv.Interface())
-		}
+	// Handle nil interface{} case
+	if v == nil {
+		return &Value{Type: TypeBool, Bool: false}, nil
 	}
 
 	rv := reflect.ValueOf(v)
+
+	// Handle pointers by dereferencing until we get a non-pointer value
+	for rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return &Value{Type: TypeBool, Bool: false}, nil
+		}
+		rv = rv.Elem()
+	}
+
+	// Now rv contains the final dereferenced value
 	kind := rv.Kind()
 
 	// Use reflect to check the underlying type to handle alias types
@@ -433,10 +435,10 @@ func NewValue(v interface{}) (*Value, error) {
 	case reflect.Bool:
 		return &Value{Type: TypeBool, Bool: rv.Bool()}, nil
 	case reflect.Slice, reflect.Array:
-		return &Value{Type: TypeSlice, Slice: v}, nil
+		return &Value{Type: TypeSlice, Slice: rv.Interface()}, nil
 	case reflect.Map:
 		if rv.Type().Key().Kind() == reflect.String {
-			if m, ok := v.(map[string]interface{}); ok {
+			if m, ok := rv.Interface().(map[string]interface{}); ok {
 				return &Value{Type: TypeMap, Map: m}, nil
 			}
 
@@ -446,11 +448,11 @@ func NewValue(v interface{}) (*Value, error) {
 			}
 			return &Value{Type: TypeMap, Map: result}, nil
 		}
-		return nil, fmt.Errorf("%w: map with non-string key type %T", ErrUnsupportedType, v)
+		return nil, fmt.Errorf("%w: map with non-string key type %T", ErrUnsupportedType, rv.Interface())
 	case reflect.Struct:
-		return &Value{Type: TypeStruct, Struct: v}, nil
+		return &Value{Type: TypeStruct, Struct: rv.Interface()}, nil
 	default:
-		return nil, fmt.Errorf("%w: %T", ErrUnsupportedType, v)
+		return nil, fmt.Errorf("%w: %T", ErrUnsupportedType, rv.Interface())
 	}
 }
 
