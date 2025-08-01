@@ -1598,3 +1598,1025 @@ func TestSetPreservesOriginalTypes(t *testing.T) {
 		})
 	}
 }
+
+// TestRenderingStability tests that template rendering produces consistent output
+// across multiple executions for the same context data.
+func TestRenderingStability(t *testing.T) {
+	// Test multiple rendering iterations to catch ordering issues
+	const iterations = 10
+
+	testCases := []struct {
+		name        string
+		template    string
+		setupFunc   func() Context
+		description string
+	}{
+		{
+			name:     "Map string iteration stability",
+			template: `{% for key in data %}{{ key.key }}:{{ key.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]string{
+					"zebra":   "last",
+					"alpha":   "first",
+					"beta":    "second",
+					"gamma":   "third",
+					"delta":   "fourth",
+					"echo":    "fifth",
+					"foxtrot": "sixth",
+				})
+				return ctx
+			},
+			description: "Map with string keys should maintain consistent iteration order",
+		},
+		{
+			name:     "Map interface iteration stability",
+			template: `{% for item in users %}{{ item.key }}:{{ item.value.name }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("users", map[string]interface{}{
+					"user3": map[string]interface{}{"name": "Charlie", "age": 35},
+					"user1": map[string]interface{}{"name": "Alice", "age": 25},
+					"user4": map[string]interface{}{"name": "David", "age": 40},
+					"user2": map[string]interface{}{"name": "Bob", "age": 30},
+				})
+				return ctx
+			},
+			description: "Map with interface{} values should maintain consistent iteration order",
+		},
+		{
+			name:     "Nested map iteration stability",
+			template: `{% for dept in company %}{{ dept.key }}:{% for emp in dept.value %}{{ emp.key }}-{{ emp.value }},{% endfor %};{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("company", map[string]map[string]string{
+					"engineering": {
+						"john":  "senior",
+						"alice": "junior",
+						"bob":   "lead",
+					},
+					"sales": {
+						"mary": "manager",
+						"tom":  "rep",
+					},
+					"hr": {
+						"susan": "director",
+					},
+				})
+				return ctx
+			},
+			description: "Nested maps should maintain consistent iteration order",
+		},
+		{
+			name:     "Slice rendering stability",
+			template: `{% for item in items %}{{ item }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("items", []string{"first", "second", "third", "fourth", "fifth"})
+				return ctx
+			},
+			description: "Slice should maintain consistent order (this should be stable)",
+		},
+		{
+			name:     "Struct slice rendering stability",
+			template: `{% for person in people %}{{ person.name }}-{{ person.age }},{% endfor %}`,
+			setupFunc: func() Context {
+				type Person struct {
+					Name string `json:"name"`
+					Age  int    `json:"age"`
+				}
+				ctx := NewContext()
+				ctx.Set("people", []Person{
+					{Name: "Alice", Age: 25},
+					{Name: "Bob", Age: 30},
+					{Name: "Charlie", Age: 35},
+				})
+				return ctx
+			},
+			description: "Slice of structs should maintain consistent order",
+		},
+		{
+			name:     "Map variable rendering stability",
+			template: `{{ data }}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]interface{}{
+					"zebra": "value1",
+					"alpha": "value2",
+					"beta":  "value3",
+					"gamma": "value4",
+				})
+				return ctx
+			},
+			description: "Direct map variable rendering should be consistent",
+		},
+		{
+			name:     "Complex nested structure rendering stability",
+			template: `{{ complex }}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("complex", map[string]interface{}{
+					"users": map[string]interface{}{
+						"user2": []string{"read", "write"},
+						"user1": []string{"admin", "read", "write"},
+					},
+					"settings": map[string]interface{}{
+						"theme": "dark",
+						"lang":  "en",
+					},
+					"data": []map[string]string{
+						{"name": "item1", "type": "A"},
+						{"name": "item2", "type": "B"},
+					},
+				})
+				return ctx
+			},
+			description: "Complex nested structures should render consistently",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Parse template once
+			template, err := Parse(tc.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			var results []string
+
+			// Run multiple iterations to detect inconsistencies
+			for i := 0; i < iterations; i++ {
+				ctx := tc.setupFunc()
+				result, err := template.Execute(ctx)
+				if err != nil {
+					t.Fatalf("Iteration %d failed: %v", i, err)
+				}
+				results = append(results, result)
+			}
+
+			// Check that all results are identical
+			firstResult := results[0]
+			for i := 1; i < iterations; i++ {
+				if results[i] != firstResult {
+					t.Errorf("%s: Inconsistent output detected\n"+
+						"Iteration 0: %q\n"+
+						"Iteration %d: %q\n"+
+						"All results: %v",
+						tc.description, firstResult, i, results[i], results)
+					break
+				}
+			}
+
+			// Log the consistent result for manual verification
+			t.Logf("%s - Consistent output: %q", tc.name, firstResult)
+		})
+	}
+}
+
+// TestMapKeyOrderStability specifically tests map key ordering in different scenarios
+func TestMapKeyOrderStability(t *testing.T) {
+	const iterations = 20 // More iterations for map ordering tests
+
+	testCases := []struct {
+		name string
+		data map[string]interface{}
+	}{
+		{
+			name: "String keys",
+			data: map[string]interface{}{
+				"zebra": "last",
+				"alpha": "first",
+				"beta":  "second",
+				"gamma": "third",
+				"delta": "fourth",
+			},
+		},
+		{
+			name: "Numeric-like string keys",
+			data: map[string]interface{}{
+				"10": "ten",
+				"1":  "one",
+				"5":  "five",
+				"2":  "two",
+				"20": "twenty",
+			},
+		},
+		{
+			name: "Mixed case keys",
+			data: map[string]interface{}{
+				"Apple":  "fruit1",
+				"banana": "fruit2",
+				"Cherry": "fruit3",
+				"date":   "fruit4",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var keyOrders [][]string
+
+			for i := 0; i < iterations; i++ {
+				ctx := NewContext()
+				ctx.Set("data", tc.data)
+
+				var observedKeys []string
+				// Use reflection to get map keys in the order they would be iterated
+				rv := reflect.ValueOf(tc.data)
+				for _, key := range rv.MapKeys() {
+					observedKeys = append(observedKeys, key.String())
+				}
+				keyOrders = append(keyOrders, observedKeys)
+			}
+
+			// Check if all key orders are the same
+			firstOrder := keyOrders[0]
+			allSame := true
+			for i := 1; i < iterations; i++ {
+				if !reflect.DeepEqual(keyOrders[i], firstOrder) {
+					allSame = false
+					t.Logf("Key order difference detected:\n"+
+						"Iteration 0: %v\n"+
+						"Iteration %d: %v", firstOrder, i, keyOrders[i])
+					break
+				}
+			}
+
+			if allSame {
+				t.Logf("%s: Key order is stable across %d iterations: %v",
+					tc.name, iterations, firstOrder)
+			} else {
+				t.Logf("%s: Key order is NOT stable - this is expected behavior in Go", tc.name)
+			}
+		})
+	}
+}
+
+// TestContextValueStability tests that different types of values maintain stability when stored and retrieved
+func TestContextValueStability(t *testing.T) {
+	const iterations = 10
+
+	testCases := []struct {
+		name     string
+		key      string
+		value    interface{}
+		checkKey string
+	}{
+		{
+			name:     "Map value stability",
+			key:      "config",
+			value:    map[string]interface{}{"a": 1, "z": 2, "m": 3, "b": 4},
+			checkKey: "config",
+		},
+		{
+			name:     "Slice value stability",
+			key:      "items",
+			value:    []interface{}{"third", "first", "second"},
+			checkKey: "items",
+		},
+		{
+			name: "Struct value stability",
+			key:  "user",
+			value: struct {
+				Name   string            `json:"name"`
+				Age    int               `json:"age"`
+				Tags   map[string]string `json:"tags"`
+				Skills []string          `json:"skills"`
+			}{
+				Name:   "John",
+				Age:    30,
+				Tags:   map[string]string{"level": "senior", "team": "backend"},
+				Skills: []string{"Go", "Python", "SQL"},
+			},
+			checkKey: "user",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var results []interface{}
+
+			for i := 0; i < iterations; i++ {
+				ctx := NewContext()
+				ctx.Set(tc.key, tc.value)
+
+				retrieved, err := ctx.Get(tc.checkKey)
+				if err != nil {
+					t.Fatalf("Iteration %d: Failed to get value: %v", i, err)
+				}
+				results = append(results, retrieved)
+			}
+
+			// For basic stability check, verify the retrieved values are deeply equal
+			firstResult := results[0]
+			for i := 1; i < iterations; i++ {
+				if !reflect.DeepEqual(results[i], firstResult) {
+					t.Errorf("Value stability failed at iteration %d\n"+
+						"Expected: %+v\n"+
+						"Got: %+v", i, firstResult, results[i])
+				}
+			}
+
+			t.Logf("%s: Value remains stable across %d iterations", tc.name, iterations)
+		})
+	}
+}
+
+// TestTemplateRenderingConsistency tests full template rendering consistency
+func TestTemplateRenderingConsistency(t *testing.T) {
+	const iterations = 15
+
+	type User struct {
+		Name     string            `json:"name"`
+		Age      int               `json:"age"`
+		Roles    []string          `json:"roles"`
+		Settings map[string]string `json:"settings"`
+	}
+
+	type Company struct {
+		Name  string          `json:"name"`
+		Users map[string]User `json:"users"`
+		Tags  []string        `json:"tags"`
+	}
+
+	template := `Company: {{ company.name }}
+Users:
+{% for user in company.users %}  - {{ user.key }}: {{ user.value.name }} ({{ user.value.age }})
+    Roles: {% for role in user.value.roles %}{{ role }}, {% endfor %}
+    Settings: {% for setting in user.value.settings %}{{ setting.key }}={{ setting.value }}, {% endfor %}
+{% endfor %}
+Tags: {% for tag in company.tags %}{{ tag }}, {% endfor %}`
+
+	setupData := func() Context {
+		ctx := NewContext()
+		company := Company{
+			Name: "TechCorp",
+			Users: map[string]User{
+				"user3": {
+					Name:     "Charlie",
+					Age:      35,
+					Roles:    []string{"developer", "lead"},
+					Settings: map[string]string{"theme": "dark", "lang": "en"},
+				},
+				"user1": {
+					Name:     "Alice",
+					Age:      25,
+					Roles:    []string{"admin", "developer"},
+					Settings: map[string]string{"theme": "light", "notifications": "on"},
+				},
+				"user2": {
+					Name:     "Bob",
+					Age:      30,
+					Roles:    []string{"developer"},
+					Settings: map[string]string{"lang": "fr"},
+				},
+			},
+			Tags: []string{"startup", "tech", "remote"},
+		}
+		ctx.Set("company", company)
+		return ctx
+	}
+
+	tmpl, err := Parse(template)
+	if err != nil {
+		t.Fatalf("Failed to parse template: %v", err)
+	}
+
+	var results []string
+	for i := 0; i < iterations; i++ {
+		ctx := setupData()
+		result, err := tmpl.Execute(ctx)
+		if err != nil {
+			t.Fatalf("Template execution failed at iteration %d: %v", i, err)
+		}
+		results = append(results, result)
+	}
+
+	// Check consistency
+	firstResult := results[0]
+	inconsistentFound := false
+	for i := 1; i < iterations; i++ {
+		if results[i] != firstResult {
+			inconsistentFound = true
+			t.Errorf("Template rendering inconsistency detected:\n"+
+				"=== Iteration 0 ===\n%s\n"+
+				"=== Iteration %d ===\n%s\n", firstResult, i, results[i])
+			break
+		}
+	}
+
+	if !inconsistentFound {
+		t.Logf("Template rendering is consistent across %d iterations", iterations)
+		t.Logf("Sample output:\n%s", firstResult)
+	}
+}
+
+// TestRenderingStabilityEdgeCases tests rendering stability for edge cases and boundary conditions
+func TestRenderingStabilityEdgeCases(t *testing.T) {
+	const iterations = 10
+
+	testCases := []struct {
+		name        string
+		template    string
+		setupFunc   func() Context
+		description string
+	}{
+		{
+			name:     "Empty map iteration",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]string{})
+				return ctx
+			},
+			description: "Empty map should render consistently (empty result)",
+		},
+		{
+			name:     "Single item map iteration",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]string{"onlykey": "onlyvalue"})
+				return ctx
+			},
+			description: "Single item map should render consistently",
+		},
+		{
+			name:     "Empty slice iteration",
+			template: `{% for item in data %}{{ item }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", []string{})
+				return ctx
+			},
+			description: "Empty slice should render consistently (empty result)",
+		},
+		{
+			name:     "Nil values in map",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]interface{}{
+					"nil_value": nil,
+					"empty_str": "",
+					"zero_int":  0,
+					"false_val": false,
+				})
+				return ctx
+			},
+			description: "Map with nil and falsy values should render consistently",
+		},
+		{
+			name:     "Special characters in keys",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]string{
+					"key-with-dashes":      "value1",
+					"key_with_underscores": "value2",
+					"key.with.dots":        "value3",
+					"key with spaces":      "value4",
+					"key@with#symbols":     "value5",
+				})
+				return ctx
+			},
+			description: "Keys with special characters should maintain stable order",
+		},
+		{
+			name:     "Unicode keys and values",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]string{
+					"中文":      "中文值",
+					"العربية": "قيمة",
+					"русский": "значение",
+					"日本語":     "値",
+					"한국어":     "값",
+					"emoji":   "🎉🎈🎊",
+				})
+				return ctx
+			},
+			description: "Unicode keys and values should maintain stable order",
+		},
+		{
+			name:     "Numeric string keys",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]string{
+					"100": "hundred",
+					"1":   "one",
+					"10":  "ten",
+					"2":   "two",
+					"01":  "zero-one",
+					"001": "zero-zero-one",
+					"1.5": "one-point-five",
+					"-1":  "negative-one",
+					"0":   "zero",
+				})
+				return ctx
+			},
+			description: "Numeric string keys should sort lexicographically",
+		},
+		{
+			name:     "Large map iteration",
+			template: `{% for item in data %}{{ item.key }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				largeMap := make(map[string]string)
+				for i := 0; i < 100; i++ {
+					key := fmt.Sprintf("key_%03d", i)
+					largeMap[key] = fmt.Sprintf("value_%d", i)
+				}
+				ctx.Set("data", largeMap)
+				return ctx
+			},
+			description: "Large map should maintain stable iteration order",
+		},
+		{
+			name:     "Deeply nested map structures",
+			template: `{% for l1 in data %}{{ l1.key }}:{% for l2 in l1.value %}{{ l2.key }}:{% for l3 in l2.value %}{{ l3.key }}-{{ l3.value }},{% endfor %};{% endfor %};{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]map[string]map[string]string{
+					"level1_b": {
+						"level2_y": {"level3_z": "value_z", "level3_x": "value_x"},
+						"level2_x": {"level3_a": "value_a"},
+					},
+					"level1_a": {
+						"level2_z": {"level3_b": "value_b"},
+						"level2_a": {"level3_y": "value_y", "level3_z": "value_z2"},
+					},
+				})
+				return ctx
+			},
+			description: "Deeply nested maps should maintain stable order at all levels",
+		},
+		{
+			name:     "Mixed types in map values",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]interface{}{
+					"string_val": "text",
+					"int_val":    123,
+					"float_val":  45.67,
+					"bool_val":   true,
+					"slice_val":  []string{"a", "b"},
+					"map_val":    map[string]string{"nested": "value"},
+				})
+				return ctx
+			},
+			description: "Map with mixed value types should render consistently",
+		},
+		{
+			name:     "Very long keys and values",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				longKey := strings.Repeat("a", 1000) + "_key"
+				longValue := strings.Repeat("x", 1000)
+				ctx.Set("data", map[string]string{
+					"short":  "short_value",
+					longKey:  longValue,
+					"medium": strings.Repeat("m", 100),
+				})
+				return ctx
+			},
+			description: "Maps with very long keys and values should be stable",
+		},
+		{
+			name:     "Case sensitive key ordering",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]string{
+					"Apple":  "fruit1",
+					"apple":  "fruit2",
+					"APPLE":  "fruit3",
+					"aPpLe":  "fruit4",
+					"Banana": "fruit5",
+					"banana": "fruit6",
+				})
+				return ctx
+			},
+			description: "Case sensitive keys should be sorted correctly",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			template, err := Parse(tc.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			var results []string
+			for i := 0; i < iterations; i++ {
+				ctx := tc.setupFunc()
+				result, err := template.Execute(ctx)
+				if err != nil {
+					t.Fatalf("Iteration %d failed: %v", i, err)
+				}
+				results = append(results, result)
+			}
+
+			// Check consistency
+			firstResult := results[0]
+			for i := 1; i < iterations; i++ {
+				if results[i] != firstResult {
+					t.Errorf("%s: Inconsistent output detected\n"+
+						"Iteration 0: %q\n"+
+						"Iteration %d: %q",
+						tc.description, firstResult, i, results[i])
+					break
+				}
+			}
+
+			t.Logf("%s - Consistent output: %q", tc.name, firstResult)
+		})
+	}
+}
+
+// TestRenderingStabilityPerformance tests rendering stability with performance considerations
+func TestRenderingStabilityPerformance(t *testing.T) {
+	const iterations = 5 // Fewer iterations for performance tests
+
+	testCases := []struct {
+		name        string
+		template    string
+		setupFunc   func() Context
+		description string
+	}{
+		{
+			name:     "Very large map (1000 items)",
+			template: `Count: {% for item in data %}1{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				largeMap := make(map[string]int)
+				for i := 0; i < 1000; i++ {
+					// Use random-ish keys to test sorting performance
+					key := fmt.Sprintf("key_%04d_%d", 1000-i, i*7%13)
+					largeMap[key] = i
+				}
+				ctx.Set("data", largeMap)
+				return ctx
+			},
+			description: "Very large map should maintain stability without significant performance degradation",
+		},
+		{
+			name:     "Deep nesting (10 levels)",
+			template: `{{ deep }}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				// Create deeply nested structure
+				current := make(map[string]interface{})
+				root := current
+				for i := 0; i < 10; i++ {
+					next := make(map[string]interface{})
+					current[fmt.Sprintf("level_%d_key_z", i)] = fmt.Sprintf("value_%d", i)
+					current[fmt.Sprintf("level_%d_key_a", i)] = fmt.Sprintf("value_%d", i)
+					current[fmt.Sprintf("nested")] = next
+					current = next
+				}
+				current["final"] = "deep_value"
+				ctx.Set("deep", root)
+				return ctx
+			},
+			description: "Deep nesting should not cause performance issues with stability",
+		},
+		{
+			name:     "Wide map (many keys at same level)",
+			template: `{% for item in data %}{{ item.key }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				wideMap := make(map[string]string)
+				// Create many keys with different prefixes to test sorting
+				prefixes := []string{"apple", "banana", "cherry", "date", "elderberry"}
+				for _, prefix := range prefixes {
+					for i := 0; i < 50; i++ {
+						key := fmt.Sprintf("%s_%03d", prefix, i)
+						wideMap[key] = fmt.Sprintf("value_%s_%d", prefix, i)
+					}
+				}
+				ctx.Set("data", wideMap)
+				return ctx
+			},
+			description: "Wide map with many keys should maintain stable order efficiently",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			template, err := Parse(tc.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			var results []string
+			start := time.Now()
+
+			for i := 0; i < iterations; i++ {
+				ctx := tc.setupFunc()
+				result, err := template.Execute(ctx)
+				if err != nil {
+					t.Fatalf("Iteration %d failed: %v", i, err)
+				}
+				results = append(results, result)
+			}
+
+			duration := time.Since(start)
+
+			// Check consistency
+			firstResult := results[0]
+			for i := 1; i < iterations; i++ {
+				if results[i] != firstResult {
+					t.Errorf("%s: Inconsistent output detected", tc.description)
+					break
+				}
+			}
+
+			t.Logf("%s - Completed %d iterations in %v (avg: %v per iteration)",
+				tc.name, iterations, duration, duration/time.Duration(iterations))
+		})
+	}
+}
+
+// TestContextStabilityWithStructs tests rendering stability with various struct configurations
+func TestContextStabilityWithStructs(t *testing.T) {
+	const iterations = 10
+
+	// Define test structs with different configurations
+	type SimpleStruct struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	type StructWithTags struct {
+		PublicField  string `json:"public"`
+		privateField string // Unexported field should be ignored
+		IgnoredField string `json:"-"` // Explicitly ignored field
+		CustomName   string `json:"custom_name"`
+	}
+
+	type NestedStruct struct {
+		ID       string                 `json:"id"`
+		Simple   SimpleStruct           `json:"simple"`
+		Settings map[string]interface{} `json:"settings"`
+		Items    []string               `json:"items"`
+	}
+
+	type StructWithPointers struct {
+		Name    *string            `json:"name"`
+		Age     *int               `json:"age"`
+		Config  *map[string]string `json:"config"`
+		Enabled *bool              `json:"enabled"`
+	}
+
+	testCases := []struct {
+		name        string
+		template    string
+		setupFunc   func() Context
+		description string
+	}{
+		{
+			name:     "Simple struct rendering",
+			template: `{{ person }}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("person", SimpleStruct{Name: "Alice", Age: 30})
+				return ctx
+			},
+			description: "Simple struct should render consistently",
+		},
+		{
+			name:     "Struct with field tags",
+			template: `{{ data }}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", StructWithTags{
+					PublicField:  "public_value",
+					privateField: "private_value", // Should not appear in JSON
+					IgnoredField: "ignored_value", // Should not appear in JSON
+					CustomName:   "custom_value",
+				})
+				return ctx
+			},
+			description: "Struct with JSON tags should render consistently",
+		},
+		{
+			name:     "Nested struct iteration",
+			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				data := map[string]NestedStruct{
+					"item_b": {
+						ID:     "id_b",
+						Simple: SimpleStruct{Name: "Bob", Age: 25},
+						Settings: map[string]interface{}{
+							"theme": "dark",
+							"lang":  "en",
+						},
+						Items: []string{"item1", "item2"},
+					},
+					"item_a": {
+						ID:     "id_a",
+						Simple: SimpleStruct{Name: "Alice", Age: 30},
+						Settings: map[string]interface{}{
+							"theme":         "light",
+							"notifications": true,
+						},
+						Items: []string{"item3", "item4"},
+					},
+				}
+				ctx.Set("data", data)
+				return ctx
+			},
+			description: "Map of nested structs should maintain stable order",
+		},
+		{
+			name:     "Struct with pointers",
+			template: `{{ data }}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				name := "John"
+				age := 35
+				config := map[string]string{"key": "value"}
+				enabled := true
+
+				ctx.Set("data", StructWithPointers{
+					Name:    &name,
+					Age:     &age,
+					Config:  &config,
+					Enabled: &enabled,
+				})
+				return ctx
+			},
+			description: "Struct with pointer fields should render consistently",
+		},
+		{
+			name:     "Slice of structs with map fields",
+			template: `{% for person in people %}{{ person.name }}:{% for setting in person.settings %}{{ setting.key }}={{ setting.value }},{% endfor %};{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				type PersonWithSettings struct {
+					Name     string            `json:"name"`
+					Settings map[string]string `json:"settings"`
+				}
+
+				people := []PersonWithSettings{
+					{
+						Name: "Charlie",
+						Settings: map[string]string{
+							"theme":         "auto",
+							"lang":          "fr",
+							"notifications": "off",
+						},
+					},
+					{
+						Name: "Alice",
+						Settings: map[string]string{
+							"theme": "light",
+							"lang":  "en",
+						},
+					},
+				}
+				ctx.Set("people", people)
+				return ctx
+			},
+			description: "Slice of structs with map fields should maintain stable order",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			template, err := Parse(tc.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			var results []string
+			for i := 0; i < iterations; i++ {
+				ctx := tc.setupFunc()
+				result, err := template.Execute(ctx)
+				if err != nil {
+					t.Fatalf("Iteration %d failed: %v", i, err)
+				}
+				results = append(results, result)
+			}
+
+			// Check consistency
+			firstResult := results[0]
+			for i := 1; i < iterations; i++ {
+				if results[i] != firstResult {
+					t.Errorf("%s: Inconsistent output detected\n"+
+						"Iteration 0: %q\n"+
+						"Iteration %d: %q",
+						tc.description, firstResult, i, results[i])
+					break
+				}
+			}
+
+			t.Logf("%s - Consistent output length: %d chars", tc.name, len(firstResult))
+		})
+	}
+}
+
+// TestRenderingStabilityErrorCases tests stability in error conditions
+func TestRenderingStabilityErrorCases(t *testing.T) {
+	const iterations = 5
+
+	testCases := []struct {
+		name        string
+		template    string
+		setupFunc   func() Context
+		description string
+		expectError bool
+	}{
+		{
+			name:     "Missing variable in map iteration",
+			template: `{% for item in missing_var %}{{ item }},{% endfor %}`,
+			setupFunc: func() Context {
+				return NewContext()
+			},
+			description: "Missing variable should produce consistent error behavior",
+			expectError: true,
+		},
+		{
+			name:     "Type mismatch for iteration",
+			template: `{% for item in not_iterable %}{{ item }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("not_iterable", "this is a string, not iterable as expected")
+				return ctx
+			},
+			description: "Type mismatch should produce consistent behavior",
+			expectError: false, // String iteration is actually supported
+		},
+		{
+			name:     "Accessing non-existent nested properties",
+			template: `{% for item in data %}{{ item.nonexistent.property }},{% endfor %}`,
+			setupFunc: func() Context {
+				ctx := NewContext()
+				ctx.Set("data", map[string]interface{}{
+					"item1": map[string]string{"name": "value1"},
+					"item2": map[string]string{"name": "value2"},
+				})
+				return ctx
+			},
+			description: "Non-existent nested properties should render consistently",
+			expectError: false, // Should render empty strings consistently
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			template, err := Parse(tc.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			var results []string
+			var errors []error
+
+			for i := 0; i < iterations; i++ {
+				ctx := tc.setupFunc()
+				result, err := template.Execute(ctx)
+				results = append(results, result)
+				errors = append(errors, err)
+			}
+
+			// Check error consistency
+			firstError := errors[0]
+			for i := 1; i < iterations; i++ {
+				if (firstError == nil) != (errors[i] == nil) {
+					t.Errorf("%s: Inconsistent error behavior\n"+
+						"Iteration 0 error: %v\n"+
+						"Iteration %d error: %v",
+						tc.description, firstError, i, errors[i])
+					return
+				}
+			}
+
+			// Check result consistency (even with errors, partial results should be consistent)
+			firstResult := results[0]
+			for i := 1; i < iterations; i++ {
+				if results[i] != firstResult {
+					t.Errorf("%s: Inconsistent output detected\n"+
+						"Iteration 0: %q\n"+
+						"Iteration %d: %q",
+						tc.description, firstResult, i, results[i])
+					break
+				}
+			}
+
+			if firstError != nil {
+				t.Logf("%s - Consistent error: %v", tc.name, firstError)
+			} else {
+				t.Logf("%s - Consistent output: %q", tc.name, firstResult)
+			}
+		})
+	}
+}

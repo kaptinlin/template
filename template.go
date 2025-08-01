@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 )
@@ -380,6 +381,11 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 
 	if kind == reflect.Map {
 		keys := val.MapKeys()
+
+		// Sort keys by their string representation for stable iteration order
+		sort.Slice(keys, func(i, j int) bool {
+			return fmt.Sprint(keys[i].Interface()) < fmt.Sprint(keys[j].Interface())
+		})
 
 		for i, key := range keys {
 			keyStr := fmt.Sprint(key.Interface())
