@@ -2278,7 +2278,7 @@ func TestRenderingStabilityPerformance(t *testing.T) {
 					next := make(map[string]interface{})
 					current[fmt.Sprintf("level_%d_key_z", i)] = fmt.Sprintf("value_%d", i)
 					current[fmt.Sprintf("level_%d_key_a", i)] = fmt.Sprintf("value_%d", i)
-					current[fmt.Sprintf("nested")] = next
+					current["nested"] = next
 					current = next
 				}
 				current["final"] = "deep_value"
@@ -2536,11 +2536,9 @@ func TestRenderingStabilityErrorCases(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:     "Missing variable in map iteration",
-			template: `{% for item in missing_var %}{{ item }},{% endfor %}`,
-			setupFunc: func() Context {
-				return NewContext()
-			},
+			name:        "Missing variable in map iteration",
+			template:    `{% for item in missing_var %}{{ item }},{% endfor %}`,
+			setupFunc:   NewContext,
 			description: "Missing variable should produce consistent error behavior",
 			expectError: true,
 		},
