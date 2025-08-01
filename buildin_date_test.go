@@ -49,7 +49,7 @@ func TestDateFilters(t *testing.T) {
 			name:     "WeekOfYearAndDayOfWeek",
 			template: "Week of year and day of week: {{ current | date:'W, N' }}",
 			context:  map[string]interface{}{"current": currentTime},
-			expected: "Week of year and day of week: 13, 06",
+			expected: "Week of year and day of week: 13, 6",
 		},
 		{
 			name:     "UnixTimestamp",
