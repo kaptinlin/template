@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/kaptinlin/filter v0.3.1
-	github.com/kaptinlin/jsonpointer v0.4.3
+	github.com/kaptinlin/jsonpointer v0.4.4
 	github.com/test-go/testify v1.1.4
 )
 
