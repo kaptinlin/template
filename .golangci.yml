@@ -21,34 +21,35 @@ linters:
     - unconvert       # Check unnecessary type conversions
     - whitespace      # Check whitespace
 
-linters-settings:
-  revive:
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true  # Allow unused parameters (common in interface implementations)
+        - name: exported
+          disabled: true  # Allow unexported types for internal use
+        - name: package-comments
+          disabled: true  # Allow packages without comments
+
+  exclusions:
+    paths:
+      - third_party     # Exclude third-party code
+      - builtin         # Exclude builtin code
+      - examples        # Exclude example code
+    
     rules:
-      - name: unused-parameter
-        disabled: true  # Allow unused parameters (common in interface implementations)
-      - name: exported
-        disabled: true  # Allow unexported types for internal use
-      - name: package-comments
-        disabled: true  # Allow packages without comments
+      # Test file exceptions
+      - path: _test\.go
+        linters:
+          - funlen            # Test functions may be longer
+          - gochecknoglobals  # Tests may use globals
+          - gosec             # Security exceptions in tests
+          - noctx             # Context usage more flexible in tests
+          - revive            # Relaxed code style in tests
 
 issues:
   max-issues-per-linter: 0  # No limit per linter
   max-same-issues: 0        # No limit for same issues
-  
-  exclude-rules:
-    # Test file exceptions
-    - path: _test\.go
-      linters:
-        - funlen            # Test functions may be longer
-        - gochecknoglobals  # Tests may use globals
-        - gosec             # Security exceptions in tests
-        - noctx             # Context usage more flexible in tests
-        - revive            # Relaxed code style in tests
-
-  exclude-dirs:
-    - third_party     # Exclude third-party code
-    - builtin         # Exclude builtin code
-    - examples        # Exclude example code
 
 run:
   timeout: 10m
