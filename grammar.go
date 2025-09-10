@@ -30,30 +30,35 @@ func NewGrammar(tokens []Token) *Grammar {
 	return g
 }
 
-// Structure definitions for various expression nodes
+// BinaryExpressionNode represents a binary expression in the AST.
 type BinaryExpressionNode struct {
 	Left     ExpressionNode
 	Right    ExpressionNode
 	Operator string
 }
 
+// UnaryExpressionNode represents a unary expression in the AST.
 type UnaryExpressionNode struct {
 	Operator string
 	Right    ExpressionNode
 }
 
+// NumberLiteralNode represents a number literal in the AST.
 type NumberLiteralNode struct {
 	Value float64
 }
 
+// StringLiteralNode represents a string literal in the AST.
 type StringLiteralNode struct {
 	Value string
 }
 
+// BooleanLiteralNode represents a boolean literal in the AST.
 type BooleanLiteralNode struct {
 	Value bool
 }
 
+// VariableNode represents a variable reference in the AST.
 type VariableNode struct {
 	Name string
 }
@@ -70,16 +75,25 @@ type Value struct {
 	Struct interface{}
 }
 
+// ValueType represents the type of a value.
 type ValueType int
 
 const (
+	// TypeInt represents an integer value type
 	TypeInt ValueType = iota
+	// TypeFloat represents a floating-point value type
 	TypeFloat
+	// TypeString represents a string value type
 	TypeString
+	// TypeBool represents a boolean value type
 	TypeBool
+	// TypeSlice represents a slice value type
 	TypeSlice
+	// TypeMap represents a map value type
 	TypeMap
+	// TypeNil represents a nil value type
 	TypeNil
+	// TypeStruct represents a struct value type
 	TypeStruct
 )
 
@@ -397,6 +411,7 @@ func (v *Value) toInterface() interface{} {
 	}
 }
 
+// NewValue creates a new Value from an interface{}.
 func NewValue(v interface{}) (*Value, error) {
 	// Handle nil interface{} case
 	if v == nil {

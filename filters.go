@@ -76,10 +76,12 @@ type StringArg struct {
 	val string
 }
 
+// Value returns the string argument value.
 func (a StringArg) Value() interface{} {
 	return a.val
 }
 
+// Type returns the argument type as "string".
 func (a StringArg) Type() string {
 	return "string"
 }
@@ -89,10 +91,12 @@ type NumberArg struct {
 	val float64
 }
 
+// Value returns the number argument value.
 func (a NumberArg) Value() interface{} {
 	return a.val
 }
 
+// Type returns the argument type as "number".
 func (a NumberArg) Type() string {
 	return "number"
 }
@@ -102,10 +106,12 @@ type VariableArg struct {
 	name string
 }
 
+// Value returns the variable name.
 func (a VariableArg) Value() interface{} {
 	return a.name
 }
 
+// Type returns the argument type as "variable".
 func (a VariableArg) Type() string {
 	return "variable"
 }

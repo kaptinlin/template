@@ -1,10 +1,11 @@
-name: Go
+name: Go CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -12,17 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.22.x
+          go-version-file: go.mod
+          cache: true
 
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run unit tests
+      - name: Run tests
         run: make test
 
   lint:
@@ -30,22 +29,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.22.x
+          go-version-file: go.mod
+          cache: true
 
-      - name: Read golangci-lint version from .golangci.version
-        id: golangci-version
-        run: echo "GOLANGCI_VERSION=$(cat .golangci.version)" > $GITHUB_OUTPUT
-
-      - uses: golangci/golangci-lint-action@v8
-        name: Install and run golangci-lint
-        with:
-          version: v${{ steps.golangci-version.outputs.GOLANGCI_VERSION }}
-          args: -h
-
-      - run: make lint
-        name: Lint
+      - name: Run linters
+        run: make lint

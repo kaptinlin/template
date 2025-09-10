@@ -1,3 +1,4 @@
+// Package main demonstrates template filter usage.
 package main
 
 import (

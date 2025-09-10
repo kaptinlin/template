@@ -1,10 +1,10 @@
 module github.com/kaptinlin/template
 
-go 1.24.3
+go 1.24.7
 
 require (
-	github.com/kaptinlin/filter v0.3.1
-	github.com/kaptinlin/jsonpointer v0.4.3
+	github.com/kaptinlin/filter v0.3.2
+	github.com/kaptinlin/jsonpointer v0.4.4
 	github.com/test-go/testify v1.1.4
 )
 
@@ -18,7 +18,7 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/gookit/goutil v0.7.0
+	github.com/gookit/goutil v0.7.1
 	github.com/gosimple/slug v1.15.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect

@@ -1,3 +1,4 @@
+// Package main demonstrates template context usage.
 package main
 
 import (

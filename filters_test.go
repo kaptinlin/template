@@ -8,7 +8,7 @@ import (
 )
 
 // mockToUpper is a simple filter function that converts a string to uppercase.
-func mockToUpper(value interface{}, args ...string) (interface{}, error) {
+func mockToUpper(value interface{}, _ ...string) (interface{}, error) {
 	str, ok := value.(string)
 	if !ok {
 		return nil, ErrFilterInputInvalid

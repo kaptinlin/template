@@ -1,3 +1,4 @@
+// Package main demonstrates a simple hello world template.
 package main
 
 import (

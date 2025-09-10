@@ -1,25 +1,40 @@
+// Package template provides a simple and efficient template engine for Go.
 package template
 
 import (
 	"fmt"
 )
 
+// TokenType represents the type of a token in the template language.
 type TokenType int
 
 const (
-	TokenIdentifier TokenType = iota // Variable (e.g., user.age)
-	TokenBool                        // Boolean value (e.g., true, false)
-	TokenNumber                      // Number (e.g., 18)
-	TokenString                      // String constant
-	TokenOperator                    // Operators (e.g., ==, !=, <, >, &&, ||)
-	TokenArithOp                     // Arithmetic operators
-	TokenNot                         // Not operator (!)
-	TokenLParen                      // Left parenthesis (()
-	TokenRParen                      // Right parenthesis ())
-	TokenPipe                        // Pipe operator (|)
-	TokenFilter                      // Filter (including name and args, e.g., upper, truncate:30)
-	TokenEOF                         // End of input marker
-	TokenDot                         // Dot operator (.)
+	// TokenIdentifier represents a variable identifier (e.g., user.age)
+	TokenIdentifier TokenType = iota
+	// TokenBool represents a boolean value (e.g., true, false)
+	TokenBool
+	// TokenNumber represents a number (e.g., 18)
+	TokenNumber
+	// TokenString represents a string constant
+	TokenString
+	// TokenOperator represents operators (e.g., ==, !=, <, >, &&, ||)
+	TokenOperator
+	// TokenArithOp represents arithmetic operators
+	TokenArithOp
+	// TokenNot represents the not operator (!)
+	TokenNot
+	// TokenLParen represents a left parenthesis (()
+	TokenLParen
+	// TokenRParen represents a right parenthesis ())
+	TokenRParen
+	// TokenPipe represents the pipe operator (|)
+	TokenPipe
+	// TokenFilter represents a filter (including name and args, e.g., upper, truncate:30)
+	TokenFilter
+	// TokenEOF represents the end of input marker
+	TokenEOF
+	// TokenDot represents the dot operator (.)
+	TokenDot
 )
 
 // Token is a token in the template language.
@@ -29,6 +44,7 @@ type Token struct {
 	Val string    // Token value
 }
 
+// Lexer tokenizes template expressions into a sequence of tokens.
 type Lexer struct {
 	input  string  // Input expression
 	pos    int     // Current scanning position
@@ -36,8 +52,7 @@ type Lexer struct {
 	tokens []Token // Generated tokens
 }
 
-// Lexer is a lexer for the template language.
-// It tokenizes the input string into a list of tokens.
+// Lex tokenizes the input string into a list of tokens.
 func (l *Lexer) Lex() ([]Token, error) {
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]

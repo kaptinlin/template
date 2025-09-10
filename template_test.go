@@ -5721,3 +5721,1070 @@ Category: Electronics
 		})
 	}
 }
+
+func TestCompleteParameterGeneration(t *testing.T) {
+	type Schema struct {
+		Type string `json:"type"`
+	}
+
+	type Param struct {
+		In     string `json:"in"`
+		Schema Schema `json:"schema"`
+	}
+
+	type Operation struct {
+		RequestBody bool             `json:"requestBody"`
+		Parameters  map[string]Param `json:"parameters"`
+	}
+
+	type Data struct {
+		Operation Operation `json:"operation"`
+	}
+
+	testCases := []struct {
+		name        string
+		context     map[string]interface{}
+		template    string
+		expected    string
+		expectError bool
+	}{
+		{
+			name: "String query parameter with request body",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: true,
+						Parameters: map[string]Param{
+							"username": {
+								In:     "query",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+			// Apply {{ paramName }} parameter ({{ param.in }})
+    {% if param.schema.type == "string" %}
+    if r.{{ paramName }} != "" {
+    {% else %}
+    if r.{{ paramName }} != nil {
+    {% endif %}
+        {% if param.in == "query" %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "path" %}
+        // Path parameters are handled in the URL construction
+        {% elif param.in == "header" %}
+        req = req.Header("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "cookie" %}
+        req = req.Cookie("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% else %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% endif %}
+    }
+    {% endfor %}
+    
+    {% if data.operation.requestBody %}
+    // Apply request body
+    req = req.JSONBody(r.Body)
+    {% endif %}`,
+			expected: `
+			// Apply username parameter (query)
+    
+    if r.username != "" {
+    
+        
+        req = req.Query("username", fmt.Sprintf("%v", r.username))
+        
+    }
+    
+    
+    
+    // Apply request body
+    req = req.JSONBody(r.Body)
+    `,
+		},
+		{
+			name: "Non-string header parameter without request body",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"authorization": {
+								In:     "header",
+								Schema: Schema{Type: "integer"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+			// Apply {{ paramName }} parameter ({{ param.in }})
+    {% if param.schema.type == "string" %}
+    if r.{{ paramName }} != "" {
+    {% else %}
+    if r.{{ paramName }} != nil {
+    {% endif %}
+        {% if param.in == "query" %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "path" %}
+        // Path parameters are handled in the URL construction
+        {% elif param.in == "header" %}
+        req = req.Header("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "cookie" %}
+        req = req.Cookie("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% else %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% endif %}
+    }
+    {% endfor %}
+    
+    {% if data.operation.requestBody %}
+    // Apply request body
+    req = req.JSONBody(r.Body)
+    {% endif %}`,
+			expected: `
+			// Apply authorization parameter (header)
+    
+    if r.authorization != nil {
+    
+        
+        req = req.Header("authorization", fmt.Sprintf("%v", r.authorization))
+        
+    }
+    
+    
+    `,
+		},
+		{
+			name: "Path parameter",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"userId": {
+								In:     "path",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+			// Apply {{ paramName }} parameter ({{ param.in }})
+    {% if param.schema.type == "string" %}
+    if r.{{ paramName }} != "" {
+    {% else %}
+    if r.{{ paramName }} != nil {
+    {% endif %}
+        {% if param.in == "query" %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "path" %}
+        // Path parameters are handled in the URL construction
+        {% elif param.in == "header" %}
+        req = req.Header("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "cookie" %}
+        req = req.Cookie("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% else %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% endif %}
+    }
+    {% endfor %}
+    
+    {% if data.operation.requestBody %}
+    // Apply request body
+    req = req.JSONBody(r.Body)
+    {% endif %}`,
+			expected: `
+			// Apply userId parameter (path)
+    
+    if r.userId != "" {
+    
+        
+        // Path parameters are handled in the URL construction
+        
+    }
+    
+    
+    `,
+		},
+		{
+			name: "Cookie parameter",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"sessionId": {
+								In:     "cookie",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+			// Apply {{ paramName }} parameter ({{ param.in }})
+    {% if param.schema.type == "string" %}
+    if r.{{ paramName }} != "" {
+    {% else %}
+    if r.{{ paramName }} != nil {
+    {% endif %}
+        {% if param.in == "query" %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "path" %}
+        // Path parameters are handled in the URL construction
+        {% elif param.in == "header" %}
+        req = req.Header("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "cookie" %}
+        req = req.Cookie("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% else %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% endif %}
+    }
+    {% endfor %}
+    
+    {% if data.operation.requestBody %}
+    // Apply request body
+    req = req.JSONBody(r.Body)
+    {% endif %}`,
+			expected: `
+			// Apply sessionId parameter (cookie)
+    
+    if r.sessionId != "" {
+    
+        
+        req = req.Cookie("sessionId", fmt.Sprintf("%v", r.sessionId))
+        
+    }
+    
+    
+    `,
+		},
+		{
+			name: "Default case (unknown parameter type)",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: true,
+						Parameters: map[string]Param{
+							"data": {
+								In:     "body",
+								Schema: Schema{Type: "object"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+			// Apply {{ paramName }} parameter ({{ param.in }})
+    {% if param.schema.type == "string" %}
+    if r.{{ paramName }} != "" {
+    {% else %}
+    if r.{{ paramName }} != nil {
+    {% endif %}
+        {% if param.in == "query" %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "path" %}
+        // Path parameters are handled in the URL construction
+        {% elif param.in == "header" %}
+        req = req.Header("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% elif param.in == "cookie" %}
+        req = req.Cookie("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% else %}
+        req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% endif %}
+    }
+    {% endfor %}
+    
+    {% if data.operation.requestBody %}
+    // Apply request body
+    req = req.JSONBody(r.Body)
+    {% endif %}`,
+			expected: `
+			// Apply data parameter (body)
+    
+    if r.data != nil {
+    
+        
+        req = req.Query("data", fmt.Sprintf("%v", r.data))
+        
+    }
+    
+    
+    
+    // Apply request body
+    req = req.JSONBody(r.Body)
+    `,
+		},
+		{
+			name: "Simple elif test with single parameter",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: true,
+						Parameters: map[string]Param{
+							"username": {
+								In:     "query",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+{% if param.schema.type == "string" %}
+String param: {{ paramName }}
+{% elif param.schema.type == "integer" %}
+Integer param: {{ paramName }}
+{% else %}
+Other param: {{ paramName }}
+{% endif %}
+{% endfor %}`,
+			expected: `
+
+String param: username
+
+`,
+		},
+		{
+			name: "Integer parameter test",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"count": {
+								In:     "query",
+								Schema: Schema{Type: "integer"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+{% if param.schema.type == "string" %}
+String param: {{ paramName }}
+{% elif param.schema.type == "integer" %}
+Integer param: {{ paramName }}
+{% else %}
+Other param: {{ paramName }}
+{% endif %}
+{% endfor %}`,
+			expected: `
+
+Integer param: count
+
+`,
+		},
+		{
+			name: "Empty parameters map",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters:  map[string]Param{},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+    // Process {{ paramName }}
+{% endfor %}    
+    // No request body
+    `,
+			expected: `    
+    // No request body
+    `,
+		},
+		{
+			name: "String query parameter with nested if elif",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"status": {
+								In:     "query",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+    {% if param.in == "query" %}
+        {% if param.schema.type == "string" %}
+            // String query param
+            if r.{{ paramName }} != "" {
+                
+                    req = req.Query("{{ paramName }}", r.{{ paramName }})
+                    
+            }
+        {% elif param.schema.type == "integer" %}
+            // Integer query param
+            req = req.Query("{{ paramName }}", fmt.Sprintf("%d", r.{{ paramName }}))
+        {% else %}
+            // Other query param
+            req = req.Query("{{ paramName }}", fmt.Sprintf("%v", r.{{ paramName }}))
+        {% endif %}
+    {% elif param.in == "header" %}
+        // Header param
+        req = req.Header("{{ paramName }}", r.{{ paramName }})
+    {% else %}
+        // Other param
+        req = req.Query("{{ paramName }}", r.{{ paramName }})
+    {% endif %}
+{% endfor %}`,
+			expected: `
+    
+        
+            // String query param
+            if r.status != "" {
+                
+                    req = req.Query("status", r.status)
+                    
+            }
+        
+    
+`,
+		},
+		{
+			name: "Unmatched elif in for loop (treated as text)",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"test": {
+								In:     "query",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+    // Process {{ paramName }}
+    {% elif param.schema.type == "string" %}
+    String parameter
+    {% endif %}
+{% endfor %}`,
+			expected: `
+    // Process test
+    {% elif param.schema.type == "string" %}
+    String parameter
+    {% endif %}
+`,
+			expectError: false,
+		},
+		{
+			name: "Unmatched else in for loop (treated as text)",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"test": {
+								In:     "query",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+    // Process {{ paramName }}
+    {% else %}
+    No parameters
+    {% endif %}
+{% endfor %}`,
+			expected: `
+    // Process test
+    {% else %}
+    No parameters
+    {% endif %}
+`,
+			expectError: false,
+		},
+		{
+			name: "Error case: multiple else statements in nested structure",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: false,
+						Parameters: map[string]Param{
+							"test": {
+								In:     "query",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+			},
+			template: `{% for paramName, param in data.operation.parameters %}
+    {% if param.schema.type == "string" %}
+        String type
+    {% else %}
+        Not string
+    {% else %}
+        Another else
+    {% endif %}
+{% endfor %}`,
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name: "Deep nested for loops with if elif",
+			context: map[string]interface{}{
+				"category": map[string]interface{}{
+					"name": "API",
+					"operations": []map[string]interface{}{
+						{
+							"name": "GetUser",
+							"parameters": map[string]Param{
+								"format": {
+									In:     "query",
+									Schema: Schema{Type: "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+			template: `Category: {{ category.name }}
+{% for operation in category.operations %}
+  Operation: {{ operation.name }}
+  {% for paramName, param in operation.parameters %}
+    {% if param.schema.type == "string" %}
+      {% if param.in == "query" %}
+      - Query string param: {{ paramName }}
+      {% elif param.in == "header" %}
+      - Header string param: {{ paramName }}
+      {% else %}
+      - Other string param: {{ paramName }}
+      {% endif %}
+    {% elif param.schema.type == "integer" %}
+      {% if param.in == "path" %}
+      - Path integer param: {{ paramName }}
+      {% elif param.in == "query" %}
+      - Query integer param: {{ paramName }}
+      {% else %}
+      - Other integer param: {{ paramName }}
+      {% endif %}
+    {% else %}
+      - Unknown param type: {{ paramName }}
+    {% endif %}
+  {% endfor %}
+{% endfor %}`,
+			expected: `Category: API
+
+  Operation: GetUser
+  
+    
+      
+      - Query string param: format
+      
+    
+  
+`,
+		},
+		{
+			name: "Complex validation with nested conditions",
+			context: map[string]interface{}{
+				"data": Data{
+					Operation: Operation{
+						RequestBody: true,
+						Parameters: map[string]Param{
+							"required": {
+								In:     "header",
+								Schema: Schema{Type: "string"},
+							},
+						},
+					},
+				},
+				"config": map[string]interface{}{
+					"validateParams": true,
+					"debugMode":      false,
+				},
+			},
+			template: `{% if config.debugMode %}
+// Debug mode enabled
+{% endif %}
+
+{% for paramName, param in data.operation.parameters %}
+    {% if config.validateParams %}
+        {% if param.schema.type == "string" %}
+            {% if paramName == "required" %}
+            // Required parameter validation
+            if r.{{ paramName }} == "" {
+                return errors.New("{{ paramName }} is required")
+            }
+            {% elif paramName == "optional" %}
+            // Optional parameter
+            {% else %}
+            // Regular parameter
+            {% endif %}
+        {% endif %}
+    {% endif %}
+    
+    {% if param.in == "query" %}
+    req = req.Query("{{ paramName }}", r.{{ paramName }})
+    {% elif param.in == "header" %}
+    req = req.Header("{{ paramName }}", r.{{ paramName }})
+    {% endif %}
+{% endfor %}
+
+{% if data.operation.requestBody %}
+req = req.JSONBody(r.Body) 
+{% endif %}`,
+			expected: `
+
+
+    
+        
+            
+            // Required parameter validation
+            if r.required == "" {
+                return errors.New("required is required")
+            }
+            
+        
+    
+    
+    
+    req = req.Header("required", r.required)
+    
+
+
+
+req = req.JSONBody(r.Body) 
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := Context(tc.context)
+			result, err := Render(tc.template, ctx)
+
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("Expected error but got none. Result: %s", result)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if result != tc.expected {
+				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			}
+		})
+	}
+}
+
+// TestLoopContextFeatures tests the comprehensive loop context functionality
+func TestLoopContextFeatures(t *testing.T) {
+	testCases := []struct {
+		name        string
+		template    string
+		context     map[string]interface{}
+		expected    string
+		expectError bool
+	}{
+		{
+			name: "Basic loop context properties",
+			template: `{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}
+{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []string{"apple", "banana", "cherry"},
+			},
+			expected: `0-2-true-false-3: apple
+1-1-false-false-3: banana
+2-0-false-true-3: cherry
+`,
+		},
+		{
+			name:     "Loop context with string iteration",
+			template: `{% for char in word %}[{{ loop.Index }}:{{ char }}]{% if loop.Last == false %}-{% endif %}{% endfor %}`,
+			context: map[string]interface{}{
+				"word": "hello",
+			},
+			expected: `[0:h]-[1:e]-[2:l]-[3:l]-[4:o]`,
+		},
+		{
+			name:     "Loop context with map iteration",
+			template: `{% for key, value in data %}{{ loop.Index }}: {{ key }}={{ value }}{% if loop.Last == false %}, {% endif %}{% endfor %}`,
+			context: map[string]interface{}{
+				"data": map[string]string{"a": "1", "b": "2", "c": "3"},
+			},
+			expected: `0: a=1, 1: b=2, 2: c=3`,
+		},
+		{
+			name: "Simple nested loops with loop context",
+			template: `{% for outer in outers %}Outer[{{ loop.Index }}]:
+{% for inner in inners %}  Inner[{{ loop.Index }}]: {{ outer }}-{{ inner }}
+{% endfor %}{% endfor %}`,
+			context: map[string]interface{}{
+				"outers": []string{"A", "B"},
+				"inners": []string{"1", "2"},
+			},
+			expected: `Outer[0]:
+  Inner[0]: A-1
+  Inner[1]: A-2
+Outer[1]:
+  Inner[0]: B-1
+  Inner[1]: B-2
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := Context(tc.context)
+			result, err := Render(tc.template, ctx)
+
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("Expected error but got none. Result: %s", result)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if result != tc.expected {
+				t.Errorf("Expected:\n%s\n\nGot:\n%s", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestLoopContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		ctx      Context
+		expected string
+	}{
+		{
+			name:     "Simple loop with loop.Index",
+			template: "{% for item in items %}{{ loop.Index }}: {{ item }}\n{% endfor %}",
+			ctx:      Context{"items": []string{"a", "b", "c"}},
+			expected: "0: a\n1: b\n2: c\n",
+		},
+		{
+			name:     "Loop with all loop properties",
+			template: "{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}\n{% endfor %}",
+			ctx:      Context{"items": []string{"x", "y"}},
+			expected: "0-1-true-false-2: x\n1-0-false-true-2: y\n",
+		},
+		{
+			name:     "Nested loops",
+			template: "{% for outer in outers %}Outer {{ loop.Index }}:\n{% for inner in inners %}  Inner {{ loop.Index }} (outer was {{ outer }})\n{% endfor %}{% endfor %}",
+			ctx:      Context{"outers": []string{"A", "B"}, "inners": []string{"1", "2"}},
+			expected: "Outer 0:\n  Inner 0 (outer was A)\n  Inner 1 (outer was A)\nOuter 1:\n  Inner 0 (outer was B)\n  Inner 1 (outer was B)\n",
+		},
+		{
+			name:     "String iteration with loop",
+			template: "{% for char in word %}{{ loop.Index }}: {{ char }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
+			ctx:      Context{"word": "hello"},
+			expected: "0: h, 1: e, 2: l, 3: l, 4: o",
+		},
+		{
+			name:     "Map iteration with loop",
+			template: "{% for k, v in map %}{{ loop.Index }}: {{ k }}={{ v }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
+			ctx:      Context{"map": map[string]string{"a": "1", "b": "2"}},
+			expected: "0: a=1, 1: b=2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpl, err := Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.ctx)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected:\n%s\nGot:\n%s", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestNestedLoopContext(t *testing.T) {
+	template := `{% for outer in outers %}
+Outer loop {{ loop.Index }} (first: {{ loop.First }}, last: {{ loop.Last }}):
+{% for inner in inners %}
+  Inner loop {{ loop.Index }} (first: {{ loop.First }}, last: {{ loop.Last }})
+{% endfor %}
+{% endfor %}`
+
+	ctx := Context{
+		"outers": []string{"A", "B"},
+		"inners": []string{"1", "2", "3"},
+	}
+
+	expected := `
+Outer loop 0 (first: true, last: false):
+
+  Inner loop 0 (first: true, last: false)
+
+  Inner loop 1 (first: false, last: false)
+
+  Inner loop 2 (first: false, last: true)
+
+
+Outer loop 1 (first: false, last: true):
+
+  Inner loop 0 (first: true, last: false)
+
+  Inner loop 1 (first: false, last: false)
+
+  Inner loop 2 (first: false, last: true)
+
+`
+
+	tmpl, err := Parse(template)
+	if err != nil {
+		t.Fatalf("Failed to parse template: %v", err)
+	}
+
+	result, err := tmpl.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Failed to execute template: %v", err)
+	}
+
+	if result != expected {
+		t.Errorf("Expected:\n%q\nGot:\n%q", expected, result)
+	}
+}
+
+func TestHighlyComplexNestedLoops(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		ctx      Context
+		expected string
+	}{
+		{
+			name: "5-level nested for loops with conditional logic",
+			template: `{% for level1 in data.level1 %}L1[{{ loop.Index }}/{{ loop.Length }}]{% if loop.First %}:FIRST{% endif %}
+{% for level2 in data.level2 %}  L2[{{ loop.Index }}/{{ loop.Length }}]{% if loop.Last %}:LAST{% endif %}
+{% if loop.Index < 2 %}{% for level3 in data.level3 %}    L3[{{ loop.Index }}/{{ loop.Length }}]{% if loop.First %}{% if loop.Last %}:ONLY{% endif %}{% endif %}
+{% if loop.Revindex > 0 %}{% for level4 in data.level4 %}      L4[{{ loop.Index }}/{{ loop.Length }}]
+{% if loop.Index == 1 %}{% for level5 in data.level5 %}        L5[{{ loop.Index }}/{{ loop.Length }}]{% if loop.Last %}:END{% endif %}
+{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endfor %}`,
+			ctx: Context{
+				"data": map[string]any{
+					"level1": []int{10, 20},
+					"level2": []string{"A", "B"},
+					"level3": []bool{true},
+					"level4": []string{"X", "Y"},
+					"level5": []int{100, 200},
+				},
+			},
+			expected: `L1[0/2]:FIRST
+  L2[0/2]
+    L3[0/1]:ONLY
+  L2[1/2]:LAST
+    L3[0/1]:ONLY
+L1[1/2]
+  L2[0/2]
+    L3[0/1]:ONLY
+  L2[1/2]:LAST
+    L3[0/1]:ONLY
+`,
+		},
+		{
+			name: "6-level ultra-complex nested loops",
+			template: `{% for a in arrays.a %}A{{ loop.Index }}{% if loop.First %}(start){% endif %}{% if loop.Last %}(end){% endif %}
+{% for b in arrays.b %}  B{{ loop.Index }}/{{ loop.Revindex }}
+{% for c in arrays.c %}    C{{ loop.Index }}-{{ loop.First }}-{{ loop.Last }}
+{% for d in arrays.d %}      D{{ loop.Index }}:{{ loop.Length }}
+{% if loop.First %}{% for e in arrays.e %}        E{{ loop.Index }}{% if loop.First %}!{% endif %}
+{% for f in arrays.f %}          F{{ loop.Index }}/{{ loop.Length }}{% if loop.Last %}*{% endif %}
+{% endfor %}{% endfor %}{% endif %}{% endfor %}{% endfor %}{% endfor %}{% endfor %}`,
+			ctx: Context{
+				"arrays": map[string]any{
+					"a": []int{1, 2},
+					"b": []string{"x", "y"},
+					"c": []bool{true, false},
+					"d": []int{10, 20},
+					"e": []string{"p", "q"},
+					"f": []int{100, 200, 300},
+				},
+			},
+			expected: `A0(start)
+  B0/1
+    C0-true-false
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+    C1-false-true
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+  B1/0
+    C0-true-false
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+    C1-false-true
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+A1(end)
+  B0/1
+    C0-true-false
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+    C1-false-true
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+  B1/0
+    C0-true-false
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+    C1-false-true
+      D0:2
+        E0!
+          F0/3
+          F1/3
+          F2/3*
+        E1
+          F0/3
+          F1/3
+          F2/3*
+      D1:2
+`,
+		},
+		{
+			name: "Complex matrix iteration with all loop properties",
+			template: `{% for row in matrix %}ROW[{{ loop.Index }}]{% if loop.First %}:HEADER{% endif %}{% if loop.Last %}:FOOTER{% endif %} (rev:{{ loop.Revindex }})
+{% for col in row %}  COL[{{ loop.Index }}]{% if loop.First %}:LEFT{% endif %}{% if loop.Last %}:RIGHT{% endif %}
+{% if loop.Index == 1 %}{% for item in col %}    ITEM[{{ loop.Index }}/{{ loop.Length }}] = {{ item }}
+{% if loop.Revindex == 1 %}{% for detail in details %}      DETAIL[{{ loop.Index }}]{% if loop.First %}:START{% endif %}{% if loop.Last %}:END{% endif %}
+{% if loop.Index == 1 %}{% for sub in subs %}        SUB[{{ loop.Index }}]: {{ sub }}{% if loop.Last %} (FINAL){% endif %}
+{% if loop.First %}{% for meta in metas %}          META[{{ loop.Index }}]: {{ meta }} (pos:{{ loop.Revindex }})
+{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endfor %}`,
+			ctx: Context{
+				"matrix": [][][]string{
+					{{"a1"}, {"b1", "b2"}, {"c1"}},
+					{{"d1"}, {"e1", "e2", "e3"}, {"f1"}},
+				},
+				"details": []string{"detail1", "detail2", "detail3"},
+				"subs":    []string{"sub1", "sub2"},
+				"metas":   []string{"meta1", "meta2"},
+			},
+			expected: `ROW[0]:HEADER (rev:1)
+  COL[0]:LEFT
+  COL[1]
+    ITEM[0/2] = b1
+      DETAIL[0]:START
+      DETAIL[1]
+        SUB[0]: sub1
+          META[0]: meta1 (pos:1)
+          META[1]: meta2 (pos:0)
+        SUB[1]: sub2 (FINAL)
+      DETAIL[2]:END
+    ITEM[1/2] = b2
+  COL[2]:RIGHT
+ROW[1]:FOOTER (rev:0)
+  COL[0]:LEFT
+  COL[1]
+    ITEM[0/3] = e1
+    ITEM[1/3] = e2
+      DETAIL[0]:START
+      DETAIL[1]
+        SUB[0]: sub1
+          META[0]: meta1 (pos:1)
+          META[1]: meta2 (pos:0)
+        SUB[1]: sub2 (FINAL)
+      DETAIL[2]:END
+    ITEM[2/3] = e3
+  COL[2]:RIGHT
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpl, err := Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			result, err := tmpl.Execute(tt.ctx)
+			if err != nil {
+				t.Fatalf("Failed to execute template: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected:\n%q\nGot:\n%q", tt.expected, result)
+			}
+		})
+	}
+}

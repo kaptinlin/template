@@ -1,3 +1,4 @@
+// Package main demonstrates template object handling.
 package main
 
 import (

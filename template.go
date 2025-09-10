@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Node defines a single element within a template, such as text, variable, or control structure.
@@ -24,8 +25,11 @@ type Node struct {
 type ControlFlow int
 
 const (
+	// ControlFlowNone indicates no control flow change
 	ControlFlowNone ControlFlow = iota
+	// ControlFlowBreak indicates a break control flow
 	ControlFlowBreak
+	// ControlFlowContinue indicates a continue control flow
 	ControlFlowContinue
 )
 
@@ -34,6 +38,15 @@ const (
 	NodeTypeBreak    = "break"
 	NodeTypeContinue = "continue"
 )
+
+// LoopContext represents the loop information available in templates
+type LoopContext struct {
+	Index    int  // Current index (starting from 0)
+	Revindex int  // Reverse index (length-1 to 0)
+	First    bool // Whether this is the first iteration
+	Last     bool // Whether this is the last iteration
+	Length   int  // Total length of the collection
+}
 
 // Template represents a structured template that can be executed with a given context.
 type Template struct {
@@ -322,32 +335,66 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 
 // executeForNode handles loop rendering
 func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
-	// Get collection data
+	// 1. Backup existing loop object (if exists)
+	var backupLoop interface{}
+	var hasBackup bool
+	if existingLoop, exists := ctx["loop"]; exists {
+		backupLoop = existingLoop
+		hasBackup = true
+	}
+
+	// 2. Get collection data and calculate length
 	collection, err := resolveVariable(node.Collection, ctx)
 	if err != nil {
 		return ControlFlowNone, err
 	}
-	// Create new context only for the outer loop
+	length := calculateCollectionLength(collection)
+
+	// 3. Create new context only for the outer loop (preserve original logic)
 	var loopCtx Context
 	if forLayers < 2 {
 		loopCtx = deepCopy(ctx)
+		// Ensure backup state is correctly set in new context
+		if hasBackup {
+			loopCtx["loop"] = backupLoop
+		}
 	} else {
 		loopCtx = ctx
 	}
-	// Handle different types of collections
+
+	// 4. Handle different types of collections
 	val := reflect.ValueOf(collection)
 	kind := val.Kind()
 
 	if kind == reflect.String {
 		str := val.String()
 		for i, ch := range str {
+			// Create current iteration's LoopContext
+			currentLoop := &LoopContext{
+				Index:    i,
+				Revindex: length - 1 - i,
+				First:    i == 0,
+				Last:     i == length-1,
+				Length:   length,
+			}
+
+			// Set loop object to context
+			loopCtx.Set("loop", currentLoop)
+
+			// Update loop variables (preserve original logic)
 			updateLoopContext(loopCtx, node.Variable, "", string(ch), i)
+
+			// Execute loop body
 			controlFlow, err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			if err != nil {
+				// Restore backup on error
+				restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 				return ControlFlowNone, err
 			}
+
 			switch controlFlow {
 			case ControlFlowBreak:
+				restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 				return ControlFlowNone, nil
 			case ControlFlowContinue:
 				continue
@@ -355,20 +402,38 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 				// Normal flow, continue iteration
 			}
 		}
+
+		// String iteration ended, restore backup
+		restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 		return ControlFlowNone, nil
 	}
 
 	if kind == reflect.Slice || kind == reflect.Array {
-		length := val.Len()
-		for i := 0; i < length; i++ {
+		arrayLength := val.Len()
+		for i := 0; i < arrayLength; i++ {
+			// Create current iteration's LoopContext
+			currentLoop := &LoopContext{
+				Index:    i,
+				Revindex: arrayLength - 1 - i,
+				First:    i == 0,
+				Last:     i == arrayLength-1,
+				Length:   arrayLength,
+			}
+
+			// Set loop object to context
+			loopCtx.Set("loop", currentLoop)
+
 			item := val.Index(i).Interface()
 			updateLoopContext(loopCtx, node.Variable, "", item, i)
+
 			controlFlow, err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			if err != nil {
+				restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 				return ControlFlowNone, err
 			}
 			switch controlFlow {
 			case ControlFlowBreak:
+				restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 				return ControlFlowNone, nil
 			case ControlFlowContinue:
 				continue
@@ -376,6 +441,7 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 				// Normal flow, continue iteration
 			}
 		}
+		restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 		return ControlFlowNone, nil
 	}
 
@@ -388,6 +454,18 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 		})
 
 		for i, key := range keys {
+			// Create current iteration's LoopContext
+			currentLoop := &LoopContext{
+				Index:    i,
+				Revindex: length - 1 - i,
+				First:    i == 0,
+				Last:     i == length-1,
+				Length:   length,
+			}
+
+			// Set loop object to context
+			loopCtx.Set("loop", currentLoop)
+
 			keyStr := fmt.Sprint(key.Interface())
 			valueValue := val.MapIndex(key).Interface()
 
@@ -397,10 +475,9 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 				varNames[j] = strings.TrimSpace(varNames[j])
 			}
 
-			var item interface{}
 			if len(varNames) == 1 {
 				// For single variable, create an object with key and value
-				item = map[string]interface{}{
+				item := map[string]interface{}{
 					"key":   keyStr,
 					"value": valueValue,
 				}
@@ -412,10 +489,12 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 
 			controlFlow, err := executeNodes(node.Children, loopCtx, builder, forLayers)
 			if err != nil {
+				restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 				return ControlFlowNone, err
 			}
 			switch controlFlow {
 			case ControlFlowBreak:
+				restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 				return ControlFlowNone, nil
 			case ControlFlowContinue:
 				continue
@@ -423,9 +502,11 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 				// Normal flow, continue iteration
 			}
 		}
+		restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 		return ControlFlowNone, nil
 	}
 
+	restoreLoopBackup(loopCtx, backupLoop, hasBackup)
 	return ControlFlowNone, fmt.Errorf("%w: %T", ErrUnsupportedCollectionType, collection)
 }
 
@@ -526,4 +607,29 @@ func disassembleExpression(expression string) string {
 		}
 	}
 	return expression[prev:next]
+}
+
+// calculateCollectionLength calculates the length of a collection
+func calculateCollectionLength(collection interface{}) int {
+	val := reflect.ValueOf(collection)
+	kind := val.Kind()
+
+	//nolint:exhaustive
+	switch kind {
+	case reflect.String:
+		return utf8.RuneCountInString(val.String())
+	case reflect.Slice, reflect.Array, reflect.Map:
+		return val.Len()
+	default:
+		return 0
+	}
+}
+
+// restoreLoopBackup restores the backed up loop object
+func restoreLoopBackup(ctx Context, backup interface{}, hasBackup bool) {
+	if hasBackup {
+		ctx.Set("loop", backup)
+	} else {
+		delete(ctx, "loop")
+	}
 }
