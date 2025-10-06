@@ -1,8 +1,10 @@
 package template
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func mockUserProfileContext() Context {
@@ -27,18 +29,12 @@ func TestExecuteWithErrorHandling(t *testing.T) {
 
 	parser := NewParser()
 	tpl, err := parser.Parse(tplStr)
-	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
-	}
+	require.NoError(t, err, "Failed to parse template")
 
 	// Execute the template.
 	output, err := Execute(tpl, ctx)
-	if err == nil {
-		t.Errorf("Expected an error due to non-existent variable, but got nil")
-	}
-	if !strings.Contains(output, "Hello, JaneDoe!") {
-		t.Errorf("Expected partial output before error, got: %s", output)
-	}
+	assert.Error(t, err, "Expected an error due to non-existent variable")
+	assert.Contains(t, output, "Hello, JaneDoe!", "Expected partial output before error")
 }
 
 func TestMustExecuteIgnoresError(t *testing.T) {
@@ -48,19 +44,13 @@ func TestMustExecuteIgnoresError(t *testing.T) {
 
 	parser := NewParser()
 	tpl, err := parser.Parse(tplStr)
-	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
-	}
+	require.NoError(t, err, "Failed to parse template")
 
 	// MustExecute should ignore errors and attempt to return any partial output.
 	output := MustExecute(tpl, ctx)
-	if !strings.Contains(output, "Hello, JaneDoe!") {
-		t.Errorf("Expected partial output before error in MustExecute, got: %s", output)
-	}
+	assert.Contains(t, output, "Hello, JaneDoe!", "Expected partial output before error in MustExecute")
 	// MustExecute should ignore the error and output the placeholder for missing variable.
-	if !strings.Contains(output, "{{nonExistentVariable}}") {
-		t.Errorf("Expected placeholder for missing variable, got: %s", output)
-	}
+	assert.Contains(t, output, "{{nonExistentVariable}}", "Expected placeholder for missing variable")
 }
 
 func TestNestedVariableRetrieval(t *testing.T) {
@@ -70,18 +60,12 @@ func TestNestedVariableRetrieval(t *testing.T) {
 	expected := "Contact: jane.doe@example.com"
 
 	tmpl, err := parser.Parse(src)
-	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
-	}
+	require.NoError(t, err, "Failed to parse template")
 
 	result, err := tmpl.Execute(ctx)
-	if err != nil {
-		t.Fatalf("Failed to execute template: %v", err)
-	}
+	require.NoError(t, err, "Failed to execute template")
 
-	if result != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, result)
-	}
+	assert.Equal(t, expected, result)
 }
 
 func TestApplyUpperCaseFilter(t *testing.T) {
@@ -91,18 +75,12 @@ func TestApplyUpperCaseFilter(t *testing.T) {
 	expected := "Username: JANEDOE"
 
 	tmpl, err := parser.Parse(src)
-	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
-	}
+	require.NoError(t, err, "Failed to parse template")
 
 	result, err := tmpl.Execute(ctx)
-	if err != nil {
-		t.Fatalf("Failed to execute template: %v", err)
-	}
+	require.NoError(t, err, "Failed to execute template")
 
-	if result != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, result)
-	}
+	assert.Equal(t, expected, result)
 }
 
 func TestChainFiltersForTitleCase(t *testing.T) {
@@ -112,18 +90,12 @@ func TestChainFiltersForTitleCase(t *testing.T) {
 	expected := "Bio: Software developer with a passion for open source."
 
 	tmpl, err := parser.Parse(src)
-	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
-	}
+	require.NoError(t, err, "Failed to parse template")
 
 	result, err := tmpl.Execute(ctx)
-	if err != nil {
-		t.Fatalf("Failed to execute template: %v", err)
-	}
+	require.NoError(t, err, "Failed to execute template")
 
-	if result != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, result)
-	}
+	assert.Equal(t, expected, result)
 }
 
 func TestVariableNotFoundReturnOriginal(t *testing.T) {
@@ -194,18 +166,12 @@ func TestVariableNotFoundReturnOriginal(t *testing.T) {
 			ctx := mockUserProfileContext()
 			parser := NewParser()
 			tmpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
+			require.NoError(t, err, "Unexpected error in %s", tc.name)
 
 			result, err := tmpl.Execute(ctx)
-			if err == nil {
-				t.Errorf("Expected an error, but got nil")
-			}
+			assert.Error(t, err, "Expected an error")
 
-			if result != tc.expected {
-				t.Errorf("Expected '%s', but got '%s'", tc.expected, result)
-			}
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -265,17 +231,11 @@ func TestFilterErrorsReturnOriginalVariableText(t *testing.T) {
 			ctx := mockUserProfileContext()
 			parser := NewParser()
 			tmpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
+			require.NoError(t, err, "Unexpected error in %s", tc.name)
 
 			result, err := tmpl.Execute(ctx)
-			if err == nil {
-				t.Fatalf("Expected an error in %s, but got nil", tc.name)
-			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', but got '%s'", tc.expected, result)
-			}
+			assert.Error(t, err, "Expected an error in %s", tc.name)
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -338,15 +298,11 @@ func TestVariablesWithPunctuation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := NewParser()
 			tmpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
+			require.NoError(t, err, "Unexpected error in %s", tc.name)
 
 			result := tmpl.MustExecute(ctx)
 
-			if result != tc.expected {
-				t.Errorf("Expected '%s', but got '%s'", tc.expected, result)
-			}
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -374,18 +330,12 @@ func TestFiltersWithVariableArguments(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := NewParser()
 			tmpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
+			require.NoError(t, err, "Unexpected error in %s", tc.name)
 
 			result, err := tmpl.Execute(ctx)
-			if err != nil {
-				t.Fatalf("Failed to execute template in %s: %v", tc.name, err)
-			}
+			require.NoError(t, err, "Failed to execute template in %s", tc.name)
 
-			if result != tc.expected {
-				t.Errorf("Expected '%s', but got '%s' in %s", tc.expected, result, tc.name)
-			}
+			assert.Equal(t, tc.expected, result, "Test case %s", tc.name)
 		})
 	}
 }
@@ -412,18 +362,12 @@ func TestFiltersWithNumericArguments(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := NewParser()
 			tmpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
+			require.NoError(t, err, "Unexpected error in %s", tc.name)
 
 			result, err := tmpl.Execute(ctx)
-			if err != nil {
-				t.Fatalf("Failed to execute template in %s: %v", tc.name, err)
-			}
+			require.NoError(t, err, "Failed to execute template in %s", tc.name)
 
-			if result != tc.expected {
-				t.Errorf("Expected '%s', but got '%s' in %s", tc.expected, result, tc.name)
-			}
+			assert.Equal(t, tc.expected, result, "Test case %s", tc.name)
 		})
 	}
 }

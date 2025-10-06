@@ -2,6 +2,9 @@ package template
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestJsonFilter(t *testing.T) {
@@ -26,12 +29,8 @@ func TestJsonFilter(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			output, err := jsonFilter(tc.input)
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-			if output != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, output)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, output)
 		})
 	}
 }

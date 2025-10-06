@@ -1,7 +1,6 @@
 package template
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -702,14 +701,6 @@ func toFloat64(v interface{}) (float64, bool) {
 		return float64(val), true
 	case uint64:
 		return float64(val), true
-	case json.Number:
-		if f, err := val.Float64(); err == nil {
-			return f, true
-		}
-		if i, err := val.Int64(); err == nil {
-			return float64(i), true
-		}
-		return 0, false
 	case string:
 		// Try to parse number from string
 		if f, err := strconv.ParseFloat(val, 64); err == nil {

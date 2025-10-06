@@ -48,17 +48,17 @@ func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
 	if tpl != nil {
 		// Extract the inner content of the variable token.
 		innerContent := strings.TrimSpace(token[2 : len(token)-2])
-		// Split the variable name from any filters.
-		parts := strings.SplitN(innerContent, "|", 2)
+		// Split the variable name from any filters using strings.Cut (faster than SplitN)
+		varNameRaw, filtersStr, hasFilters := strings.Cut(innerContent, "|")
 
-		varName := strings.TrimSpace(parts[0])
+		varName := strings.TrimSpace(varNameRaw)
 
 		// Initialize filters slice.
 		var filters []Filter
 
 		// Check if there are filters to parse and use parseFilters if so.
-		if len(parts) > 1 {
-			filters = parseFilters(parts[1])
+		if hasFilters {
+			filters = parseFilters(filtersStr)
 		}
 
 		// Create a new variable node with the parsed variable name and filters.
@@ -110,13 +110,13 @@ func parseFilters(filterStr string) []Filter {
 			continue
 		}
 
-		// Splitting the filter name from its arguments
-		nameArgs := strings.SplitN(partTrimmed, ":", 2)
-		filter := Filter{Name: strings.TrimSpace(nameArgs[0])}
+		// Splitting the filter name from its arguments using strings.Cut (faster than SplitN)
+		filterName, argsStr, hasArgs := strings.Cut(partTrimmed, ":")
+		filter := Filter{Name: strings.TrimSpace(filterName)}
 
 		// Handling arguments, if present
-		if len(nameArgs) == 2 {
-			filter.Args = splitArgsConsideringQuotes(nameArgs[1])
+		if hasArgs {
+			filter.Args = splitArgsConsideringQuotes(argsStr)
 		}
 
 		filters = append(filters, filter)
@@ -128,6 +128,7 @@ func parseFilters(filterStr string) []Filter {
 func splitArgsConsideringQuotes(argsStr string) []FilterArg {
 	var args []FilterArg
 	var currentArg strings.Builder
+	currentArg.Grow(len(argsStr)) // Pre-allocate based on input length
 	var inQuotes bool
 	var quoteChar rune
 

@@ -2,6 +2,9 @@ package template
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNumberFilters(t *testing.T) {
@@ -41,9 +44,7 @@ func TestNumberFilters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Parse the template
 			tpl, err := Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
+			require.NoError(t, err, "Failed to parse template")
 
 			// Create a context and add variables
 			context := NewContext()
@@ -53,14 +54,10 @@ func TestNumberFilters(t *testing.T) {
 
 			// Execute the template
 			output, err := Execute(tpl, context)
-			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
-			}
+			require.NoError(t, err, "Failed to execute template")
 
 			// Verify the output matches the expected result
-			if output != tc.expected {
-				t.Errorf("Expected '%s', got '%s' for test case '%s'", tc.expected, output, tc.name)
-			}
+			assert.Equal(t, tc.expected, output, "Test case '%s'", tc.name)
 		})
 	}
 }

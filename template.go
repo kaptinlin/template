@@ -1,13 +1,15 @@
 package template
 
 import (
-	"encoding/json"
+	"cmp"
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/go-json-experiment/json"
 )
 
 // Node defines a single element within a template, such as text, variable, or control structure.
@@ -213,24 +215,31 @@ func convertToString(value interface{}) (string, error) {
 			return "[]", nil
 		}
 
-		var parts []string
+		var result strings.Builder
+		result.Grow(length * 20) // Estimate ~20 chars per item
+		result.WriteByte('[')
+
 		for i := 0; i < length; i++ {
+			if i > 0 {
+				result.WriteByte(',')
+			}
 			item := rv.Index(i).Interface()
 			str, err := convertToString(item)
 			if err != nil {
 				// Fallback to JSON for complex items
-				jsonBytes, err := json.Marshal(item)
+				jsonBytes, err := json.Marshal(item, json.Deterministic(true))
 				if err != nil {
 					return "", fmt.Errorf("could not convert slice item to string: %w", err)
 				}
 				str = string(jsonBytes)
 			}
-			parts = append(parts, str)
+			result.WriteString(str)
 		}
-		return fmt.Sprintf("[%s]", strings.Join(parts, ",")), nil
+		result.WriteByte(']')
+		return result.String(), nil
 	default:
 		// Fallback for complex types: use JSON serialization
-		jsonBytes, err := json.Marshal(value)
+		jsonBytes, err := json.Marshal(value, json.Deterministic(true))
 		if err != nil {
 			return "", fmt.Errorf("could not convert value to string: %w", err)
 		}
@@ -449,8 +458,11 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 		keys := val.MapKeys()
 
 		// Sort keys by their string representation for stable iteration order
-		sort.Slice(keys, func(i, j int) bool {
-			return fmt.Sprint(keys[i].Interface()) < fmt.Sprint(keys[j].Interface())
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			return cmp.Compare(
+				fmt.Sprint(a.Interface()),
+				fmt.Sprint(b.Interface()),
+			)
 		})
 
 		for i, key := range keys {
@@ -543,21 +555,13 @@ func deepCopyValue(v interface{}) interface{} {
 		}
 		return newMap
 	case []string:
-		newSlice := make([]string, len(val))
-		copy(newSlice, val)
-		return newSlice
+		return slices.Clone(val)
 	case []int:
-		newSlice := make([]int, len(val))
-		copy(newSlice, val)
-		return newSlice
+		return slices.Clone(val)
 	case []float64:
-		newSlice := make([]float64, len(val))
-		copy(newSlice, val)
-		return newSlice
+		return slices.Clone(val)
 	case []bool:
-		newSlice := make([]bool, len(val))
-		copy(newSlice, val)
-		return newSlice
+		return slices.Clone(val)
 	default:
 		// For basic types (string, int, float64, bool, etc.), return directly
 		return val

@@ -3,6 +3,9 @@ package template
 import (
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGrammar(t *testing.T) {
@@ -116,24 +119,22 @@ func TestGrammar(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			lexer := &Lexer{input: tt.input}
 			tokens, err := lexer.Lex()
-			if err != nil {
-				t.Fatalf("Lexer.Lex() error = %v", err)
-			}
+			require.NoError(t, err)
 
 			grammar := NewGrammar(tokens)
 			ast, err := grammar.Parse()
-			if err != nil {
-				if !tt.wantErr {
-					t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
-				}
+			if tt.wantErr && err != nil {
+				// Error occurred during parsing as expected
 				return
 			}
+			require.NoError(t, err)
 
 			result, err := ast.Evaluate(*tt.context)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Evaluate() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
 				return
 			}
+			require.NoError(t, err)
 
 			if err == nil {
 				var got interface{}
@@ -156,9 +157,7 @@ func TestGrammar(t *testing.T) {
 					got = result.Struct
 				}
 
-				if got != tt.expected {
-					t.Errorf("Evaluate() got = %v, want %v", got, tt.expected)
-				}
+				assert.Equal(t, tt.expected, got)
 			}
 		})
 	}
@@ -209,22 +208,12 @@ func TestUnsignedIntegerOverflow(t *testing.T) {
 			result, err := NewValue(tt.value)
 
 			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error for value %v, but got none", tt.value)
-				}
-				if result != nil {
-					t.Errorf("Expected nil result on error, but got %v", result)
-				}
+				assert.Error(t, err, "Expected error for value %v", tt.value)
+				assert.Nil(t, result, "Expected nil result on error")
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error for value %v: %v", tt.value, err)
-				}
-				if result == nil {
-					t.Errorf("Expected valid result for value %v, but got nil", tt.value)
-				}
-				if result != nil && result.Type != TypeInt {
-					t.Errorf("Expected TypeInt for value %v, but got %v", tt.value, result.Type)
-				}
+				require.NoError(t, err, "Unexpected error for value %v", tt.value)
+				require.NotNil(t, result, "Expected valid result for value %v", tt.value)
+				assert.Equal(t, TypeInt, result.Type, "Expected TypeInt for value %v", tt.value)
 			}
 		})
 	}

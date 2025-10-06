@@ -1,9 +1,10 @@
 package template
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
+
+	"github.com/go-json-experiment/json"
 )
 
 func init() {
@@ -21,7 +22,8 @@ func init() {
 
 // jsonFilter serializes an input object into its JSON representation.
 func jsonFilter(input interface{}, _ ...string) (interface{}, error) {
-	jsonBytes, err := json.Marshal(input)
+	// Use deterministic mode to ensure consistent key ordering
+	jsonBytes, err := json.Marshal(input, json.Deterministic(true))
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling to JSON: %w", err)
 	}

@@ -1,10 +1,12 @@
 package template
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // mockToUpper is a simple filter function that converts a string to uppercase.
@@ -31,13 +33,9 @@ func mockAppend(value interface{}, args ...string) (interface{}, error) {
 func TestApplyFilters(t *testing.T) {
 	// Register mock filters for testing
 	err := RegisterFilter("mockToUpper", mockToUpper)
-	if err != nil {
-		t.Fatalf("Failed to register filter: %v", err)
-	}
+	require.NoError(t, err, "Failed to register filter")
 	err = RegisterFilter("mockAppend", mockAppend)
-	if err != nil {
-		t.Fatalf("Failed to register filter: %v", err)
-	}
+	require.NoError(t, err, "Failed to register filter")
 
 	// Create a simple context for testing VariableArg
 	ctx := NewContext()
@@ -95,14 +93,14 @@ func TestApplyFilters(t *testing.T) {
 			result, err := ApplyFilters(tc.value, tc.filters, ctx)
 
 			// Check for expected error
-			if (err != nil || tc.err != nil) && !errors.Is(err, tc.err) {
-				t.Errorf("%s: expected error %v, got %v", tc.name, tc.err, err)
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err, "%s: expected error", tc.name)
+			} else {
+				assert.NoError(t, err, "%s: unexpected error", tc.name)
 			}
 
 			// Check for expected result
-			if result != tc.expected {
-				t.Errorf("%s: expected result %v, got %v", tc.name, tc.expected, result)
-			}
+			assert.Equal(t, tc.expected, result, "%s: result mismatch", tc.name)
 		})
 	}
 }

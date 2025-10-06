@@ -1,8 +1,10 @@
 package template
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLexer_Lex(t *testing.T) {
@@ -79,19 +81,16 @@ func TestLexer_Lex(t *testing.T) {
 				input: tt.input,
 			}
 			got, err := lexer.Lex()
-			if err != nil {
-				t.Fatalf("Lexer.Lex() error = %v", err)
-			}
+			require.NoError(t, err)
 
-			if !reflect.DeepEqual(got, tt.expected) {
-				t.Errorf("Lexer.Lex() = %v, want %v", got, tt.expected)
-				t.Errorf("\nActual tokens:")
+			if !assert.Equal(t, tt.expected, got) {
+				t.Logf("\nActual tokens:")
 				for i, token := range got {
-					t.Errorf("%d: {Type: %v, Val: %q}", i, token.Typ, token.Val)
+					t.Logf("%d: {Type: %v, Val: %q}", i, token.Typ, token.Val)
 				}
-				t.Errorf("\nExpected tokens:")
+				t.Logf("\nExpected tokens:")
 				for i, token := range tt.expected {
-					t.Errorf("%d: {Type: %v, Val: %q}", i, token.Typ, token.Val)
+					t.Logf("%d: {Type: %v, Val: %q}", i, token.Typ, token.Val)
 				}
 			}
 		})
