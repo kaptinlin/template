@@ -107,11 +107,43 @@ func (l *Lexer) lexIdentifierOrKeyword() {
 		l.pos++
 	}
 	val := l.input[l.start:l.pos]
-	if val == "true" || val == "false" {
-		l.emit(TokenBool) // Boolean value
-	} else {
-		l.emit(TokenIdentifier) // Identifier
+
+	// Check for boolean literals (case-insensitive)
+	if val == "true" || val == "True" || val == "false" || val == "False" {
+		l.emit(TokenBool)
+		return
 	}
+
+	// Check for text operators
+	if val == "and" || val == "or" || val == "not" || val == "in" {
+		// Check for multi-word operators like "not in"
+		if val == "not" {
+			// Look ahead for "in"
+			savedPos := l.pos
+			// Skip whitespace
+			for l.pos < len(l.input) && isSpace(l.input[l.pos]) {
+				l.pos++
+			}
+			// Check if next word is "in"
+			nextStart := l.pos
+			for l.pos < len(l.input) && isLetter(l.input[l.pos]) {
+				l.pos++
+			}
+			if l.pos > nextStart && l.input[nextStart:l.pos] == "in" {
+				// Emit "not in" as single operator
+				l.tokens = append(l.tokens, Token{Typ: TokenOperator, Val: "not in"})
+				l.start = l.pos
+				return
+			}
+			// Restore position if not "not in"
+			l.pos = savedPos
+		}
+		l.emit(TokenOperator)
+		return
+	}
+
+	// Otherwise it's an identifier (including null/Null/none/None literals)
+	l.emit(TokenIdentifier)
 }
 
 func (l *Lexer) lexNot() {
@@ -223,7 +255,12 @@ func isOperatorChar(ch byte, pos int, input string) bool {
 }
 
 func isOperator(op string) bool {
-	operators := []string{"==", "!=", "<=", ">=", "&&", "||"}
+	operators := []string{
+		"==", "!=", "<=", ">=", "<", ">",
+		"&&", "||", // C-style (backward compatibility)
+		"and", "or", "not", // Django/Liquid style
+		"in", "not in", // Membership operators
+	}
 	for _, o := range operators {
 		if op == o {
 			return true

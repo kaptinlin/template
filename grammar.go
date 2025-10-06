@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 // ExpressionNode is the interface for all expression nodes
@@ -57,6 +58,9 @@ type StringLiteralNode struct {
 type BooleanLiteralNode struct {
 	Value bool
 }
+
+// NilLiteralNode represents a nil/null/none literal in the AST.
+type NilLiteralNode struct{}
 
 // VariableNode represents a variable reference in the AST.
 type VariableNode struct {
@@ -113,16 +117,16 @@ func (g *Grammar) parseExpression() (ExpressionNode, error) {
 	return g.parseLogicalOr()
 }
 
-// parseLogicalOr parses logical OR expressions
+// parseLogicalOr parses logical OR expressions (supports both || and or)
 func (g *Grammar) parseLogicalOr() (ExpressionNode, error) {
 	left, err := g.parseLogicalAnd()
 	if err != nil {
 		return nil, err
 	}
 
-	for g.current.Typ == TokenOperator && g.current.Val == "||" {
+	for g.current.Typ == TokenOperator && (g.current.Val == "||" || g.current.Val == "or") {
 		operator := g.current.Val
-		g.advance() // Consume || operator
+		g.advance() // Consume || or or operator
 
 		right, err := g.parseLogicalAnd()
 		if err != nil {
@@ -139,18 +143,18 @@ func (g *Grammar) parseLogicalOr() (ExpressionNode, error) {
 	return left, nil
 }
 
-// parseLogicalAnd parses logical AND expressions
+// parseLogicalAnd parses logical AND expressions (supports both && and and)
 func (g *Grammar) parseLogicalAnd() (ExpressionNode, error) {
-	left, err := g.parseComparison()
+	left, err := g.parseNot()
 	if err != nil {
 		return nil, err
 	}
 
-	for g.current.Typ == TokenOperator && g.current.Val == "&&" {
+	for g.current.Typ == TokenOperator && (g.current.Val == "&&" || g.current.Val == "and") {
 		operator := g.current.Val
 		g.advance()
 
-		right, err := g.parseComparison()
+		right, err := g.parseNot()
 		if err != nil {
 			return nil, err
 		}
@@ -162,6 +166,46 @@ func (g *Grammar) parseLogicalAnd() (ExpressionNode, error) {
 		}
 	}
 
+	return left, nil
+}
+
+// parseNot parses the NOT operator
+func (g *Grammar) parseNot() (ExpressionNode, error) {
+	if g.current.Typ == TokenOperator && g.current.Val == "not" {
+		g.advance()
+		right, err := g.parseNot() // Right-associative for `not not x`
+		if err != nil {
+			return nil, err
+		}
+		return &UnaryExpressionNode{
+			Operator: "not",
+			Right:    right,
+		}, nil
+	}
+	return g.parseIn()
+}
+
+// parseIn parses membership operators (in, not in)
+func (g *Grammar) parseIn() (ExpressionNode, error) {
+	left, err := g.parseComparison()
+	if err != nil {
+		return nil, err
+	}
+
+	if g.current.Typ == TokenOperator &&
+		(g.current.Val == "in" || g.current.Val == "not in") {
+		operator := g.current.Val
+		g.advance()
+		right, err := g.parseComparison()
+		if err != nil {
+			return nil, err
+		}
+		return &BinaryExpressionNode{
+			Left:     left,
+			Right:    right,
+			Operator: operator,
+		}, nil
+	}
 	return left, nil
 }
 
@@ -308,12 +352,17 @@ func (g *Grammar) parseBasicPrimary() (ExpressionNode, error) {
 		return &StringLiteralNode{Value: value}, nil
 
 	case TokenBool:
-		value := g.current.Val == "true"
+		value := g.current.Val == "true" || g.current.Val == "True"
 		g.advance()
 		return &BooleanLiteralNode{Value: value}, nil
 
 	case TokenIdentifier:
 		name := g.current.Val
+		// Check for null/Null/none/None literals
+		if name == "null" || name == "Null" || name == "none" || name == "None" {
+			g.advance()
+			return &NilLiteralNode{}, nil
+		}
 		g.advance()
 		return &VariableNode{Name: name}, nil
 
@@ -415,7 +464,7 @@ func (v *Value) toInterface() interface{} {
 func NewValue(v interface{}) (*Value, error) {
 	// Handle nil interface{} case
 	if v == nil {
-		return &Value{Type: TypeBool, Bool: false}, nil
+		return &Value{Type: TypeNil}, nil
 	}
 
 	rv := reflect.ValueOf(v)
@@ -423,7 +472,7 @@ func NewValue(v interface{}) (*Value, error) {
 	// Handle pointers by dereferencing until we get a non-pointer value
 	for rv.Kind() == reflect.Ptr {
 		if rv.IsNil() {
-			return &Value{Type: TypeBool, Bool: false}, nil
+			return &Value{Type: TypeNil}, nil
 		}
 		rv = rv.Elem()
 	}
@@ -493,10 +542,12 @@ func (n *BinaryExpressionNode) Evaluate(ctx Context) (*Value, error) {
 		return left.Multiply(right)
 	case "/":
 		return left.Divide(right)
-	case "&&":
-		return left.And(right)
-	case "||":
-		return left.Or(right)
+	case "&&", "and":
+		// Short-circuit AND: if left is falsy, return false without evaluating right
+		return NewValue(isTruthy(left) && isTruthy(right))
+	case "||", "or":
+		// Short-circuit OR: if left is truthy, return true without re-evaluating right
+		return NewValue(isTruthy(left) || isTruthy(right))
 	case "==":
 		return left.Equal(right)
 	case "!=":
@@ -509,6 +560,14 @@ func (n *BinaryExpressionNode) Evaluate(ctx Context) (*Value, error) {
 		return left.LessEqual(right)
 	case ">=":
 		return left.GreaterEqual(right)
+	case "in":
+		return left.In(right)
+	case "not in":
+		result, err := left.In(right)
+		if err != nil {
+			return nil, err
+		}
+		return NewValue(!result.Bool)
 	}
 
 	return nil, fmt.Errorf("%w: %s", ErrUnsupportedOperator, n.Operator)
@@ -521,12 +580,20 @@ func (n *UnaryExpressionNode) Evaluate(ctx Context) (*Value, error) {
 		return nil, err
 	}
 
-	if n.Operator == "!" {
-		rightBool, err := right.toBool()
-		if err != nil {
-			return nil, err
+	if n.Operator == "!" || n.Operator == "not" {
+		return NewValue(!isTruthy(right))
+	}
+
+	if n.Operator == "-" {
+		// Numeric negation
+		switch right.Type {
+		case TypeInt:
+			return NewValue(-right.Int)
+		case TypeFloat:
+			return NewValue(-right.Float)
+		case TypeString, TypeBool, TypeSlice, TypeMap, TypeNil, TypeStruct:
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedUnaryOp, n.Operator)
 		}
-		return NewValue(!rightBool)
 	}
 
 	return nil, fmt.Errorf("%w: %s", ErrUnsupportedUnaryOp, n.Operator)
@@ -545,6 +612,11 @@ func (n *StringLiteralNode) Evaluate(_ Context) (*Value, error) {
 // Evaluate method implementation for BooleanLiteralNode
 func (n *BooleanLiteralNode) Evaluate(_ Context) (*Value, error) {
 	return NewValue(n.Value)
+}
+
+// Evaluate method implementation for NilLiteralNode
+func (n *NilLiteralNode) Evaluate(_ Context) (*Value, error) {
+	return &Value{Type: TypeNil}, nil
 }
 
 // Evaluate method implementation for VariableNode
@@ -1024,7 +1096,7 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+			return NewValue(false)
 		case TypeStruct:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
@@ -1043,7 +1115,7 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+			return NewValue(false)
 		case TypeStruct:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
@@ -1062,7 +1134,7 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+			return NewValue(false)
 		case TypeStruct:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
@@ -1081,17 +1153,27 @@ func (v *Value) Equal(right *Value) (*Value, error) {
 		case TypeMap:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+			return NewValue(false)
 		case TypeStruct:
 			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 		}
 	case TypeSlice:
+		if right.Type == TypeNil {
+			return NewValue(false)
+		}
 		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 	case TypeMap:
+		if right.Type == TypeNil {
+			return NewValue(false)
+		}
 		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 	case TypeNil:
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		// nil == nil is true, nil == anything else is false
+		return NewValue(right.Type == TypeNil)
 	case TypeStruct:
+		if right.Type == TypeNil {
+			return NewValue(false)
+		}
 		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 	}
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
@@ -1218,4 +1300,83 @@ func (v *Value) GreaterEqual(right *Value) (*Value, error) {
 		return nil, err
 	}
 	return NewValue(!lt.Bool)
+}
+
+// isTruthy determines if a value is truthy according to Django/template semantics
+func isTruthy(v *Value) bool {
+	if v == nil {
+		return false
+	}
+	switch v.Type {
+	case TypeBool:
+		return v.Bool
+	case TypeInt:
+		return v.Int != 0
+	case TypeFloat:
+		return v.Float != 0.0
+	case TypeString:
+		return v.Str != ""
+	case TypeSlice:
+		if v.Slice == nil {
+			return false
+		}
+		rv := reflect.ValueOf(v.Slice)
+		return rv.Len() > 0
+	case TypeMap:
+		if v.Map == nil {
+			return false
+		}
+		rv := reflect.ValueOf(v.Map)
+		return rv.Len() > 0
+	case TypeNil:
+		return false
+	case TypeStruct:
+		// Struct types are truthy if not nil
+		return true
+	}
+	return false // unreachable, but required for exhaustive switch
+}
+
+// In implements membership test operator
+func (v *Value) In(haystack *Value) (*Value, error) {
+	// String in string (substring check)
+	if v.Type == TypeString && haystack.Type == TypeString {
+		return NewValue(strings.Contains(haystack.Str, v.Str))
+	}
+
+	// Item in slice
+	if haystack.Type == TypeSlice {
+		rv := reflect.ValueOf(haystack.Slice)
+		for i := 0; i < rv.Len(); i++ {
+			item := rv.Index(i).Interface()
+			itemVal, err := NewValue(item)
+			if err != nil {
+				continue
+			}
+			eq, err := v.Equal(itemVal)
+			if err == nil && eq.Bool {
+				return NewValue(true)
+			}
+		}
+		return NewValue(false)
+	}
+
+	// Key in map
+	if haystack.Type == TypeMap {
+		rv := reflect.ValueOf(haystack.Map)
+		// Convert v to appropriate key type and check existence
+		for _, key := range rv.MapKeys() {
+			keyVal, err := NewValue(key.Interface())
+			if err != nil {
+				continue
+			}
+			eq, err := v.Equal(keyVal)
+			if err == nil && eq.Bool {
+				return NewValue(true)
+			}
+		}
+		return NewValue(false)
+	}
+
+	return nil, fmt.Errorf("%w: 'in' operator for %v in %v", ErrUnsupportedOperator, v.Type, haystack.Type)
 }
