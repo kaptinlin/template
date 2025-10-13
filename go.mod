@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/go-json-experiment/json v0.0.0-20250910080747-cc2cfa0554c3
-	github.com/kaptinlin/filter v0.4.0
+	github.com/kaptinlin/filter v0.4.1
 	github.com/kaptinlin/jsonpointer v0.4.6
 	github.com/stretchr/testify v1.11.1
 )
