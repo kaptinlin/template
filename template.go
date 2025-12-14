@@ -2,6 +2,7 @@ package template
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -79,18 +80,18 @@ func (t *Template) MustExecute(ctx Context) string {
 
 // executeNodes recursively processes a slice of nodes, appending the result to the builder.
 func executeNodes(nodes []*Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
-	var firstErr error
+	var errs []error
 	for _, node := range nodes {
 		controlFlow, err := executeNode(node, ctx, builder, forLayers)
-		if err != nil && firstErr == nil {
-			firstErr = err
+		if err != nil {
+			errs = append(errs, err)
 		}
-		// If a control flow signal is received, return it immediately
+		// If a control flow signal is received, return it immediately with aggregated errors
 		if controlFlow != ControlFlowNone {
-			return controlFlow, firstErr
+			return controlFlow, errors.Join(errs...)
 		}
 	}
-	return ControlFlowNone, firstErr
+	return ControlFlowNone, errors.Join(errs...)
 }
 
 // executeNode executes a single node, handling text and variable nodes differently.

@@ -10,7 +10,7 @@ import (
 func BenchmarkStringsCut(b *testing.B) {
 	input := "variable|filter1|filter2"
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _ = strings.Cut(input, "|")
 	}
 }
@@ -19,7 +19,7 @@ func BenchmarkStringsCut(b *testing.B) {
 func BenchmarkStringsSplitN(b *testing.B) {
 	input := "variable|filter1|filter2"
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		parts := strings.SplitN(input, "|", 2)
 		_ = parts[0]
 		if len(parts) > 1 {
@@ -32,7 +32,7 @@ func BenchmarkStringsSplitN(b *testing.B) {
 func BenchmarkSlicesClone(b *testing.B) {
 	data := []string{"apple", "banana", "cherry", "date", "elderberry"}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = slices.Clone(data)
 	}
 }
@@ -41,7 +41,7 @@ func BenchmarkSlicesClone(b *testing.B) {
 func BenchmarkManualSliceCopy(b *testing.B) {
 	data := []string{"apple", "banana", "cherry", "date", "elderberry"}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		newSlice := make([]string, len(data))
 		copy(newSlice, data)
 		_ = newSlice
@@ -52,7 +52,7 @@ func BenchmarkManualSliceCopy(b *testing.B) {
 func BenchmarkSlicesCloneInt(b *testing.B) {
 	data := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = slices.Clone(data)
 	}
 }
@@ -61,7 +61,7 @@ func BenchmarkSlicesCloneInt(b *testing.B) {
 func BenchmarkManualSliceCopyInt(b *testing.B) {
 	data := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		newSlice := make([]int, len(data))
 		copy(newSlice, data)
 		_ = newSlice
@@ -72,7 +72,7 @@ func BenchmarkManualSliceCopyInt(b *testing.B) {
 func BenchmarkStringBuilderPreallocated(b *testing.B) {
 	items := []string{"item1", "item2", "item3", "item4", "item5"}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result strings.Builder
 		result.Grow(len(items) * 10) // Pre-allocate
 		result.WriteByte('[')
@@ -91,7 +91,7 @@ func BenchmarkStringBuilderPreallocated(b *testing.B) {
 func BenchmarkStringBuilderNoPrealloc(b *testing.B) {
 	items := []string{"item1", "item2", "item3", "item4", "item5"}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result strings.Builder
 		result.WriteByte('[')
 		for j, item := range items {
@@ -109,7 +109,7 @@ func BenchmarkStringBuilderNoPrealloc(b *testing.B) {
 func BenchmarkStringJoin(b *testing.B) {
 	items := []string{"item1", "item2", "item3", "item4", "item5"}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		parts := append([]string(nil), items...)
 		_ = "[" + strings.Join(parts, ",") + "]"
 	}
@@ -125,7 +125,7 @@ func BenchmarkTemplateExecuteSimple(b *testing.B) {
 	ctx.Set("name", "World")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = tpl.Execute(ctx)
 	}
 }
@@ -140,7 +140,7 @@ func BenchmarkTemplateExecuteWithFilters(b *testing.B) {
 	ctx.Set("text", "hello world, this is a test")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = tpl.Execute(ctx)
 	}
 }
@@ -155,7 +155,7 @@ func BenchmarkTemplateExecuteForLoop(b *testing.B) {
 	ctx.Set("items", []string{"a", "b", "c", "d", "e"})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = tpl.Execute(ctx)
 	}
 }
@@ -182,7 +182,7 @@ func BenchmarkTemplateExecuteComplex(b *testing.B) {
 	})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = tpl.Execute(ctx)
 	}
 }
@@ -191,7 +191,7 @@ func BenchmarkTemplateExecuteComplex(b *testing.B) {
 func BenchmarkParse(b *testing.B) {
 	template := "Hello {{ name | upper }}! {% if active %}Welcome{% endif %}"
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = Parse(template)
 	}
 }
@@ -209,7 +209,7 @@ func BenchmarkParseComplex(b *testing.B) {
 	{% endfor %}
 	`
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = Parse(template)
 	}
 }

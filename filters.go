@@ -28,7 +28,7 @@ func ApplyFilters(value interface{}, fs []Filter, ctx Context) (interface{}, err
 	for _, f := range fs {
 		fn, exists := filters[f.Name]
 		if !exists {
-			return value, fmt.Errorf("%w: filter '%s' not found", ErrFilterNotFound, f.Name)
+			return value, fmt.Errorf("filter '%s' not found: %w", f.Name, ErrFilterNotFound)
 		}
 
 		// Prepare arguments by checking their types and extracting values for VariableArg.
@@ -42,18 +42,19 @@ func ApplyFilters(value interface{}, fs []Filter, ctx Context) (interface{}, err
 			case VariableArg:
 				val, err := ctx.Get(arg.Value().(string))
 				if err != nil {
-					return value, fmt.Errorf("%w: variable '%s' not found in context", ErrContextKeyNotFound, arg.Value().(string))
+					return value, fmt.Errorf("variable '%s' not found in context: %w",
+						arg.Value().(string), ErrContextKeyNotFound)
 				}
 				args[i] = fmt.Sprint(val)
 			default:
-				return value, fmt.Errorf("%w for filter '%s'", ErrUnknownFilterArgumentType, f.Name)
+				return value, fmt.Errorf("filter '%s': %w", f.Name, ErrUnknownFilterArgumentType)
 			}
 		}
 
 		// Apply each filter with the prepared arguments.
 		value, err = fn(value, args...)
 		if err != nil {
-			return value, fmt.Errorf("error applying '%s' filter: %w", f.Name, err)
+			return value, fmt.Errorf("filter '%s' failed: %w", f.Name, err)
 		}
 	}
 	return value, nil
