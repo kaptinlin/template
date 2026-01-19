@@ -63,56 +63,42 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
+// addNode is a generic helper to add a node to either the template root or a parent node
+func (p *Parser) addNode(newNode *Node, tpl *Template, parent *Node) {
+	if tpl != nil {
+		tpl.Nodes = append(tpl.Nodes, newNode)
+	} else if parent != nil {
+		parent.Children = append(parent.Children, newNode)
+	}
+}
+
+// extractFiltersFromToken extracts variable name and filters from a variable token
+func (p *Parser) extractFiltersFromToken(token string) (string, []Filter) {
+	innerContent := strings.TrimSpace(token[templateVarOpenLen : len(token)-templateVarCloseLen])
+	varNameRaw, filtersStr, hasFilters := strings.Cut(innerContent, "|")
+
+	varName := strings.TrimSpace(varNameRaw)
+	var filters []Filter
+
+	if hasFilters {
+		filters = parseFilters(filtersStr)
+	}
+
+	return varName, filters
+}
+
 // Updated addVariableNode processes a variable token, parses out any filters, and adds it to the template.
 func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
-	if tpl != nil {
-		// Extract the inner content of the variable token.
-		innerContent := strings.TrimSpace(token[templateVarOpenLen : len(token)-templateVarCloseLen])
-		// Split the variable name from any filters using strings.Cut (faster than SplitN)
-		varNameRaw, filtersStr, hasFilters := strings.Cut(innerContent, "|")
+	varName, filters := p.extractFiltersFromToken(token)
 
-		varName := strings.TrimSpace(varNameRaw)
-
-		// Initialize filters slice.
-		var filters []Filter
-
-		// Check if there are filters to parse and use parseFilters if so.
-		if hasFilters {
-			filters = parseFilters(filtersStr)
-		}
-
-		// Create a new variable node with the parsed variable name and filters.
-		node = &Node{
-			Type:     "variable",
-			Variable: varName,
-			Filters:  filters,
-			Text:     token,
-		}
-
-		// Add the new node to the template.
-		tpl.Nodes = append(tpl.Nodes, node)
-	} else {
-		// Extract the inner content of the variable token.
-		innerContent := strings.TrimSpace(token[templateVarOpenLen : len(token)-templateVarCloseLen])
-		// Split the variable name from any filters.
-		parts := strings.SplitN(innerContent, "|", 2)
-
-		varName := strings.TrimSpace(parts[0])
-
-		// Initialize filters slice.
-		var filters []Filter
-
-		// Check if there are filters to parse and use parseFilters if so.
-		if len(parts) > 1 {
-			filters = parseFilters(parts[1])
-		}
-		node.Children = append(node.Children, &Node{
-			Type:     "variable",
-			Variable: varName,
-			Filters:  filters,
-			Text:     token,
-		})
+	varNode := &Node{
+		Type:     "variable",
+		Variable: varName,
+		Filters:  filters,
+		Text:     token,
 	}
+
+	p.addNode(varNode, tpl, node)
 }
 
 func parseFilters(filterStr string) []Filter {
@@ -200,11 +186,10 @@ func splitArgsConsideringQuotes(argsStr string) []FilterArg {
 
 // addTextNode adds a text token to the template
 func (p *Parser) addTextNode(text string, tpl *Template, node *Node) {
-	if text != "" && tpl != nil {
-		tpl.Nodes = append(tpl.Nodes, &Node{Type: "text", Text: text})
-	} else {
-		node.Children = append(node.Children, &Node{Type: "text", Text: text})
+	if text == "" {
+		return
 	}
+	p.addNode(&Node{Type: "text", Text: text}, tpl, node)
 }
 
 // addForNode adds a for node to the template
@@ -264,29 +249,13 @@ func (p *Parser) addIfNode(text string, tpl *Template, node *Node) {
 
 // addControlFlowNode adds a control flow node (break/continue) to the template
 func (p *Parser) addControlFlowNode(text string, tpl *Template, node *Node, nodeType string) {
-	newNode := &Node{Type: nodeType, Text: text}
-
-	if tpl != nil {
-		// Adding to template root
-		tpl.Nodes = append(tpl.Nodes, newNode)
-	} else if node != nil {
-		// Adding to a parent node
-		node.Children = append(node.Children, newNode)
-	}
+	p.addNode(&Node{Type: nodeType, Text: text}, tpl, node)
 }
 
 // addConditionalBranchNode adds a conditional branch node (else/elif) to the template
 func (p *Parser) addConditionalBranchNode(text string, tpl *Template, node *Node, nodeType string) *Node {
 	newNode := &Node{Type: nodeType, Text: text}
-
-	if tpl != nil {
-		// Adding to template root
-		tpl.Nodes = append(tpl.Nodes, newNode)
-	} else if node != nil {
-		// Adding to a parent node
-		node.Children = append(node.Children, newNode)
-	}
-
+	p.addNode(newNode, tpl, node)
 	return newNode
 }
 
