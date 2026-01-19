@@ -13,6 +13,11 @@ import (
 	"github.com/go-json-experiment/json"
 )
 
+// String conversion constants
+const (
+	estimatedCharsPerArrayItem = 20 // Estimate ~20 chars per item when converting arrays to strings
+)
+
 // Node defines a single element within a template, such as text, variable, or control structure.
 type Node struct {
 	Type       string
@@ -217,7 +222,7 @@ func convertToString(value interface{}) (string, error) {
 		}
 
 		var result strings.Builder
-		result.Grow(length * 20) // Estimate ~20 chars per item
+		result.Grow(length * estimatedCharsPerArrayItem)
 		result.WriteByte('[')
 
 		for i := 0; i < length; i++ {
