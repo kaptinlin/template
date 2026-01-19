@@ -149,10 +149,12 @@ func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers in
 }
 
 // executeVariableNode resolves and processes a variable node, applying any filters.
+// If an error occurs, it returns the original variable placeholder along with the error
+// for debugging purposes, but allows template execution to continue.
 func executeVariableNode(node *Node, ctx Context) (string, error) {
 	value, err := resolveVariable(node.Variable, ctx)
 	if err != nil {
-		// Instead of returning an error, return the original variable placeholder.
+		// Return fallback value with error for debugging
 		return node.Text, err
 	}
 
@@ -166,7 +168,8 @@ func executeVariableNode(node *Node, ctx Context) (string, error) {
 
 	result, err := convertToString(value)
 	if err != nil {
-		return node.Text, nil //nolint: nilerr // Return the original variable placeholder.
+		// Return fallback value with error for debugging
+		return node.Text, err
 	}
 
 	return result, nil
