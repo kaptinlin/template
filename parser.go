@@ -35,6 +35,26 @@ var forRegex = regexp.MustCompile(
 var breakRegex = regexp.MustCompile(`{%\s*break\s*%}`)
 var continueRegex = regexp.MustCompile(`{%\s*continue\s*%}`)
 
+// Template delimiter constants
+const (
+	templateVarOpenLen   = 2 // length of "{{"
+	templateVarCloseLen  = 2 // length of "}}"
+	templateCtrlOpenLen  = 2 // length of "{%"
+	templateCtrlCloseLen = 2 // length of "%}"
+)
+
+// Node type identifiers for control structures
+const (
+	nodeTypeFor      = 1
+	nodeTypeIf       = 2
+	nodeTypeElse     = 3
+	nodeTypeEndFor   = 4
+	nodeTypeEndIf    = 5
+	nodeTypeBreak    = 6
+	nodeTypeContinue = 7
+	nodeTypeElif     = 8
+)
+
 // Parser analyzes template syntax.
 type Parser struct{}
 
@@ -47,7 +67,7 @@ func NewParser() *Parser {
 func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
 	if tpl != nil {
 		// Extract the inner content of the variable token.
-		innerContent := strings.TrimSpace(token[2 : len(token)-2])
+		innerContent := strings.TrimSpace(token[templateVarOpenLen : len(token)-templateVarCloseLen])
 		// Split the variable name from any filters using strings.Cut (faster than SplitN)
 		varNameRaw, filtersStr, hasFilters := strings.Cut(innerContent, "|")
 
@@ -73,7 +93,7 @@ func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
 		tpl.Nodes = append(tpl.Nodes, node)
 	} else {
 		// Extract the inner content of the variable token.
-		innerContent := strings.TrimSpace(token[2 : len(token)-2])
+		innerContent := strings.TrimSpace(token[templateVarOpenLen : len(token)-templateVarCloseLen])
 		// Split the variable name from any filters.
 		parts := strings.SplitN(innerContent, "|", 2)
 
@@ -311,7 +331,7 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 	n := len(src)
 	// Try to match control structure opening tags and determine their type
 	matched, temp, typ := p.matchAppropriateStrings(src, n, next+2, "%}")
-	if matched && typ <= 8 {
+	if matched && typ <= nodeTypeElif {
 		// Extract the complete control structure token
 		token := src[next : temp+1]
 		// Handle any text content before the control structure
@@ -322,18 +342,18 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 
 		// Add appropriate node based on control structure type
 		switch typ {
-		case 1:
+		case nodeTypeFor:
 			p.addForNode(token, template, nil)
-		case 2:
+		case nodeTypeIf:
 			p.addIfNode(token, template, nil)
-		case 6: // break
+		case nodeTypeBreak:
 			p.addControlFlowNode(token, template, nil, NodeTypeBreak)
-		case 7: // continue
+		case nodeTypeContinue:
 			p.addControlFlowNode(token, template, nil, NodeTypeContinue)
 		}
 
 		// Handle control structures that need end tags (for/if)
-		if typ < 3 {
+		if typ < nodeTypeElse {
 			// Get the last added node to process its children
 			node := template.Nodes[len(template.Nodes)-1]
 			// Parse the content between opening and closing tags
@@ -342,9 +362,9 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 
 			// Process the closing tag of the control structure
 			switch typ {
-			case 1:
+			case nodeTypeFor:
 				p.addForNode(tempToken, nil, node)
-			case 2:
+			case nodeTypeIf:
 				p.addIfNode(tempToken, nil, node)
 			}
 
@@ -438,21 +458,21 @@ func (p *Parser) judgeBranchingStatements(src string, temp int, next int) (bool,
 	token := src[temp:next]
 	switch {
 	case forRegex.MatchString(token):
-		return true, 1
+		return true, nodeTypeFor
 	case ifRegex.MatchString(token):
-		return true, 2
+		return true, nodeTypeIf
 	case elseRegex.MatchString(token):
-		return true, 3
+		return true, nodeTypeElse
 	case elifRegex.MatchString(token):
-		return true, 8
+		return true, nodeTypeElif
 	case endforRegex.MatchString(token):
-		return true, 4
+		return true, nodeTypeEndFor
 	case endifRegex.MatchString(token):
-		return true, 5
+		return true, nodeTypeEndIf
 	case breakRegex.MatchString(token):
-		return true, 6
+		return true, nodeTypeBreak
 	case continueRegex.MatchString(token):
-		return true, 7
+		return true, nodeTypeContinue
 	default:
 		return false, 0
 	}
@@ -487,9 +507,9 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 			// Handle control structures
 			matched, temp, tempType := p.matchAppropriateStrings(src, n, next+2, "%}")
 			switch {
-			case matched && tempType < 3:
+			case matched && tempType < nodeTypeElse:
 				next, prev = p.handleControlStructure(src, next, prev, temp, tempType, node)
-			case matched && tempType == 3 && typ == 5:
+			case matched && tempType == nodeTypeElse && typ == nodeTypeEndIf:
 				if markEnterElse {
 					// We're in an elif/else branch and found another else
 					// Add any remaining text to current branch and return to if node
@@ -497,11 +517,11 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 						token := src[prev:next]
 						p.addTextNode(token, nil, node)
 					}
-					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 3, enterIfNode)
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, nodeTypeElse, enterIfNode)
 				} else {
-					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 3, node)
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, nodeTypeElse, node)
 				}
-			case matched && tempType == 8 && typ == 5:
+			case matched && tempType == nodeTypeElif && typ == nodeTypeEndIf:
 				if markEnterElse {
 					// We're in an elif/else branch and found another elif
 					// Add any remaining text to current branch and return to if node
@@ -509,11 +529,11 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 						token := src[prev:next]
 						p.addTextNode(token, nil, node)
 					}
-					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 8, enterIfNode)
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, nodeTypeElif, enterIfNode)
 				} else {
-					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, 8, node)
+					next, prev, markEnterElse, node = p.handleConditionalBranch(src, next, prev, temp, nodeTypeElif, node)
 				}
-			case matched && (tempType == 6 || tempType == 7):
+			case matched && (tempType == nodeTypeBreak || tempType == nodeTypeContinue):
 				// Handle break/continue control flow
 				token := src[next : temp+1]
 				if next > prev {
@@ -521,7 +541,7 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 					p.addTextNode(textToken, nil, node)
 				}
 				// Add break or continue node
-				if tempType == 6 {
+				if tempType == nodeTypeBreak {
 					p.addControlFlowNode(token, nil, node, NodeTypeBreak)
 				} else {
 					p.addControlFlowNode(token, nil, node, NodeTypeContinue)
@@ -587,9 +607,9 @@ func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, n
 
 	// Create appropriate node based on control structure type
 	switch typ {
-	case 1:
+	case nodeTypeFor:
 		p.addForNode(token, nil, node)
-	case 2:
+	case nodeTypeIf:
 		p.addIfNode(token, nil, node)
 	}
 
@@ -602,9 +622,9 @@ func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, n
 	// Extract and process the closing tag
 	tempToken := src[tempPrev : tempNext+1]
 	switch typ {
-	case 1:
+	case nodeTypeFor:
 		p.addForNode(tempToken, nil, node1)
-	case 2:
+	case nodeTypeIf:
 		p.addIfNode(tempToken, nil, node1)
 	}
 
@@ -640,9 +660,9 @@ func (p *Parser) handleConditionalBranch(src string, next, prev, temp, branchTyp
 	// Create appropriate node type based on branch type
 	var nodeType string
 	switch branchType {
-	case 3:
+	case nodeTypeElse:
 		nodeType = "else"
-	case 8:
+	case nodeTypeElif:
 		nodeType = "elif"
 	default:
 		nodeType = "text"
