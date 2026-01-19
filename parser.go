@@ -64,9 +64,9 @@ func NewParser() *Parser {
 }
 
 // addNode is a generic helper to add a node to either the template root or a parent node
-func (p *Parser) addNode(newNode *Node, tpl *Template, parent *Node) {
-	if tpl != nil {
-		tpl.Nodes = append(tpl.Nodes, newNode)
+func (p *Parser) addNode(newNode *Node, template *Template, parent *Node) {
+	if template != nil {
+		template.Nodes = append(template.Nodes, newNode)
 	} else if parent != nil {
 		parent.Children = append(parent.Children, newNode)
 	}
@@ -88,7 +88,7 @@ func (p *Parser) extractFiltersFromToken(token string) (string, []Filter) {
 }
 
 // Updated addVariableNode processes a variable token, parses out any filters, and adds it to the template.
-func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
+func (p *Parser) addVariableNode(token string, template *Template, node *Node) {
 	varName, filters := p.extractFiltersFromToken(token)
 
 	varNode := &Node{
@@ -98,7 +98,7 @@ func (p *Parser) addVariableNode(token string, tpl *Template, node *Node) {
 		Text:     token,
 	}
 
-	p.addNode(varNode, tpl, node)
+	p.addNode(varNode, template, node)
 }
 
 func parseFilters(filterStr string) []Filter {
@@ -185,18 +185,18 @@ func splitArgsConsideringQuotes(argsStr string) []FilterArg {
 }
 
 // addTextNode adds a text token to the template
-func (p *Parser) addTextNode(text string, tpl *Template, node *Node) {
+func (p *Parser) addTextNode(text string, template *Template, node *Node) {
 	if text == "" {
 		return
 	}
-	p.addNode(&Node{Type: "text", Text: text}, tpl, node)
+	p.addNode(&Node{Type: "text", Text: text}, template, node)
 }
 
 // addForNode adds a for node to the template
-func (p *Parser) addForNode(text string, tpl *Template, node *Node) {
+func (p *Parser) addForNode(text string, template *Template, node *Node) {
 	matched := endforRegex.MatchString(text)
-	if text != "" && tpl != nil {
-		tpl.Nodes = append(tpl.Nodes, &Node{Type: "text", Text: text})
+	if text != "" && template != nil {
+		template.Nodes = append(template.Nodes, &Node{Type: "text", Text: text})
 	} else if !matched {
 		node.Children = append(node.Children, &Node{Type: "text", Text: text})
 	}
@@ -234,10 +234,10 @@ func analyzeForParameter(text string, node *Node) {
 }
 
 // addIfNode adds an if node to the template
-func (p *Parser) addIfNode(text string, tpl *Template, node *Node) {
+func (p *Parser) addIfNode(text string, template *Template, node *Node) {
 	matched := endifRegex.MatchString(text)
-	if text != "" && tpl != nil {
-		tpl.Nodes = append(tpl.Nodes, &Node{Type: "if", Text: text})
+	if text != "" && template != nil {
+		template.Nodes = append(template.Nodes, &Node{Type: "if", Text: text})
 	} else if !matched {
 		node.Children = append(node.Children, &Node{Type: "text", Text: text})
 	}
@@ -248,14 +248,14 @@ func (p *Parser) addIfNode(text string, tpl *Template, node *Node) {
 }
 
 // addControlFlowNode adds a control flow node (break/continue) to the template
-func (p *Parser) addControlFlowNode(text string, tpl *Template, node *Node, nodeType string) {
-	p.addNode(&Node{Type: nodeType, Text: text}, tpl, node)
+func (p *Parser) addControlFlowNode(text string, template *Template, node *Node, nodeType string) {
+	p.addNode(&Node{Type: nodeType, Text: text}, template, node)
 }
 
 // addConditionalBranchNode adds a conditional branch node (else/elif) to the template
-func (p *Parser) addConditionalBranchNode(text string, tpl *Template, node *Node, nodeType string) *Node {
+func (p *Parser) addConditionalBranchNode(text string, template *Template, node *Node, nodeType string) *Node {
 	newNode := &Node{Type: nodeType, Text: text}
-	p.addNode(newNode, tpl, node)
+	p.addNode(newNode, template, node)
 	return newNode
 }
 
@@ -530,23 +530,7 @@ func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
 				next++
 			}
 		case next+1 < n && src[next] == '{' && src[next+1] == '#':
-			// 处理注释
-			matched, tempNext, _ := p.matchAppropriateStrings(src, n, next+2, "#}")
-			if matched {
-				// 处理注释前的文本内容
-				if next > prev {
-					token := src[prev:next]
-					p.addTextNode(token, nil, node)
-				}
-
-				// 注释内容不添加到模板中，直接跳过
-
-				// 更新位置到注释之后继续解析
-				next = tempNext + 1
-				prev = tempNext + 1
-			} else {
-				next++
-			}
+			next, prev = p.handleComment(src, n, next, prev, node)
 		default:
 			next++
 		}
@@ -700,23 +684,43 @@ func (p *Parser) handleVariable(src string, next, prev int, template *Template, 
 
 	return next, prev
 }
+
+// handleComment processes comment blocks {# ... #} in the template
+func (p *Parser) handleComment(src string, n, next, prev int, node *Node) (int, int) {
+	matched, tempNext, _ := p.matchAppropriateStrings(src, n, next+2, "#}")
+	if matched {
+		// Add text content before comment
+		if next > prev {
+			token := src[prev:next]
+			p.addTextNode(token, nil, node)
+		}
+
+		// Comment content is not added to template, skip it
+		// Update position to continue parsing after comment
+		return tempNext + 1, tempNext + 1
+	}
+
+	// No valid comment match found, move forward
+	return next + 1, prev
+}
+
 func (p *Parser) parseExplanatoryNote(src string, next, prev int, template *Template) (int, int) {
 	n := len(src)
-	// 寻找注释结束标记 "#}"
+	// Find comment end marker "#}"
 	endPos := next + 2
 	for endPos < n-1 {
 		if src[endPos] == '#' && src[endPos+1] == '}' {
-			// 找到注释结束标记
+			// Found comment end marker
 
-			// 处理注释前的文本内容
+			// Handle text content before comment
 			if next > prev {
 				textToken := src[prev:next]
 				p.addTextNode(textToken, template, nil)
 			}
 
-			// 注释内容不添加到模板中，直接跳过
+			// Comment content is not added to template, skip it
 
-			// 更新位置到注释之后继续解析
+			// Update position to continue parsing after comment
 			next = endPos + 2
 			prev = next
 			return next, prev
@@ -724,7 +728,7 @@ func (p *Parser) parseExplanatoryNote(src string, next, prev int, template *Temp
 		endPos++
 	}
 
-	// 如果没有找到结束标记，只前进一个字符
+	// If no end marker found, just advance one character
 	next++
 
 	return next, prev
