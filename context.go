@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-json-experiment/json"
 	"github.com/kaptinlin/jsonpointer"
 )
 
@@ -12,10 +13,30 @@ import (
 // Keys are strings, and values can be of any type, supporting dot-notation (.) for nested access.
 type Context map[string]interface{}
 
+// ContextBuilder provides a fluent API for building Context with error collection.
+type ContextBuilder struct {
+	context Context
+	errors  []error
+}
+
 // NewContext creates and returns a new empty Context instance.
 // Example usage: ctx := NewContext()
 func NewContext() Context {
 	return make(Context)
+}
+
+// NewContextBuilder creates a new ContextBuilder for fluent Context construction.
+// Example usage:
+//
+//	ctx, err := NewContextBuilder().
+//	    KeyValue("name", "John").
+//	    Struct(user).
+//	    Build()
+func NewContextBuilder() *ContextBuilder {
+	return &ContextBuilder{
+		context: make(Context),
+		errors:  []error{},
+	}
 }
 
 // Set inserts a value into the Context with the specified key, supporting dot-notation (.) for nested keys.
@@ -104,4 +125,70 @@ func convertDotToPath(dotNotation string) []string {
 		return []string{}
 	}
 	return strings.Split(dotNotation, ".")
+}
+
+// KeyValue sets a key-value pair and returns the ContextBuilder to support method chaining.
+// Example:
+//
+//	builder := NewContextBuilder().
+//	    KeyValue("name", "John").
+//	    KeyValue("age", 30)
+func (cb *ContextBuilder) KeyValue(key string, value interface{}) *ContextBuilder {
+	cb.context.Set(key, value)
+	return cb
+}
+
+// Struct expands struct fields into the Context using JSON serialization.
+// The struct fields are flattened to top-level keys based on their json tags.
+// Nested structs are preserved as nested maps and can be accessed using dot notation.
+// If serialization fails, the error is collected and can be retrieved via Build().
+//
+// Example:
+//
+//	type User struct {
+//	    Name string `json:"name"`
+//	    Age  int    `json:"age"`
+//	}
+//	builder := NewContextBuilder().Struct(User{Name: "John", Age: 30})
+//	// Results in: context["name"]="John", context["age"]=30
+//	// Template access: {{ name }}, {{ age }}
+func (cb *ContextBuilder) Struct(v interface{}) *ContextBuilder {
+	// Marshal struct to JSON
+	jsonData, err := json.Marshal(v)
+	if err != nil {
+		cb.errors = append(cb.errors, fmt.Errorf("Struct: marshal failed: %w", err))
+		return cb
+	}
+
+	// Unmarshal to temporary map
+	temp := make(map[string]interface{})
+	if err := json.Unmarshal(jsonData, &temp); err != nil {
+		cb.errors = append(cb.errors, fmt.Errorf("Struct: unmarshal failed: %w", err))
+		return cb
+	}
+
+	// Explicitly merge into Context
+	for k, v := range temp {
+		cb.context[k] = v
+	}
+
+	return cb
+}
+
+// Build returns the constructed Context and any errors collected during the build process.
+// If there were any errors during KeyValue or Struct operations, they are returned as a joined error.
+// Example:
+//
+//	ctx, err := NewContextBuilder().
+//	    KeyValue("name", "John").
+//	    Struct(user).
+//	    Build()
+//	if err != nil {
+//	    // handle errors
+//	}
+func (cb *ContextBuilder) Build() (Context, error) {
+	if len(cb.errors) > 0 {
+		return cb.context, errors.Join(cb.errors...)
+	}
+	return cb.context, nil
 }
