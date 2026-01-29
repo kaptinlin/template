@@ -134,51 +134,51 @@ func parseFilters(filterStr string) []Filter {
 func splitArgsConsideringQuotes(argsStr string) []FilterArg {
 	var args []FilterArg
 	var currentArg strings.Builder
-	currentArg.Grow(len(argsStr)) // Pre-allocate based on input length
+	currentArg.Grow(len(argsStr))
 	var inQuotes bool
 	var quoteChar rune
 
 	appendArg := func() {
 		arg := currentArg.String()
 		currentArg.Reset()
-		if arg == `""` || arg == "''" {
-			args = append(args, StringArg{val: ""})
-		} else if trimmedArg := strings.TrimSpace(arg); len(trimmedArg) > 0 {
-			if len(trimmedArg) >= 2 && (trimmedArg[0] == '"' || trimmedArg[0] == '\'') {
-				// String argument
-				args = append(args, StringArg{val: trimmedArg[1 : len(trimmedArg)-1]})
-			} else if number, err := strconv.ParseFloat(trimmedArg, 64); err == nil {
-				args = append(args, NumberArg{val: number})
+		arg = strings.TrimSpace(arg)
+		if arg == "" {
+			return
+		}
+
+		if (strings.HasPrefix(arg, "\"") && strings.HasSuffix(arg, "\"")) ||
+			(strings.HasPrefix(arg, "'") && strings.HasSuffix(arg, "'")) {
+			if len(arg) >= 2 {
+				args = append(args, StringArg{val: arg[1 : len(arg)-1]})
 			} else {
-				// Treat as variable
-				args = append(args, VariableArg{name: trimmedArg})
+				args = append(args, StringArg{val: ""})
 			}
+		} else if number, err := strconv.ParseFloat(arg, 64); err == nil {
+			args = append(args, NumberArg{val: number})
+		} else {
+			args = append(args, VariableArg{name: arg})
 		}
 	}
 
 	for i, char := range argsStr {
 		switch {
-		case char == '"' || char == '\'':
-			if inQuotes && char == quoteChar {
-				currentArg.WriteRune(char) // Include the quote for simplicity
-				inQuotes = false
-				if i == len(argsStr)-1 || argsStr[i+1] == ',' {
-					appendArg()
-				}
-			} else if !inQuotes {
-				inQuotes = true
-				quoteChar = char
-				currentArg.WriteRune(char) // Include the quote for parsing
-			}
+		case (char == '"' || char == '\'') && !inQuotes:
+			inQuotes = true
+			quoteChar = char
+			currentArg.WriteRune(char)
+		case inQuotes && char == quoteChar:
+			inQuotes = false
+			currentArg.WriteRune(char)
 		case char == ',' && !inQuotes:
 			appendArg()
 		default:
 			currentArg.WriteRune(char)
 		}
-	}
 
-	if currentArg.Len() > 0 || inQuotes {
-		appendArg()
+		// If last char, append
+		if i == len(argsStr)-1 {
+			appendArg()
+		}
 	}
 
 	return args
@@ -193,57 +193,42 @@ func (p *Parser) addTextNode(text string, template *Template, node *Node) {
 }
 
 // addForNode adds a for node to the template
-func (p *Parser) addForNode(text string, template *Template, node *Node) {
-	matched := endforRegex.MatchString(text)
-	if text != "" && template != nil {
-		template.Nodes = append(template.Nodes, &Node{Type: "text", Text: text})
-	} else if !matched {
-		node.Children = append(node.Children, &Node{Type: "text", Text: text})
+func (p *Parser) addForNode(text string, template *Template, parent *Node) {
+	// If it's a start tag, create the For node immediately
+	if forRegex.MatchString(text) {
+		newNode := &Node{Type: "for", Text: text}
+		analyzeForParameter(text, newNode)
+		p.addNode(newNode, template, parent)
+		return
 	}
-	if matched {
-		node.Type = "for"
-		node.EndText = text
-		analyzeForParameter(node.Text, node)
+
+	// If it's an end tag, we expect the parent node to already be a For node
+	if endforRegex.MatchString(text) && parent != nil && parent.Type == "for" {
+		parent.EndText = text
 	}
 }
 
-// analyzeForParameter analyzes the for parameter
+// analyzeForParameter analyzes the for parameter using regex
 func analyzeForParameter(text string, node *Node) {
-	n := len(text)
-	next := 0
-	for next < n {
-		if text[next:next+4] == " in " {
-			left := next
-			right := next + 4
-			for left > 0 {
-				if text[0:left] == "{% for " {
-					node.Variable = text[left:next]
-				}
-				left--
-			}
-			for right < n {
-				if text[right:n] == " %}" {
-					node.Collection = text[next+4 : right]
-				}
-				right++
-			}
-			break
-		}
-		next++
+	matches := forRegex.FindStringSubmatch(text)
+	if len(matches) >= 6 {
+		node.Variable = strings.TrimSpace(matches[1])
+		node.Collection = matches[5]
 	}
 }
 
 // addIfNode adds an if node to the template
-func (p *Parser) addIfNode(text string, template *Template, node *Node) {
-	matched := endifRegex.MatchString(text)
-	if text != "" && template != nil {
-		template.Nodes = append(template.Nodes, &Node{Type: "if", Text: text})
-	} else if !matched {
-		node.Children = append(node.Children, &Node{Type: "text", Text: text})
+func (p *Parser) addIfNode(text string, template *Template, parent *Node) {
+	// If it's a start tag, create the If node immediately
+	if ifRegex.MatchString(text) {
+		newNode := &Node{Type: "if", Text: text}
+		p.addNode(newNode, template, parent)
+		return
 	}
-	if matched {
-		node.Type = "if"
-		node.EndText = text
+
+	// If it's an end tag, we expect the parent node to already be an If node
+	if endifRegex.MatchString(text) && parent != nil && parent.Type == "if" {
+		parent.EndText = text
 	}
 }
 
@@ -567,18 +552,18 @@ func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, n
 	}
 
 	// Get the newly created node to process its contents
-	node1 := node.Children[len(node.Children)-1]
+	childNode := node.Children[len(node.Children)-1]
 
 	// Recursively parse the content between opening and closing tags
-	tempPrev, tempNext := p.parser(src, temp+1, typ, node1)
+	tempPrev, tempNext := p.parser(src, temp+1, typ, childNode)
 
 	// Extract and process the closing tag
 	tempToken := src[tempPrev : tempNext+1]
 	switch typ {
 	case nodeTypeFor:
-		p.addForNode(tempToken, nil, node1)
+		p.addForNode(tempToken, nil, childNode)
 	case nodeTypeIf:
-		p.addIfNode(tempToken, nil, node1)
+		p.addIfNode(tempToken, nil, childNode)
 	}
 
 	// Update positions to continue parsing after this structure

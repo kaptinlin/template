@@ -1,6 +1,7 @@
 package template
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"reflect"
@@ -799,104 +800,65 @@ func (v *Value) toBool() (bool, error) {
 	}
 }
 
-// Equal implements equality comparison
-func (v *Value) Equal(right *Value) (*Value, error) {
+// compareNumeric compares two numeric values.
+// Returns:
+// - 0 if v == right
+// - -1 if v < right
+// - 1 if v > right
+// - true if comparison is valid (both are numeric)
+func (v *Value) compareNumeric(right *Value) (int, bool) {
+	if v.Type == TypeInt && right.Type == TypeInt {
+		return cmp.Compare(v.Int, right.Int), true
+	}
+
+	var vf, rf float64
+
+	//nolint:exhaustive // Only numeric types are relevant here
 	switch v.Type {
 	case TypeInt:
-		switch right.Type {
-		case TypeInt:
-			return NewValue(v.Int == right.Int)
-		case TypeFloat:
-			return NewValue(float64(v.Int) == right.Float)
-		case TypeString:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeBool:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return NewValue(false)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
+		vf = float64(v.Int)
 	case TypeFloat:
-		switch right.Type {
-		case TypeInt:
-			return NewValue(v.Float == float64(right.Int))
-		case TypeFloat:
-			return NewValue(v.Float == right.Float)
-		case TypeString:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeBool:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return NewValue(false)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
-	case TypeString:
-		switch right.Type {
-		case TypeString:
-			return NewValue(v.Str == right.Str)
-		case TypeInt:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeFloat:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeBool:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return NewValue(false)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
-	case TypeBool:
-		switch right.Type {
-		case TypeBool:
-			return NewValue(v.Bool == right.Bool)
-		case TypeInt:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeFloat:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeString:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return NewValue(false)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
-	case TypeSlice:
-		if right.Type == TypeNil {
-			return NewValue(false)
-		}
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-	case TypeMap:
-		if right.Type == TypeNil {
-			return NewValue(false)
-		}
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-	case TypeNil:
-		// nil == nil is true, nil == anything else is false
-		return NewValue(right.Type == TypeNil)
-	case TypeStruct:
-		if right.Type == TypeNil {
-			return NewValue(false)
-		}
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+		vf = v.Float
+	default:
+		return 0, false
 	}
+
+	//nolint:exhaustive // Only numeric types are relevant here
+	switch right.Type {
+	case TypeInt:
+		rf = float64(right.Int)
+	case TypeFloat:
+		rf = right.Float
+	default:
+		return 0, false
+	}
+
+	return cmp.Compare(vf, rf), true
+}
+
+// Equal implements equality comparison
+func (v *Value) Equal(right *Value) (*Value, error) {
+	if v.isNumeric() && right.isNumeric() {
+		cmp, _ := v.compareNumeric(right)
+		return NewValue(cmp == 0)
+	}
+
+	if v.Type == TypeString && right.Type == TypeString {
+		return NewValue(v.Str == right.Str)
+	}
+
+	if v.Type == TypeBool && right.Type == TypeBool {
+		return NewValue(v.Bool == right.Bool)
+	}
+
+	if v.Type == TypeNil {
+		return NewValue(right.Type == TypeNil)
+	}
+
+	if right.Type == TypeNil {
+		return NewValue(false)
+	}
+
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 }
 
@@ -911,92 +873,15 @@ func (v *Value) NotEqual(right *Value) (*Value, error) {
 
 // LessThan implements less than comparison
 func (v *Value) LessThan(right *Value) (*Value, error) {
-	switch v.Type {
-	case TypeInt:
-		switch right.Type {
-		case TypeInt:
-			return NewValue(v.Int < right.Int)
-		case TypeFloat:
-			return NewValue(float64(v.Int) < right.Float)
-		case TypeString:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeBool:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
-	case TypeFloat:
-		switch right.Type {
-		case TypeInt:
-			return NewValue(v.Float < float64(right.Int))
-		case TypeFloat:
-			return NewValue(v.Float < right.Float)
-		case TypeString:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeBool:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
-	case TypeString:
-		switch right.Type {
-		case TypeString:
-			return NewValue(v.Str < right.Str)
-		case TypeInt:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeFloat:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeBool:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
-	case TypeBool:
-		switch right.Type {
-		case TypeBool:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeInt:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeFloat:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeString:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeSlice:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeMap:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeNil:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		case TypeStruct:
-			return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-		}
-	case TypeSlice:
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-	case TypeMap:
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-	case TypeNil:
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
-	case TypeStruct:
-		return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
+	if v.isNumeric() && right.isNumeric() {
+		cmp, _ := v.compareNumeric(right)
+		return NewValue(cmp < 0)
 	}
+
+	if v.Type == TypeString && right.Type == TypeString {
+		return NewValue(v.Str < right.Str)
+	}
+
 	return nil, fmt.Errorf("%w: %v and %v", ErrCannotCompareTypes, v.Type, right.Type)
 }
 

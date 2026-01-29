@@ -533,7 +533,7 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 
 // deepCopy deep copy context data
 func deepCopy(ctx Context) Context {
-	newCtx := make(Context)
+	newCtx := make(Context, len(ctx))
 	for k, v := range ctx {
 		newCtx[k] = deepCopyValue(v)
 	}
@@ -544,7 +544,7 @@ func deepCopy(ctx Context) Context {
 func deepCopyValue(v interface{}) interface{} {
 	switch val := v.(type) {
 	case map[string]interface{}:
-		newMap := make(map[string]interface{})
+		newMap := make(map[string]interface{}, len(val))
 		for k, v := range val {
 			newMap[k] = deepCopyValue(v)
 		}
@@ -558,7 +558,7 @@ func deepCopyValue(v interface{}) interface{} {
 	case Context:
 		return deepCopy(val)
 	case map[interface{}]interface{}:
-		newMap := make(map[interface{}]interface{})
+		newMap := make(map[interface{}]interface{}, len(val))
 		for k, v := range val {
 			newMap[k] = deepCopyValue(v)
 		}

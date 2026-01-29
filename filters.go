@@ -6,6 +6,8 @@ import (
 )
 
 // FilterFunc represents the signature of functions that can be applied as filters.
+// Arguments are always passed as strings, even if the source in the template was a number literal or other type.
+// Filter authors should parse string arguments into their expected types if necessary.
 type FilterFunc func(interface{}, ...string) (interface{}, error)
 
 var filters = make(map[string]FilterFunc)
@@ -38,14 +40,24 @@ func ApplyFilters(value interface{}, fs []Filter, ctx Context) (interface{}, err
 			case StringArg:
 				args[i] = arg.Value().(string)
 			case NumberArg:
-				args[i] = fmt.Sprint(arg.Value())
+				// Use convertToString for consistent handling
+				str, err := convertToString(arg.Value())
+				if err != nil {
+					return value, fmt.Errorf("could not convert filter argument %d to string: %w", i, err)
+				}
+				args[i] = str
 			case VariableArg:
 				val, err := ctx.Get(arg.Value().(string))
 				if err != nil {
 					return value, fmt.Errorf("variable '%s' not found in context: %w",
 						arg.Value().(string), ErrContextKeyNotFound)
 				}
-				args[i] = fmt.Sprint(val)
+				// Use convertToString for consistent handling
+				str, err := convertToString(val)
+				if err != nil {
+					return value, fmt.Errorf("could not convert variable '%s' to string: %w", arg.Value().(string), err)
+				}
+				args[i] = str
 			default:
 				return value, fmt.Errorf("filter '%s': %w", f.Name, ErrUnknownFilterArgumentType)
 			}
