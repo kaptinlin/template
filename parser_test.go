@@ -3,8 +3,6 @@ package template
 import (
 	"reflect"
 	"testing"
-
-	"github.com/gookit/goutil/dump"
 )
 
 func TestParseTextNode(t *testing.T) {
@@ -711,7 +709,6 @@ func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
 				t.Fatalf("Unexpected error for case '%s': %v", tc.name, err)
 			}
 			if !reflect.DeepEqual(tpl, tc.expected) {
-				dump.P(tc.expected)
 				t.Errorf("For case '%s', expected %+v, got %+v", tc.name, tc.expected, tpl)
 			}
 		})
