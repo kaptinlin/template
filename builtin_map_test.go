@@ -12,16 +12,16 @@ func TestExtractFilter(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]interface{}
+		context  map[string]any
 		expected string
 	}{
 		{
 			name:     "ExtractFromMap",
 			template: "{{ data | extract:'user.address.city' }}",
-			context: map[string]interface{}{
-				"data": map[string]interface{}{
-					"user": map[string]interface{}{
-						"address": map[string]interface{}{
+			context: map[string]any{
+				"data": map[string]any{
+					"user": map[string]any{
+						"address": map[string]any{
 							"city": "New York",
 						},
 					},
@@ -32,18 +32,18 @@ func TestExtractFilter(t *testing.T) {
 		{
 			name:     "ExtractFromArray",
 			template: "{{ data | extract:'0' }}",
-			context: map[string]interface{}{
-				"data": []interface{}{"First Element", "Second Element"},
+			context: map[string]any{
+				"data": []any{"First Element", "Second Element"},
 			},
 			expected: "First Element",
 		},
 		{
 			name:     "ExtractFromNestedArray",
 			template: "{{ data | extract:'1.0' }}",
-			context: map[string]interface{}{
-				"data": []interface{}{
-					[]interface{}{"Nested First Element"},
-					[]interface{}{"Nested Second Element"},
+			context: map[string]any{
+				"data": []any{
+					[]any{"Nested First Element"},
+					[]any{"Nested Second Element"},
 				},
 			},
 			expected: "Nested Second Element",
@@ -51,8 +51,8 @@ func TestExtractFilter(t *testing.T) {
 		{
 			name:     "KeyNotFound",
 			template: "{{ data | extract:'nonexistent.key' }}",
-			context: map[string]interface{}{
-				"data": map[string]interface{}{
+			context: map[string]any{
+				"data": map[string]any{
 					"exists": "This exists",
 				},
 			},
@@ -61,8 +61,8 @@ func TestExtractFilter(t *testing.T) {
 		{
 			name:     "IndexOutOfRange",
 			template: "{{ data | extract:'2' }}",
-			context: map[string]interface{}{
-				"data": []interface{}{"First", "Second"},
+			context: map[string]any{
+				"data": []any{"First", "Second"},
 			},
 			expected: "ErrContextIndexOutOfRange",
 		},

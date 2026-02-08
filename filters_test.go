@@ -10,7 +10,7 @@ import (
 )
 
 // mockToUpper is a simple filter function that converts a string to uppercase.
-func mockToUpper(value interface{}, _ ...string) (interface{}, error) {
+func mockToUpper(value any, _ ...string) (any, error) {
 	str, ok := value.(string)
 	if !ok {
 		return nil, ErrFilterInputInvalid
@@ -19,7 +19,7 @@ func mockToUpper(value interface{}, _ ...string) (interface{}, error) {
 }
 
 // mockAppend is a filter function that appends given args to the string.
-func mockAppend(value interface{}, args ...string) (interface{}, error) {
+func mockAppend(value any, args ...string) (any, error) {
 	str, ok := value.(string)
 	if !ok {
 		return nil, ErrFilterInputInvalid
@@ -43,9 +43,9 @@ func TestApplyFilters(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		value    interface{}
+		value    any
 		filters  []Filter
-		expected interface{}
+		expected any
 		err      error
 	}{
 		{

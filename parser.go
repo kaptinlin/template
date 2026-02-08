@@ -37,10 +37,8 @@ var continueRegex = regexp.MustCompile(`{%\s*continue\s*%}`)
 
 // Template delimiter constants
 const (
-	templateVarOpenLen   = 2 // length of "{{"
-	templateVarCloseLen  = 2 // length of "}}"
-	templateCtrlOpenLen  = 2 // length of "{%"
-	templateCtrlCloseLen = 2 // length of "%}"
+	templateVarOpenLen  = 2 // length of "{{"
+	templateVarCloseLen = 2 // length of "}}"
 )
 
 // Node type identifiers for control structures
@@ -58,12 +56,12 @@ const (
 // Parser analyzes template syntax.
 type Parser struct{}
 
-// NewParser creates a Parser with a compiled regular expression for efficiency.
+// NewParser creates a new Parser instance.
 func NewParser() *Parser {
 	return &Parser{}
 }
 
-// addNode is a generic helper to add a node to either the template root or a parent node
+// addNode is a generic helper to add a node to either the template root or a parent node.
 func (p *Parser) addNode(newNode *Node, template *Template, parent *Node) {
 	if template != nil {
 		template.Nodes = append(template.Nodes, newNode)
@@ -72,7 +70,7 @@ func (p *Parser) addNode(newNode *Node, template *Template, parent *Node) {
 	}
 }
 
-// extractFiltersFromToken extracts variable name and filters from a variable token
+// extractFiltersFromToken extracts variable name and filters from a variable token.
 func (p *Parser) extractFiltersFromToken(token string) (string, []Filter) {
 	innerContent := strings.TrimSpace(token[templateVarOpenLen : len(token)-templateVarCloseLen])
 	varNameRaw, filtersStr, hasFilters := strings.Cut(innerContent, "|")
@@ -87,12 +85,12 @@ func (p *Parser) extractFiltersFromToken(token string) (string, []Filter) {
 	return varName, filters
 }
 
-// Updated addVariableNode processes a variable token, parses out any filters, and adds it to the template.
+// addVariableNode processes a variable token, parses out any filters, and adds it to the template.
 func (p *Parser) addVariableNode(token string, template *Template, node *Node) {
 	varName, filters := p.extractFiltersFromToken(token)
 
 	varNode := &Node{
-		Type:     "variable",
+		Type:     NodeTypeVariable,
 		Variable: varName,
 		Filters:  filters,
 		Text:     token,
@@ -102,14 +100,13 @@ func (p *Parser) addVariableNode(token string, template *Template, node *Node) {
 }
 
 func parseFilters(filterStr string) []Filter {
-	filters := make([]Filter, 0)
-
 	if filterStr == "" {
-		return filters
+		return nil
 	}
 
 	// Splitting the entire filter string into individual filters
 	filterParts := strings.Split(filterStr, "|")
+	filters := make([]Filter, 0, len(filterParts))
 	for _, part := range filterParts {
 		partTrimmed := strings.TrimSpace(part)
 		if partTrimmed == "" {
@@ -184,31 +181,31 @@ func splitArgsConsideringQuotes(argsStr string) []FilterArg {
 	return args
 }
 
-// addTextNode adds a text token to the template
+// addTextNode adds a text token to the template.
 func (p *Parser) addTextNode(text string, template *Template, node *Node) {
 	if text == "" {
 		return
 	}
-	p.addNode(&Node{Type: "text", Text: text}, template, node)
+	p.addNode(&Node{Type: NodeTypeText, Text: text}, template, node)
 }
 
-// addForNode adds a for node to the template
+// addForNode adds a for node to the template.
 func (p *Parser) addForNode(text string, template *Template, parent *Node) {
 	// If it's a start tag, create the For node immediately
 	if forRegex.MatchString(text) {
-		newNode := &Node{Type: "for", Text: text}
+		newNode := &Node{Type: NodeTypeFor, Text: text}
 		analyzeForParameter(text, newNode)
 		p.addNode(newNode, template, parent)
 		return
 	}
 
 	// If it's an end tag, we expect the parent node to already be a For node
-	if endforRegex.MatchString(text) && parent != nil && parent.Type == "for" {
+	if endforRegex.MatchString(text) && parent != nil && parent.Type == NodeTypeFor {
 		parent.EndText = text
 	}
 }
 
-// analyzeForParameter analyzes the for parameter using regex
+// analyzeForParameter analyzes the for parameter using regex.
 func analyzeForParameter(text string, node *Node) {
 	matches := forRegex.FindStringSubmatch(text)
 	if len(matches) >= 6 {
@@ -217,27 +214,27 @@ func analyzeForParameter(text string, node *Node) {
 	}
 }
 
-// addIfNode adds an if node to the template
+// addIfNode adds an if node to the template.
 func (p *Parser) addIfNode(text string, template *Template, parent *Node) {
 	// If it's a start tag, create the If node immediately
 	if ifRegex.MatchString(text) {
-		newNode := &Node{Type: "if", Text: text}
+		newNode := &Node{Type: NodeTypeIf, Text: text}
 		p.addNode(newNode, template, parent)
 		return
 	}
 
 	// If it's an end tag, we expect the parent node to already be an If node
-	if endifRegex.MatchString(text) && parent != nil && parent.Type == "if" {
+	if endifRegex.MatchString(text) && parent != nil && parent.Type == NodeTypeIf {
 		parent.EndText = text
 	}
 }
 
-// addControlFlowNode adds a control flow node (break/continue) to the template
+// addControlFlowNode adds a control flow node (break/continue) to the template.
 func (p *Parser) addControlFlowNode(text string, template *Template, node *Node, nodeType string) {
 	p.addNode(&Node{Type: nodeType, Text: text}, template, node)
 }
 
-// addConditionalBranchNode adds a conditional branch node (else/elif) to the template
+// addConditionalBranchNode adds a conditional branch node (else/elif) to the template.
 func (p *Parser) addConditionalBranchNode(text string, template *Template, node *Node, nodeType string) *Node {
 	newNode := &Node{Type: nodeType, Text: text}
 	p.addNode(newNode, template, node)
@@ -311,7 +308,7 @@ func (p *Parser) parseControlBlock(src string, next, prev int, template *Templat
 			// Get the last added node to process its children
 			node := template.Nodes[len(template.Nodes)-1]
 			// Parse the content between opening and closing tags
-			tempPrev, tempNext := p.parser(src, temp+1, typ, node)
+			tempPrev, tempNext := p.parseNestedBlock(src, temp+1, typ, node)
 			tempToken := src[tempPrev : tempNext+1]
 
 			// Process the closing tag of the control structure
@@ -363,7 +360,7 @@ func (p *Parser) matchAppropriateStrings(src string, n int, next int, format str
 			// Look for "%}" ending tag
 			if src[next] == '%' && src[next+1] == '}' {
 				// Determine if it's a for or if statement
-				matched, typ := p.judgeBranchingStatements(src, temp, next+2)
+				matched, typ := p.classifyControlStructure(src, temp, next+2)
 				if matched {
 					return true, next + 1, typ
 				}
@@ -398,17 +395,10 @@ func (p *Parser) matchAppropriateStrings(src string, n int, next int, format str
 	return false, 0, 0
 }
 
-// judgeBranchingStatements determines the type of control structure by matching against predefined regex patterns.
-// It checks for the following control structures:
-// - for/endfor statements (type 1/4)
-// - if/endif statements (type 2/5)
-// - else statements (type 3)
-// - break statements (type 6)
-// - continue statements (type 7)
-// Returns:
-// - bool: whether a valid control structure was matched
-// - int: the type of control structure (1-7) or 0 if no match
-func (p *Parser) judgeBranchingStatements(src string, temp int, next int) (bool, int) {
+// classifyControlStructure determines the type of control structure by matching
+// the token against predefined regex patterns. It returns whether a valid control
+// structure was matched and its type identifier.
+func (p *Parser) classifyControlStructure(src string, temp, next int) (bool, int) {
 	token := src[temp:next]
 	switch {
 	case forRegex.MatchString(token):
@@ -432,17 +422,10 @@ func (p *Parser) judgeBranchingStatements(src string, temp int, next int) (bool,
 	}
 }
 
-// parser processes the content within control structure blocks, including nested variables,
+// parseNestedBlock processes the content within control structure blocks, including nested variables,
 // control structures, and plain text. It recursively handles all nested structures until
 // it encounters the corresponding end tag.
-// Parameters:
-// - src: source template string
-// - prev: current starting position
-// - typ: current control structure type
-// - node: current node being processed
-// Returns:
-// - ending position and position of matched end tag
-func (p *Parser) parser(src string, prev int, typ int, node *Node) (int, int) {
+func (p *Parser) parseNestedBlock(src string, prev, typ int, node *Node) (int, int) {
 	n := len(src)
 	next := prev
 	// Adjust type value to match end tags (e.g., 1->4 means for->endfor)
@@ -555,7 +538,7 @@ func (p *Parser) handleControlStructure(src string, next, prev, temp, typ int, n
 	childNode := node.Children[len(node.Children)-1]
 
 	// Recursively parse the content between opening and closing tags
-	tempPrev, tempNext := p.parser(src, temp+1, typ, childNode)
+	tempPrev, tempNext := p.parseNestedBlock(src, temp+1, typ, childNode)
 
 	// Extract and process the closing tag
 	tempToken := src[tempPrev : tempNext+1]
@@ -599,11 +582,11 @@ func (p *Parser) handleConditionalBranch(src string, next, prev, temp, branchTyp
 	var nodeType string
 	switch branchType {
 	case nodeTypeElse:
-		nodeType = "else"
+		nodeType = NodeTypeElse
 	case nodeTypeElif:
-		nodeType = "elif"
+		nodeType = NodeTypeElif
 	default:
-		nodeType = "text"
+		nodeType = NodeTypeText
 	}
 
 	// Add conditional branch node as a child of the if node
@@ -634,43 +617,26 @@ func (p *Parser) handleVariable(src string, next, prev int, template *Template, 
 	// Try to match variable expression ending with "}}"
 	matched, tempNext, _ := p.matchAppropriateStrings(src, n, next+2, "}}")
 
-	if matched { //nolint:nestif
-		// Extract the complete variable expression
-		token := src[next : tempNext+1]
-
-		// Process any text content before the variable
-		if next > prev {
-			token := src[prev:next]
-			if template != nil {
-				// Add text node to root template
-				p.addTextNode(token, template, nil)
-			} else {
-				// Add text node to parent control structure
-				p.addTextNode(token, nil, node)
-			}
-		}
-
-		// Add the variable node to appropriate parent
-		if template != nil {
-			// Add variable to root template
-			p.addVariableNode(token, template, nil)
-		} else {
-			// Add variable to parent control structure
-			p.addVariableNode(token, nil, node)
-		}
-
-		// Update positions to continue after variable
-		prev = tempNext + 1
-		next = tempNext + 1
-	} else {
-		// No valid variable match found, move forward
-		next++
+	if !matched {
+		return next + 1, prev
 	}
 
-	return next, prev
+	// Extract the complete variable expression
+	token := src[next : tempNext+1]
+
+	// Process any text content before the variable
+	if next > prev {
+		textToken := src[prev:next]
+		p.addTextNode(textToken, template, node)
+	}
+
+	// Add the variable node to appropriate parent
+	p.addVariableNode(token, template, node)
+
+	return tempNext + 1, tempNext + 1
 }
 
-// handleComment processes comment blocks {# ... #} in the template
+// handleComment processes comment blocks {# ... #} in the template.
 func (p *Parser) handleComment(src string, n, next, prev int, node *Node) (int, int) {
 	matched, tempNext, _ := p.matchAppropriateStrings(src, n, next+2, "#}")
 	if matched {

@@ -177,7 +177,7 @@ func TestConcurrentContextAccess(t *testing.T) {
 			defer wg.Done()
 			// Each goroutine creates its own context
 			ctx := NewContext()
-			ctx.Set("user", map[string]interface{}{
+			ctx.Set("user", map[string]any{
 				"name": fmt.Sprintf("User%d", id),
 				"age":  20 + id,
 			})
@@ -258,7 +258,7 @@ func TestConcurrentComplexTemplate(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			ctx := NewContext()
-			ctx.Set("users", []map[string]interface{}{
+			ctx.Set("users", []map[string]any{
 				{"name": fmt.Sprintf("user%d-a", id), "age": 25, "active": true},
 				{"name": fmt.Sprintf("user%d-b", id), "age": 30, "active": false},
 				{"name": fmt.Sprintf("user%d-c", id), "age": 35, "active": true},

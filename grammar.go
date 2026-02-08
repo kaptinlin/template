@@ -75,9 +75,9 @@ type Value struct {
 	Float  float64
 	Str    string
 	Bool   bool
-	Slice  interface{}
-	Map    interface{}
-	Struct interface{}
+	Slice  any
+	Map    any
+	Struct any
 }
 
 // ValueType represents the type of a value.
@@ -438,7 +438,7 @@ func (n *FilterExpressionNode) Evaluate(ctx Context) (*Value, error) {
 }
 
 // Helper methods for Value
-func (v *Value) toInterface() interface{} {
+func (v *Value) toInterface() any {
 	switch v.Type {
 	case TypeInt:
 		return v.Int
@@ -461,9 +461,9 @@ func (v *Value) toInterface() interface{} {
 	}
 }
 
-// NewValue creates a new Value from an interface{}.
-func NewValue(v interface{}) (*Value, error) {
-	// Handle nil interface{} case
+// NewValue creates a new Value from an any.
+func NewValue(v any) (*Value, error) {
+	// Handle nil any case
 	if v == nil {
 		return &Value{Type: TypeNil}, nil
 	}
@@ -503,11 +503,11 @@ func NewValue(v interface{}) (*Value, error) {
 		return &Value{Type: TypeSlice, Slice: rv.Interface()}, nil
 	case reflect.Map:
 		if rv.Type().Key().Kind() == reflect.String {
-			if m, ok := rv.Interface().(map[string]interface{}); ok {
+			if m, ok := rv.Interface().(map[string]any); ok {
 				return &Value{Type: TypeMap, Map: m}, nil
 			}
 
-			result := make(map[string]interface{})
+			result := make(map[string]any)
 			for _, k := range rv.MapKeys() {
 				result[k.String()] = rv.MapIndex(k).Interface()
 			}

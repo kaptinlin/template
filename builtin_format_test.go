@@ -11,12 +11,12 @@ func TestJsonFilter(t *testing.T) {
 	// Setup test cases
 	cases := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{
 			"SimpleMap",
-			map[string]interface{}{"name": "John", "age": 30},
+			map[string]any{"name": "John", "age": 30},
 			`{"age":30,"name":"John"}`, // Note: JSON serialization sorts keys alphabetically
 		},
 		{

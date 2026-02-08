@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-// Helper function to ensure the value is a string
-func toString(value interface{}) string {
+// toString converts the value to its string representation.
+func toString(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v
@@ -18,8 +18,8 @@ func toString(value interface{}) string {
 	}
 }
 
-// toInteger attempts to convert an interface{} to an integer.
-func toInteger(input interface{}) (int, error) {
+// toInteger attempts to convert an any to an integer.
+func toInteger(input any) (int, error) {
 	input = dereferenceIfNeeded(input)
 	switch v := input.(type) {
 	case int:
@@ -37,7 +37,7 @@ func toInteger(input interface{}) (int, error) {
 }
 
 // dereferenceIfNeeded checks if the input is a pointer and dereferences it if it's not nil.
-func dereferenceIfNeeded(input interface{}) interface{} {
+func dereferenceIfNeeded(input any) any {
 	valRef := reflect.ValueOf(input)
 	if valRef.Kind() == reflect.Ptr && !valRef.IsNil() {
 		return valRef.Elem().Interface()

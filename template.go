@@ -29,7 +29,7 @@ type Node struct {
 	EndText    string
 }
 
-// ControlFlow represents the type of control flow operation
+// ControlFlow represents the type of control flow operation.
 type ControlFlow int
 
 const (
@@ -43,11 +43,17 @@ const (
 
 // Node type constants
 const (
+	NodeTypeText     = "text"
+	NodeTypeVariable = "variable"
+	NodeTypeIf       = "if"
+	NodeTypeFor      = "for"
+	NodeTypeElif     = "elif"
+	NodeTypeElse     = "else"
 	NodeTypeBreak    = "break"
 	NodeTypeContinue = "continue"
 )
 
-// LoopContext represents the loop information available in templates
+// LoopContext represents the loop information available in templates.
 type LoopContext struct {
 	Index    int  // Current index (starting from 0)
 	Revindex int  // Reverse index (length-1 to 0)
@@ -77,9 +83,13 @@ func (t *Template) Execute(ctx Context) (string, error) {
 	return builder.String(), nil
 }
 
-// MustExecute combines template data with the provided context to produce a string, ignoring errors.
+// MustExecute combines template data with the provided context to produce a string.
+// It panics if an error occurs during execution.
 func (t *Template) MustExecute(ctx Context) string {
-	result, _ := t.Execute(ctx)
+	result, err := t.Execute(ctx)
+	if err != nil {
+		panic(err)
+	}
 	return result
 }
 
@@ -102,15 +112,15 @@ func executeNodes(nodes []*Node, ctx Context, builder *strings.Builder, forLayer
 // executeNode executes a single node, handling text and variable nodes differently.
 func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	switch node.Type {
-	case "text":
+	case NodeTypeText:
 		builder.WriteString(node.Text)
-	case "variable":
+	case NodeTypeVariable:
 		value, err := executeVariableNode(node, ctx)
 		builder.WriteString(value)
 		if err != nil {
 			return ControlFlowNone, err
 		}
-	case "if":
+	case NodeTypeIf:
 		controlFlow, err := executeIfNode(node, ctx, builder, forLayers)
 		if err != nil {
 			return ControlFlowNone, err
@@ -118,7 +128,7 @@ func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers in
 		if controlFlow != ControlFlowNone {
 			return controlFlow, nil
 		}
-	case "for":
+	case NodeTypeFor:
 		forLayers++
 		controlFlow, err := executeForNode(node, ctx, builder, forLayers)
 		if err != nil {
@@ -139,7 +149,7 @@ func executeNode(node *Node, ctx Context, builder *strings.Builder, forLayers in
 			return ControlFlowNone, ErrContinueOutsideLoop
 		}
 		return ControlFlowContinue, nil
-	case "elif", "else":
+	case NodeTypeElif, NodeTypeElse:
 		// For elif/else nodes, execute their children but skip the tag itself
 		return executeNodes(node.Children, ctx, builder, forLayers)
 	default:
@@ -176,7 +186,7 @@ func executeVariableNode(node *Node, ctx Context) (string, error) {
 }
 
 // resolveVariable retrieves and formats a variable's value from the context, supporting nested keys.
-func resolveVariable(variable string, ctx Context) (interface{}, error) {
+func resolveVariable(variable string, ctx Context) (any, error) {
 	// Directly return string literals.
 	if strings.HasPrefix(variable, "'") && strings.HasSuffix(variable, "'") {
 		return strings.Trim(variable, "'"), nil
@@ -191,7 +201,7 @@ func resolveVariable(variable string, ctx Context) (interface{}, error) {
 }
 
 // convertToString attempts to convert various types to a string, handling all types including aliases uniformly.
-func convertToString(value interface{}) (string, error) {
+func convertToString(value any) (string, error) {
 	// Handle special interfaces first
 	if t, ok := value.(time.Time); ok {
 		return t.Format("2006-01-02 15:04:05"), nil
@@ -228,7 +238,7 @@ func convertToString(value interface{}) (string, error) {
 		result.Grow(length * estimatedCharsPerArrayItem)
 		result.WriteByte('[')
 
-		for i := 0; i < length; i++ {
+		for i := range length {
 			if i > 0 {
 				result.WriteByte(',')
 			}
@@ -256,9 +266,9 @@ func convertToString(value interface{}) (string, error) {
 	}
 }
 
-// parseCondition parses a condition expression and returns a boolean value
+// parseCondition parses a condition expression and returns a boolean value.
 func parseCondition(text string, ctx Context) (bool, error) {
-	expression := disassembleExpression(text)
+	expression := extractConditionExpression(text)
 	lexer := &Lexer{input: expression}
 	tokens, err := lexer.Lex()
 	if err != nil {
@@ -279,10 +289,10 @@ func parseCondition(text string, ctx Context) (bool, error) {
 	return condition.toBool()
 }
 
-// executeIfBranch executes if branch content until the first else/elif
+// executeIfBranch executes if branch content until the first else/elif.
 func executeIfBranch(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	for _, child := range node.Children {
-		if child.Type == "else" || child.Type == "elif" {
+		if child.Type == NodeTypeElse || child.Type == NodeTypeElif {
 			break
 		}
 		controlFlow, err := executeNode(child, ctx, builder, forLayers)
@@ -296,11 +306,11 @@ func executeIfBranch(node *Node, ctx Context, builder *strings.Builder, forLayer
 	return ControlFlowNone, nil
 }
 
-// validateIfElseStructure validates that an if node has at most one else branch
+// validateIfElseStructure validates that an if node has at most one else branch.
 func validateIfElseStructure(node *Node) error {
 	elseCount := 0
 	for _, child := range node.Children {
-		if child.Type == "else" {
+		if child.Type == NodeTypeElse {
 			elseCount++
 			if elseCount > 1 {
 				return ErrMultipleElseStatements
@@ -310,7 +320,7 @@ func validateIfElseStructure(node *Node) error {
 	return nil
 }
 
-// executeIfNode handles conditional rendering with support for elif branches
+// executeIfNode handles conditional rendering with support for elif branches.
 func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	// Validate the if-else structure before execution
 	if err := validateIfElseStructure(node); err != nil {
@@ -330,7 +340,7 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 
 	// 2. Evaluate elif conditions (short-circuit mechanism)
 	for _, child := range node.Children {
-		if child.Type == "elif" {
+		if child.Type == NodeTypeElif {
 			elifCondition, err := parseCondition(child.Text, ctx)
 			if err != nil {
 				return ControlFlowNone, err
@@ -343,7 +353,7 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 
 	// 3. Check for else branch
 	for _, child := range node.Children {
-		if child.Type == "else" {
+		if child.Type == NodeTypeElse {
 			return executeNodes(child.Children, ctx, builder, forLayers)
 		}
 	}
@@ -351,10 +361,10 @@ func executeIfNode(node *Node, ctx Context, builder *strings.Builder, forLayers 
 	return ControlFlowNone, nil
 }
 
-// executeForNode handles loop rendering
+// executeForNode handles loop rendering.
 func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers int) (ControlFlow, error) {
 	// 1. Backup existing loop object (if exists)
-	var backupLoop interface{}
+	var backupLoop any
 	var hasBackup bool
 	if existingLoop, exists := ctx["loop"]; exists {
 		backupLoop = existingLoop
@@ -428,7 +438,7 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 
 	if kind == reflect.Slice || kind == reflect.Array {
 		arrayLength := val.Len()
-		for i := 0; i < arrayLength; i++ {
+		for i := range arrayLength {
 			// Create current iteration's LoopContext
 			currentLoop := &LoopContext{
 				Index:    i,
@@ -498,7 +508,7 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 
 			if len(varNames) == 1 {
 				// For single variable, create an object with key and value
-				item := map[string]interface{}{
+				item := map[string]any{
 					"key":   keyStr,
 					"value": valueValue,
 				}
@@ -531,7 +541,7 @@ func executeForNode(node *Node, ctx Context, builder *strings.Builder, forLayers
 	return ControlFlowNone, fmt.Errorf("%w: %T", ErrUnsupportedCollectionType, collection)
 }
 
-// deepCopy deep copy context data
+// deepCopy creates a deep copy of the context data.
 func deepCopy(ctx Context) Context {
 	newCtx := make(Context, len(ctx))
 	for k, v := range ctx {
@@ -540,25 +550,25 @@ func deepCopy(ctx Context) Context {
 	return newCtx
 }
 
-// deepCopyValue deep copy any value
-func deepCopyValue(v interface{}) interface{} {
+// deepCopyValue creates a deep copy of any value.
+func deepCopyValue(v any) any {
 	switch val := v.(type) {
-	case map[string]interface{}:
-		newMap := make(map[string]interface{}, len(val))
+	case map[string]any:
+		newMap := make(map[string]any, len(val))
 		for k, v := range val {
 			newMap[k] = deepCopyValue(v)
 		}
 		return newMap
-	case []interface{}:
-		newSlice := make([]interface{}, len(val))
+	case []any:
+		newSlice := make([]any, len(val))
 		for i, v := range val {
 			newSlice[i] = deepCopyValue(v)
 		}
 		return newSlice
 	case Context:
 		return deepCopy(val)
-	case map[interface{}]interface{}:
-		newMap := make(map[interface{}]interface{}, len(val))
+	case map[any]any:
+		newMap := make(map[any]any, len(val))
 		for k, v := range val {
 			newMap[k] = deepCopyValue(v)
 		}
@@ -577,8 +587,8 @@ func deepCopyValue(v interface{}) interface{} {
 	}
 }
 
-// updateLoopContext updates loop context information
-func updateLoopContext(ctx Context, varName string, keyStr string, item interface{}, index int) {
+// updateLoopContext updates loop context information.
+func updateLoopContext(ctx Context, varName string, keyStr string, item any, index int) {
 	// Split variable name into multiple variables if needed
 	varNames := strings.Split(varName, ",")
 	// Trim spaces from each variable name
@@ -599,8 +609,8 @@ func updateLoopContext(ctx Context, varName string, keyStr string, item interfac
 	}
 }
 
-// Disassemble expression from if or elif statements
-func disassembleExpression(expression string) string {
+// extractConditionExpression extracts the condition expression from if or elif statements.
+func extractConditionExpression(expression string) string {
 	n := len(expression)
 	prev := 0
 	next := 0
@@ -622,8 +632,8 @@ func disassembleExpression(expression string) string {
 	return expression[prev:next]
 }
 
-// calculateCollectionLength calculates the length of a collection
-func calculateCollectionLength(collection interface{}) int {
+// calculateCollectionLength calculates the length of a collection.
+func calculateCollectionLength(collection any) int {
 	val := reflect.ValueOf(collection)
 	kind := val.Kind()
 
@@ -638,8 +648,8 @@ func calculateCollectionLength(collection interface{}) int {
 	}
 }
 
-// restoreLoopBackup restores the backed up loop object
-func restoreLoopBackup(ctx Context, backup interface{}, hasBackup bool) {
+// restoreLoopBackup restores the backed up loop object.
+func restoreLoopBackup(ctx Context, backup any, hasBackup bool) {
 	if hasBackup {
 		ctx.Set("loop", backup)
 	} else {

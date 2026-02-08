@@ -11,73 +11,73 @@ func TestMathFilters(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]interface{}
+		context  map[string]any
 		expected string
 	}{
 		{
 			name:     "AbsFilterPositive",
 			template: "{{ value | abs }}",
-			context:  map[string]interface{}{"value": -42},
+			context:  map[string]any{"value": -42},
 			expected: "42",
 		},
 		{
 			name:     "AtLeastFilter",
 			template: "{{ value | atLeast:10 }}",
-			context:  map[string]interface{}{"value": 5},
+			context:  map[string]any{"value": 5},
 			expected: "10",
 		},
 		{
 			name:     "AtMostFilter",
 			template: "{{ value | atMost:10 }}",
-			context:  map[string]interface{}{"value": 15},
+			context:  map[string]any{"value": 15},
 			expected: "10",
 		},
 		{
 			name:     "RoundFilter",
 			template: "{{ value | round:2 }}",
-			context:  map[string]interface{}{"value": 3.14159},
+			context:  map[string]any{"value": 3.14159},
 			expected: "3.14",
 		},
 		{
 			name:     "FloorFilter",
 			template: "{{ value | floor }}",
-			context:  map[string]interface{}{"value": 3.99},
+			context:  map[string]any{"value": 3.99},
 			expected: "3",
 		},
 		{
 			name:     "CeilFilter",
 			template: "{{ value | ceil }}",
-			context:  map[string]interface{}{"value": 3.01},
+			context:  map[string]any{"value": 3.01},
 			expected: "4",
 		},
 		{
 			name:     "PlusFilter",
 			template: "{{ value | plus:3 }}",
-			context:  map[string]interface{}{"value": 7},
+			context:  map[string]any{"value": 7},
 			expected: "10",
 		},
 		{
 			name:     "MinusFilter",
 			template: "{{ value | minus:2 }}",
-			context:  map[string]interface{}{"value": 10},
+			context:  map[string]any{"value": 10},
 			expected: "8",
 		},
 		{
 			name:     "TimesFilter",
 			template: "{{ value | times:2 }}",
-			context:  map[string]interface{}{"value": 5},
+			context:  map[string]any{"value": 5},
 			expected: "10",
 		},
 		{
 			name:     "DivideFilter",
 			template: "{{ value | divide:4 }}",
-			context:  map[string]interface{}{"value": 20},
+			context:  map[string]any{"value": 20},
 			expected: "5",
 		},
 		{
 			name:     "ModuloFilter",
 			template: "{{ value | modulo:3 }}",
-			context:  map[string]interface{}{"value": 10},
+			context:  map[string]any{"value": 10},
 			expected: "1",
 		},
 	}

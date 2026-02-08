@@ -175,7 +175,7 @@ func BenchmarkTemplateExecuteComplex(b *testing.B) {
 	}
 
 	ctx := NewContext()
-	ctx.Set("users", []map[string]interface{}{
+	ctx.Set("users", []map[string]any{
 		{"name": "alice", "age": 30, "active": true},
 		{"name": "bob", "age": 25, "active": false},
 		{"name": "charlie", "age": 35, "active": true},

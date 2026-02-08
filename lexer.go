@@ -255,18 +255,15 @@ func isOperatorChar(ch byte, pos int, input string) bool {
 }
 
 func isOperator(op string) bool {
-	operators := []string{
-		"==", "!=", "<=", ">=", "<", ">",
-		"&&", "||", // C-style (backward compatibility)
-		"and", "or", "not", // Django/Liquid style
-		"in", "not in", // Membership operators
+	switch op {
+	case "==", "!=", "<=", ">=", "<", ">",
+		"&&", "||",
+		"and", "or", "not",
+		"in", "not in":
+		return true
+	default:
+		return false
 	}
-	for _, o := range operators {
-		if op == o {
-			return true
-		}
-	}
-	return false
 }
 
 func isArithOperator(ch byte) bool {
@@ -274,12 +271,13 @@ func isArithOperator(ch byte) bool {
 }
 
 func (l *Lexer) emit(typ TokenType) {
-	if typ != TokenEOF {
-		val := l.input[l.start:l.pos]
-		l.tokens = append(l.tokens, Token{Typ: typ, Val: val})
-	} else {
+	if typ == TokenEOF {
 		l.tokens = append(l.tokens, Token{Typ: typ, Val: "EOF"})
+		l.start = l.pos
+		return
 	}
+	val := l.input[l.start:l.pos]
+	l.tokens = append(l.tokens, Token{Typ: typ, Val: val})
 	l.start = l.pos
 }
 

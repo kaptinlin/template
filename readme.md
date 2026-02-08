@@ -81,8 +81,8 @@ func main() {
 }
 ```
 
-#### Ignoring Errors with MustExecute
-Execute a template and ignore any errors, useful for templates guaranteed not to fail:
+#### Panic on Error with MustExecute
+Execute a template and panic if any error occurs, useful for templates guaranteed not to fail:
 
 ```go
 package main
@@ -100,14 +100,14 @@ func main() {
     if err != nil {
         panic(err)
     }
-    
+
     // Create a context and add variables
     context := template.NewContext()
     context.Set("name", "Universe")
-    
-    // MustExecute the template, ignoring errors
+
+    // MustExecute the template, panics if an error occurs
     output := template.MustExecute(tpl, context)
-    
+
     fmt.Println(output) // Output: Welcome, Universe!
 }
 ```
@@ -171,7 +171,7 @@ import (
 	"strings"
 )
 
-func capitalize(input interface{}, args ...string) (interface{}, error) {
+func capitalize(input any, args ...string) (any, error) {
 	s, ok := input.(string)
 	if !ok {
 		return input, nil

@@ -10,7 +10,7 @@ func TestDereferenceIfNeeded(t *testing.T) {
 	// Define test cases
 	testCases := []struct {
 		name        string
-		input       interface{}
+		input       any
 		expectedNil bool // Expect the dereferenced value to be nil
 	}{
 		{

@@ -3,16 +3,20 @@ package template
 import (
 	"fmt"
 	"regexp"
+	"sync"
 )
 
 // FilterFunc represents the signature of functions that can be applied as filters.
 // Arguments are always passed as strings, even if the source in the template was a number literal or other type.
 // Filter authors should parse string arguments into their expected types if necessary.
-type FilterFunc func(interface{}, ...string) (interface{}, error)
+type FilterFunc func(any, ...string) (any, error)
 
-var filters = make(map[string]FilterFunc)
+var (
+	filters   = make(map[string]FilterFunc)
+	filtersMu sync.RWMutex
+)
 
-// Global variable for validating filter names
+// validFilterNameRegex validates filter names.
 var validFilterNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$`)
 
 // RegisterFilter adds a filter to the global registry with name validation.
@@ -20,15 +24,29 @@ func RegisterFilter(name string, fn FilterFunc) error {
 	if !validFilterNameRegex.MatchString(name) {
 		return fmt.Errorf("%w: '%s'", ErrInvalidFilterName, name)
 	}
+	filtersMu.Lock()
 	filters[name] = fn
+	filtersMu.Unlock()
 	return nil
 }
 
+// mustRegisterFilters registers multiple filters and panics if any registration fails.
+// This is intended for use in init() functions where registration failure indicates a programming error.
+func mustRegisterFilters(filtersToRegister map[string]FilterFunc) {
+	for name, fn := range filtersToRegister {
+		if err := RegisterFilter(name, fn); err != nil {
+			panic(fmt.Sprintf("failed to register filter %s: %v", name, err))
+		}
+	}
+}
+
 // ApplyFilters executes a series of filters on a value within a context, supporting variable arguments.
-func ApplyFilters(value interface{}, fs []Filter, ctx Context) (interface{}, error) {
+func ApplyFilters(value any, fs []Filter, ctx Context) (any, error) {
 	var err error
 	for _, f := range fs {
+		filtersMu.RLock()
 		fn, exists := filters[f.Name]
+		filtersMu.RUnlock()
 		if !exists {
 			return value, fmt.Errorf("filter '%s' not found: %w", f.Name, ErrFilterNotFound)
 		}
@@ -80,7 +98,7 @@ type Filter struct {
 
 // FilterArg represents the interface for filter arguments.
 type FilterArg interface {
-	Value() interface{}
+	Value() any
 	Type() string
 }
 
@@ -90,7 +108,7 @@ type StringArg struct {
 }
 
 // Value returns the string argument value.
-func (a StringArg) Value() interface{} {
+func (a StringArg) Value() any {
 	return a.val
 }
 
@@ -105,7 +123,7 @@ type NumberArg struct {
 }
 
 // Value returns the number argument value.
-func (a NumberArg) Value() interface{} {
+func (a NumberArg) Value() any {
 	return a.val
 }
 
@@ -120,7 +138,7 @@ type VariableArg struct {
 }
 
 // Value returns the variable name.
-func (a VariableArg) Value() interface{} {
+func (a VariableArg) Value() any {
 	return a.name
 }
 

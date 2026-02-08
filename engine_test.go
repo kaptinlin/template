@@ -10,10 +10,10 @@ import (
 func mockUserProfileContext() Context {
 	return Context{
 		"userName": "JaneDoe",
-		"profile": map[string]interface{}{
+		"profile": map[string]any{
 			"age": 29,
 			"bio": "Software developer with a passion for open source.",
-			"contacts": map[string]interface{}{
+			"contacts": map[string]any{
 				"email": "jane.doe@example.com",
 			},
 		},
@@ -37,20 +37,31 @@ func TestExecuteWithErrorHandling(t *testing.T) {
 	assert.Contains(t, output, "Hello, JaneDoe!", "Expected partial output before error")
 }
 
-func TestMustExecuteIgnoresError(t *testing.T) {
+func TestMustExecutePanicsOnError(t *testing.T) {
 	ctx := mockUserProfileContext()
-	// Similar template to above, which will encounter an error due to a non-existent variable.
+	// Template with a non-existent variable that will cause an error.
 	tplStr := "Hello, {{userName}}! Missing: {{nonExistentVariable}}"
 
 	parser := NewParser()
 	tpl, err := parser.Parse(tplStr)
 	require.NoError(t, err, "Failed to parse template")
 
-	// MustExecute should ignore errors and attempt to return any partial output.
+	// MustExecute should panic when an error occurs.
+	assert.Panics(t, func() {
+		MustExecute(tpl, ctx)
+	}, "Expected MustExecute to panic on error")
+}
+
+func TestMustExecuteSuccess(t *testing.T) {
+	ctx := mockUserProfileContext()
+	tplStr := "Hello, {{userName}}!"
+
+	parser := NewParser()
+	tpl, err := parser.Parse(tplStr)
+	require.NoError(t, err, "Failed to parse template")
+
 	output := MustExecute(tpl, ctx)
-	assert.Contains(t, output, "Hello, JaneDoe!", "Expected partial output before error in MustExecute")
-	// MustExecute should ignore the error and output the placeholder for missing variable.
-	assert.Contains(t, output, "{{nonExistentVariable}}", "Expected placeholder for missing variable")
+	assert.Equal(t, "Hello, JaneDoe!", output)
 }
 
 func TestNestedVariableRetrieval(t *testing.T) {
@@ -282,6 +293,27 @@ func TestVariablesWithPunctuation(t *testing.T) {
 			source:   "Welcome, {{userName|lower}}!",
 			expected: "Welcome, janedoe!",
 		},
+	}
+	ctx := mockUserProfileContext()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewParser()
+			tmpl, err := parser.Parse(tc.source)
+			require.NoError(t, err, "Unexpected error in %s", tc.name)
+
+			result := tmpl.MustExecute(ctx)
+
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestVariablesWithPunctuationAndErrors(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		expected string
+	}{
 		{
 			name:     "FilterNotFoundWithPunctuation",
 			source:   "Hello, {{userName|nonExistentFilter}}!",
@@ -300,8 +332,8 @@ func TestVariablesWithPunctuation(t *testing.T) {
 			tmpl, err := parser.Parse(tc.source)
 			require.NoError(t, err, "Unexpected error in %s", tc.name)
 
-			result := tmpl.MustExecute(ctx)
-
+			result, err := tmpl.Execute(ctx)
+			assert.Error(t, err)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

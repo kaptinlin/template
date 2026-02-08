@@ -11,7 +11,7 @@ import (
 
 // Context stores template variables in a map structure, used for passing and accessing variables during template execution.
 // Keys are strings, and values can be of any type, supporting dot-notation (.) for nested access.
-type Context map[string]interface{}
+type Context map[string]any
 
 // ContextBuilder provides a fluent API for building Context with error collection.
 type ContextBuilder struct {
@@ -35,14 +35,13 @@ func NewContext() Context {
 func NewContextBuilder() *ContextBuilder {
 	return &ContextBuilder{
 		context: make(Context),
-		errors:  []error{},
 	}
 }
 
 // Set inserts a value into the Context with the specified key, supporting dot-notation (.) for nested keys.
 // This method preserves original data types for top-level keys and creates minimal map structures
 // only when needed for nested access. Relies on jsonpointer's powerful reading capabilities.
-func (c Context) Set(key string, value interface{}) {
+func (c Context) Set(key string, value any) {
 	if key == "" {
 		return // Silently ignore empty keys for backward compatibility
 	}
@@ -68,12 +67,12 @@ func (c Context) Set(key string, value interface{}) {
 		} else {
 			// Intermediate parts: ensure they are map types
 			if _, exists := current[part]; !exists {
-				current[part] = make(map[string]interface{})
-			} else if _, ok := current[part].(map[string]interface{}); !ok {
+				current[part] = make(map[string]any)
+			} else if _, ok := current[part].(map[string]any); !ok {
 				// If exists but not a map, replace with map for nested access
-				current[part] = make(map[string]interface{})
+				current[part] = make(map[string]any)
 			}
-			current = current[part].(map[string]interface{})
+			current = current[part].(map[string]any)
 		}
 	}
 }
@@ -84,12 +83,12 @@ func (c Context) Set(key string, value interface{}) {
 //   - key: The key to retrieve, can be a dot-separated nested key like "user.profile.name"
 //
 // Returns:
-//   - interface{}: The retrieved value
+//   - any: The retrieved value
 //   - error: Returns an appropriate error if the key doesn't exist or access fails
-func (c Context) Get(key string) (interface{}, error) {
+func (c Context) Get(key string) (any, error) {
 	// Handle empty key
 	if key == "" {
-		return map[string]interface{}(c), nil
+		return map[string]any(c), nil
 	}
 
 	// Convert dot notation to path components
@@ -133,7 +132,7 @@ func convertDotToPath(dotNotation string) []string {
 //	builder := NewContextBuilder().
 //	    KeyValue("name", "John").
 //	    KeyValue("age", 30)
-func (cb *ContextBuilder) KeyValue(key string, value interface{}) *ContextBuilder {
+func (cb *ContextBuilder) KeyValue(key string, value any) *ContextBuilder {
 	cb.context.Set(key, value)
 	return cb
 }
@@ -152,18 +151,18 @@ func (cb *ContextBuilder) KeyValue(key string, value interface{}) *ContextBuilde
 //	builder := NewContextBuilder().Struct(User{Name: "John", Age: 30})
 //	// Results in: context["name"]="John", context["age"]=30
 //	// Template access: {{ name }}, {{ age }}
-func (cb *ContextBuilder) Struct(v interface{}) *ContextBuilder {
+func (cb *ContextBuilder) Struct(v any) *ContextBuilder {
 	// Marshal struct to JSON
 	jsonData, err := json.Marshal(v)
 	if err != nil {
-		cb.errors = append(cb.errors, fmt.Errorf("Struct: marshal failed: %w", err))
+		cb.errors = append(cb.errors, fmt.Errorf("struct: marshal failed: %w", err))
 		return cb
 	}
 
 	// Unmarshal to temporary map
-	temp := make(map[string]interface{})
+	temp := make(map[string]any)
 	if err := json.Unmarshal(jsonData, &temp); err != nil {
-		cb.errors = append(cb.errors, fmt.Errorf("Struct: unmarshal failed: %w", err))
+		cb.errors = append(cb.errors, fmt.Errorf("struct: unmarshal failed: %w", err))
 		return cb
 	}
 

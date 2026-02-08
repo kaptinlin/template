@@ -74,7 +74,7 @@ func TestContextErrorInTemplate(t *testing.T) {
 
 		if !testFilterRegistered {
 			// Register a temporary filter for testing
-			_ = RegisterFilter("test_var_filter", func(value interface{}, _ ...string) (interface{}, error) {
+			_ = RegisterFilter("test_var_filter", func(value any, _ ...string) (any, error) {
 				return value, nil
 			})
 		}

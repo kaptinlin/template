@@ -13,7 +13,7 @@ func TestGrammar(t *testing.T) {
 		name     string
 		input    string
 		context  *Context
-		expected interface{}
+		expected any
 		wantErr  bool
 	}{
 		{
@@ -137,7 +137,7 @@ func TestGrammar(t *testing.T) {
 			require.NoError(t, err)
 
 			if err == nil {
-				var got interface{}
+				var got any
 				switch result.Type {
 				case TypeInt:
 					got = float64(result.Int)
@@ -168,7 +168,7 @@ func TestGrammar(t *testing.T) {
 func TestUnsignedIntegerOverflow(t *testing.T) {
 	tests := []struct {
 		name        string
-		value       interface{}
+		value       any
 		expectError bool
 	}{
 		{
@@ -300,25 +300,25 @@ func TestTextLogicalOperators(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		ctx      map[string]interface{}
+		ctx      map[string]any
 		want     string
 	}{
 		{"and-both-true", `{% if a and b %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": true, "b": true}, "y"},
+			map[string]any{"a": true, "b": true}, "y"},
 		{"and-first-false", `{% if a and b %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": false, "b": true}, "n"},
+			map[string]any{"a": false, "b": true}, "n"},
 		{"or-both-false", `{% if a or b %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": false, "b": false}, "n"},
+			map[string]any{"a": false, "b": false}, "n"},
 		{"or-second-true", `{% if a or b %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": false, "b": true}, "y"},
+			map[string]any{"a": false, "b": true}, "y"},
 		{"not-false", `{% if not a %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": false}, "y"},
+			map[string]any{"a": false}, "y"},
 		{"not-true", `{% if not a %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": true}, "n"},
+			map[string]any{"a": true}, "n"},
 		{"and-or-precedence", `{% if a or b and c %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": false, "b": true, "c": true}, "y"},
+			map[string]any{"a": false, "b": true, "c": true}, "y"},
 		{"not-and-precedence", `{% if not a and b %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"a": false, "b": true}, "y"},
+			map[string]any{"a": false, "b": true}, "y"},
 	}
 
 	for _, tt := range tests {
@@ -339,21 +339,21 @@ func TestInOperator(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		ctx      map[string]interface{}
+		ctx      map[string]any
 		want     string
 	}{
 		{"string-in-string-found", `{% if "bc" in text %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"text": "abcdef"}, "y"},
+			map[string]any{"text": "abcdef"}, "y"},
 		{"string-in-string-not-found", `{% if "xyz" in text %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"text": "abcdef"}, "n"},
+			map[string]any{"text": "abcdef"}, "n"},
 		{"item-in-list", `{% if "hello" in items %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"items": []string{"hi", "hello", "hey"}}, "y"},
+			map[string]any{"items": []string{"hi", "hello", "hey"}}, "y"},
 		{"item-not-in-list", `{% if "goodbye" in items %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"items": []string{"hi", "hello", "hey"}}, "n"},
+			map[string]any{"items": []string{"hi", "hello", "hey"}}, "n"},
 		{"number-in-array", `{% if 2 in nums %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"nums": []int{1, 2, 3}}, "y"},
+			map[string]any{"nums": []int{1, 2, 3}}, "y"},
 		{"not-in-operator", `{% if "xyz" not in text %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"text": "abcdef"}, "y"},
+			map[string]any{"text": "abcdef"}, "y"},
 	}
 
 	for _, tt := range tests {
@@ -374,49 +374,49 @@ func TestOperatorPrecedence(t *testing.T) {
 	tests := []struct {
 		name    string
 		tmpl    string
-		ctx     map[string]interface{}
+		ctx     map[string]any
 		want    string
 		comment string
 	}{
 		{
 			name:    "and-before-or",
 			tmpl:    `{% if a or b and c %}y{% else %}n{% endif %}`,
-			ctx:     map[string]interface{}{"a": false, "b": true, "c": true},
+			ctx:     map[string]any{"a": false, "b": true, "c": true},
 			want:    "y",
 			comment: "a or (b and c) = false or true = true",
 		},
 		{
 			name:    "not-before-and",
 			tmpl:    `{% if not a and b %}y{% else %}n{% endif %}`,
-			ctx:     map[string]interface{}{"a": false, "b": true},
+			ctx:     map[string]any{"a": false, "b": true},
 			want:    "y",
 			comment: "(not a) and b = true and true = true",
 		},
 		{
 			name:    "comparison-before-and",
 			tmpl:    `{% if a == b or c == d and e %}y{% else %}n{% endif %}`,
-			ctx:     map[string]interface{}{"a": 1, "b": 2, "c": 3, "d": 3, "e": true},
+			ctx:     map[string]any{"a": 1, "b": 2, "c": 3, "d": 3, "e": true},
 			want:    "y",
 			comment: "(a == b) or ((c == d) and e) = false or true = true",
 		},
 		{
 			name:    "in-before-and",
 			tmpl:    `{% if "x" in items and flag %}y{% else %}n{% endif %}`,
-			ctx:     map[string]interface{}{"items": []string{"x", "y"}, "flag": true},
+			ctx:     map[string]any{"items": []string{"x", "y"}, "flag": true},
 			want:    "y",
 			comment: "(\"x\" in items) and flag = true and true = true",
 		},
 		{
 			name:    "not-before-in",
 			tmpl:    `{% if not flag and "x" in items %}y{% else %}n{% endif %}`,
-			ctx:     map[string]interface{}{"flag": false, "items": []string{"x"}},
+			ctx:     map[string]any{"flag": false, "items": []string{"x"}},
 			want:    "y",
 			comment: "(not flag) and (\"x\" in items) = true and true = true",
 		},
 		{
 			name:    "complex-precedence",
 			tmpl:    `{% if a or b and not c or d %}y{% else %}n{% endif %}`,
-			ctx:     map[string]interface{}{"a": false, "b": true, "c": false, "d": false},
+			ctx:     map[string]any{"a": false, "b": true, "c": false, "d": false},
 			want:    "y",
 			comment: "a or (b and (not c)) or d = false or true or false = true",
 		},
@@ -440,30 +440,30 @@ func TestDjangoPatterns(t *testing.T) {
 	tests := []struct {
 		name string
 		tmpl string
-		ctx  map[string]interface{}
+		ctx  map[string]any
 		want string
 	}{
 		{
 			name: "auth-check",
 			tmpl: `{% if user.authenticated and not user.banned %}ok{% endif %}`,
-			ctx: map[string]interface{}{
-				"user": map[string]interface{}{"authenticated": true, "banned": false},
+			ctx: map[string]any{
+				"user": map[string]any{"authenticated": true, "banned": false},
 			},
 			want: "ok",
 		},
 		{
 			name: "permission",
 			tmpl: `{% if user.staff or user.admin %}admin{% else %}user{% endif %}`,
-			ctx: map[string]interface{}{
-				"user": map[string]interface{}{"staff": false, "admin": true},
+			ctx: map[string]any{
+				"user": map[string]any{"staff": false, "admin": true},
 			},
 			want: "admin",
 		},
 		{
 			name: "category-filter",
 			tmpl: `{% if item.cat in allowed %}show{% endif %}`,
-			ctx: map[string]interface{}{
-				"item":    map[string]interface{}{"cat": "tech"},
+			ctx: map[string]any{
+				"item":    map[string]any{"cat": "tech"},
 				"allowed": []string{"tech", "news"},
 			},
 			want: "show",
@@ -471,15 +471,15 @@ func TestDjangoPatterns(t *testing.T) {
 		{
 			name: "null-check-with-and",
 			tmpl: `{% if user != null and user.active %}active{% else %}inactive{% endif %}`,
-			ctx: map[string]interface{}{
-				"user": map[string]interface{}{"active": true},
+			ctx: map[string]any{
+				"user": map[string]any{"active": true},
 			},
 			want: "active",
 		},
 		{
 			name: "null-check-is-null",
 			tmpl: `{% if user == null %}guest{% else %}logged-in{% endif %}`,
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"user": nil,
 			},
 			want: "guest",
@@ -487,7 +487,7 @@ func TestDjangoPatterns(t *testing.T) {
 		{
 			name: "empty-list-check",
 			tmpl: `{% if items %}has-items{% else %}empty{% endif %}`,
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"items": []string{},
 			},
 			want: "empty",
@@ -495,7 +495,7 @@ func TestDjangoPatterns(t *testing.T) {
 		{
 			name: "non-empty-list-check",
 			tmpl: `{% if items %}has-items{% else %}empty{% endif %}`,
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"items": []string{"a"},
 			},
 			want: "has-items",
@@ -520,27 +520,27 @@ func TestLiterals(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		ctx      map[string]interface{}
+		ctx      map[string]any
 		want     string
 	}{
 		{"true-uppercase", `{% if val == True %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": true}, "y"},
+			map[string]any{"val": true}, "y"},
 		{"true-lowercase", `{% if val == true %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": true}, "y"},
+			map[string]any{"val": true}, "y"},
 		{"false-uppercase", `{% if val == False %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": false}, "y"},
+			map[string]any{"val": false}, "y"},
 		{"false-lowercase", `{% if val == false %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": false}, "y"},
+			map[string]any{"val": false}, "y"},
 		{"null-lowercase", `{% if val == null %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": nil}, "y"},
+			map[string]any{"val": nil}, "y"},
 		{"null-capitalized", `{% if val == Null %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": nil}, "y"},
+			map[string]any{"val": nil}, "y"},
 		{"none-lowercase", `{% if val == none %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": nil}, "y"},
+			map[string]any{"val": nil}, "y"},
 		{"none-capitalized", `{% if val == None %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": nil}, "y"},
+			map[string]any{"val": nil}, "y"},
 		{"not-null", `{% if val != null %}y{% else %}n{% endif %}`,
-			map[string]interface{}{"val": "something"}, "y"},
+			map[string]any{"val": "something"}, "y"},
 	}
 
 	for _, tt := range tests {

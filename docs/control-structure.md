@@ -265,14 +265,14 @@ Filters transform values within expressions:
 ## **Lexical and Syntax Analysis**
 
 ### **Lexical Analysis**
-The template engine breaks expressions into tokens:
+The template engine's lexer (`lexer.go`) breaks expressions into tokens:
 - **Identifiers**: Variable names, property paths
 - **Literals**: Numbers, strings, booleans
-- **Operators**: Arithmetic, comparison, logical
+- **Operators**: Arithmetic, comparison, logical (uses switch-based classification)
 - **Others**: Parentheses, pipes, filters
 
 ### **Syntax Analysis**
-The parser uses recursive descent to process expressions, following precedence rules:
+The parser (`lexer.go`) uses recursive descent to process expressions, following precedence rules:
 ```plaintext
 Parse -> parseExpression
 parseExpression -> parseLogicalOr
@@ -340,10 +340,12 @@ The template engine follows Django-style truthiness for conditional evaluation:
 1. **Expression Evaluation**
    - Evaluated at runtime with precedence rules.
    - Short-circuit evaluation for `&&`/`and` and `||`/`or`.
+   - Condition expressions are extracted via `extractConditionExpression` from `if`/`elif` tags.
 
 2. **Error Handling**
    - Syntax errors during parsing.
    - Runtime errors (e.g., type mismatches) during execution.
+   - `MustExecute` panics on error (use `Execute` for error-returning behavior).
 
 3. **Variable Scope**
    - Outer scope variables are accessible within control structures.
@@ -361,6 +363,10 @@ The template engine follows Django-style truthiness for conditional evaluation:
 6. **Operator Compatibility**
    - Both C-style (`&&`, `||`, `!`) and Django-style (`and`, `or`, `not`) operators are supported.
    - Can be mixed in the same template for backward compatibility.
+
+7. **Thread Safety**
+   - Filter registry is protected by `sync.RWMutex` for concurrent access.
+   - Templates can be executed concurrently with independent contexts.
 
 
 ## **Advanced Usage**

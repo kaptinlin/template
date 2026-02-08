@@ -11,13 +11,13 @@ func TestStringFilters(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]interface{}
+		context  map[string]any
 		expected string
 	}{
 		{
 			name:     "DefaultFilter",
 			template: "{{ name | default:'Unknown' }}",
-			context:  map[string]interface{}{"name": ""},
+			context:  map[string]any{"name": ""},
 			expected: "Unknown",
 		},
 		{
@@ -98,13 +98,13 @@ func TestStringFilters(t *testing.T) {
 		{
 			name:     "PluralizeFilterSingular",
 			template: "{{ count | pluralize:'apple','apples' }}",
-			context:  map[string]interface{}{"count": 1},
+			context:  map[string]any{"count": 1},
 			expected: "apple",
 		},
 		{
 			name:     "PluralizeFilterPlural",
 			template: "{{ count | pluralize:'apple','apples' }}",
-			context:  map[string]interface{}{"count": 2},
+			context:  map[string]any{"count": 2},
 			expected: "apples",
 		},
 		{

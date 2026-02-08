@@ -2,14 +2,12 @@ package template
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/kaptinlin/filter"
 )
 
 func init() {
-	// Register all math filters
-	filtersToRegister := map[string]FilterFunc{
+	mustRegisterFilters(map[string]FilterFunc{
 		"abs":     absFilter,
 		"atLeast": atLeastFilter,
 		"atMost":  atMostFilter,
@@ -21,22 +19,16 @@ func init() {
 		"times":   timesFilter,
 		"divide":  divideFilter,
 		"modulo":  moduloFilter,
-	}
-
-	for name, filterFunc := range filtersToRegister {
-		if err := RegisterFilter(name, filterFunc); err != nil {
-			log.Printf("Error registering filter %s: %v", name, err)
-		}
-	}
+	})
 }
 
 // absFilter calculates the absolute value of a number.
-func absFilter(value interface{}, _ ...string) (interface{}, error) {
+func absFilter(value any, _ ...string) (any, error) {
 	return filter.Abs(value)
 }
 
 // atLeastFilter ensures the number is at least as large as the minimum value provided.
-func atLeastFilter(value interface{}, args ...string) (interface{}, error) {
+func atLeastFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: atLeast filter requires one argument", ErrInsufficientArgs)
 	}
@@ -45,7 +37,7 @@ func atLeastFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // atMostFilter ensures the number is no larger than the maximum value provided.
-func atMostFilter(value interface{}, args ...string) (interface{}, error) {
+func atMostFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: atMost filter requires one argument", ErrInsufficientArgs)
 	}
@@ -54,7 +46,7 @@ func atMostFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // roundFilter rounds the input to the specified number of decimal places.
-func roundFilter(value interface{}, args ...string) (interface{}, error) {
+func roundFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: round filter requires one argument for precision", ErrInsufficientArgs)
 	}
@@ -63,17 +55,17 @@ func roundFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // floorFilter rounds the input down to the nearest whole number.
-func floorFilter(value interface{}, _ ...string) (interface{}, error) {
+func floorFilter(value any, _ ...string) (any, error) {
 	return filter.Floor(value)
 }
 
 // ceilFilter rounds the input up to the nearest whole number.
-func ceilFilter(value interface{}, _ ...string) (interface{}, error) {
+func ceilFilter(value any, _ ...string) (any, error) {
 	return filter.Ceil(value)
 }
 
 // plusFilter adds two numbers.
-func plusFilter(value interface{}, args ...string) (interface{}, error) {
+func plusFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: plus filter requires one argument", ErrInsufficientArgs)
 	}
@@ -82,7 +74,7 @@ func plusFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // minusFilter subtracts the second value from the first.
-func minusFilter(value interface{}, args ...string) (interface{}, error) {
+func minusFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: minus filter requires one argument", ErrInsufficientArgs)
 	}
@@ -91,7 +83,7 @@ func minusFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // timesFilter multiplies the first value by the second.
-func timesFilter(value interface{}, args ...string) (interface{}, error) {
+func timesFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: times filter requires one argument", ErrInsufficientArgs)
 	}
@@ -100,7 +92,7 @@ func timesFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // divideFilter divides the first value by the second.
-func divideFilter(value interface{}, args ...string) (interface{}, error) {
+func divideFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: divide filter requires one argument", ErrInsufficientArgs)
 	}
@@ -109,7 +101,7 @@ func divideFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // moduloFilter returns the remainder of the division of the first value by the second.
-func moduloFilter(value interface{}, args ...string) (interface{}, error) {
+func moduloFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: modulo filter requires one argument", ErrInsufficientArgs)
 	}

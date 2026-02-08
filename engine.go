@@ -11,7 +11,8 @@ func Execute(tpl *Template, ctx Context) (string, error) {
 	return tpl.Execute(ctx)
 }
 
-// MustExecute renders the template with provided context, ignoring errors.
+// MustExecute renders the template with provided context.
+// It panics if an error occurs during execution.
 func MustExecute(tpl *Template, ctx Context) string {
 	return tpl.MustExecute(ctx)
 }

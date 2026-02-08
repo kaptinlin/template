@@ -2,14 +2,12 @@ package template
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/kaptinlin/filter"
 )
 
 func init() {
-	// Register string-related filters
-	filtersToRegister := map[string]FilterFunc{
+	mustRegisterFilters(map[string]FilterFunc{
 		"default":       defaultFilter,
 		"trim":          trimFilter,
 		"split":         splitFilter,
@@ -30,17 +28,11 @@ func init() {
 		"ordinalize":    ordinalizeFilter,
 		"truncate":      truncateFilter,
 		"truncateWords": truncateWordsFilter,
-	}
-
-	for name, filterFunc := range filtersToRegister {
-		if err := RegisterFilter(name, filterFunc); err != nil {
-			log.Printf("Error registering filter %s: %v", name, err)
-		}
-	}
+	})
 }
 
 // defaultFilter returns a default value if the input string is empty.
-func defaultFilter(value interface{}, args ...string) (interface{}, error) {
+func defaultFilter(value any, args ...string) (any, error) {
 	defaultValue := ""
 	if len(args) > 0 {
 		defaultValue = args[0]
@@ -49,12 +41,12 @@ func defaultFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // trimFilter removes leading and trailing whitespace from the string.
-func trimFilter(value interface{}, _ ...string) (interface{}, error) {
+func trimFilter(value any, _ ...string) (any, error) {
 	return filter.Trim(toString(value)), nil
 }
 
 // splitFilter divides a string into a slice of strings based on a specified delimiter.
-func splitFilter(value interface{}, args ...string) (interface{}, error) {
+func splitFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: split filter requires a delimiter argument", ErrInsufficientArgs)
 	}
@@ -63,7 +55,7 @@ func splitFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // replaceFilter substitutes all instances of a specified substring with another string.
-func replaceFilter(value interface{}, args ...string) (interface{}, error) {
+func replaceFilter(value any, args ...string) (any, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("%w: replace filter requires two arguments (old and new substrings)", ErrInsufficientArgs)
 	}
@@ -72,7 +64,7 @@ func replaceFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // removeFilter eliminates all occurrences of a specified substring.
-func removeFilter(value interface{}, args ...string) (interface{}, error) {
+func removeFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: remove filter requires a substring argument", ErrInsufficientArgs)
 	}
@@ -81,7 +73,7 @@ func removeFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // appendFilter adds characters to the end of a string.
-func appendFilter(value interface{}, args ...string) (interface{}, error) {
+func appendFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: append filter requires a string to append", ErrInsufficientArgs)
 	}
@@ -90,7 +82,7 @@ func appendFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // prependFilter adds characters to the beginning of a string.
-func prependFilter(value interface{}, args ...string) (interface{}, error) {
+func prependFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: prepend filter requires a string to prepend", ErrInsufficientArgs)
 	}
@@ -99,52 +91,52 @@ func prependFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // lengthFilter returns the number of characters in a string.
-func lengthFilter(value interface{}, _ ...string) (interface{}, error) {
+func lengthFilter(value any, _ ...string) (any, error) {
 	return filter.Length(toString(value)), nil
 }
 
 // upperFilter converts all characters in a string to uppercase.
-func upperFilter(value interface{}, _ ...string) (interface{}, error) {
+func upperFilter(value any, _ ...string) (any, error) {
 	return filter.Upper(toString(value)), nil
 }
 
 // lowerFilter converts all characters in a string to lowercase.
-func lowerFilter(value interface{}, _ ...string) (interface{}, error) {
+func lowerFilter(value any, _ ...string) (any, error) {
 	return filter.Lower(toString(value)), nil
 }
 
 // titleizeFilter capitalizes the first letter of each word in a string.
-func titleizeFilter(value interface{}, _ ...string) (interface{}, error) {
+func titleizeFilter(value any, _ ...string) (any, error) {
 	return filter.Titleize(toString(value)), nil
 }
 
 // capitalizeFilter capitalizes the first letter of a string.
-func capitalizeFilter(value interface{}, _ ...string) (interface{}, error) {
+func capitalizeFilter(value any, _ ...string) (any, error) {
 	return filter.Capitalize(toString(value)), nil
 }
 
 // camelizeFilter converts a string to camelCase.
-func camelizeFilter(value interface{}, _ ...string) (interface{}, error) {
+func camelizeFilter(value any, _ ...string) (any, error) {
 	return filter.Camelize(toString(value)), nil
 }
 
 // pascalizeFilter converts a string to PascalCase.
-func pascalizeFilter(value interface{}, _ ...string) (interface{}, error) {
+func pascalizeFilter(value any, _ ...string) (any, error) {
 	return filter.Pascalize(toString(value)), nil
 }
 
 // dasherizeFilter transforms a string into a lowercased, dash-separated format.
-func dasherizeFilter(value interface{}, _ ...string) (interface{}, error) {
+func dasherizeFilter(value any, _ ...string) (any, error) {
 	return filter.Dasherize(toString(value)), nil
 }
 
 // slugifyFilter converts a string into a URL-friendly "slug".
-func slugifyFilter(value interface{}, _ ...string) (interface{}, error) {
+func slugifyFilter(value any, _ ...string) (any, error) {
 	return filter.Slugify(toString(value)), nil
 }
 
 // pluralizeFilter determines the singular or plural form of a word based on a numeric value.
-func pluralizeFilter(value interface{}, args ...string) (interface{}, error) {
+func pluralizeFilter(value any, args ...string) (any, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("%w: pluralize filter requires two arguments (singular and plural forms)", ErrInsufficientArgs)
 	}
@@ -157,7 +149,7 @@ func pluralizeFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // ordinalizeFilter converts a number to its ordinal English form.
-func ordinalizeFilter(value interface{}, _ ...string) (interface{}, error) {
+func ordinalizeFilter(value any, _ ...string) (any, error) {
 	number, err := toInteger(value)
 	if err != nil {
 		return nil, err
@@ -166,7 +158,7 @@ func ordinalizeFilter(value interface{}, _ ...string) (interface{}, error) {
 }
 
 // truncateFilter shortens a string to a specified length and appends "..." if it exceeds that length.
-func truncateFilter(value interface{}, args ...string) (interface{}, error) {
+func truncateFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: truncate filter requires a length argument", ErrInsufficientArgs)
 	}
@@ -178,7 +170,7 @@ func truncateFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // truncateWordsFilter truncates a string to a specified number of words, appending "..." if it exceeds that limit.
-func truncateWordsFilter(value interface{}, args ...string) (interface{}, error) {
+func truncateWordsFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: truncateWords filter requires a word count argument", ErrInsufficientArgs)
 	}
