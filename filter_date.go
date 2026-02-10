@@ -9,17 +9,17 @@ func registerDateFilters() {
 	RegisterFilter("date", dateFilter)
 	RegisterFilter("month", monthFilter)
 	RegisterFilter("monthFull", monthFullFilter)
-	RegisterFilter("month_full", monthFullFilter) // Alias for backward compatibility
+	RegisterFilter("month_full", monthFullFilter)
 	RegisterFilter("year", yearFilter)
 	RegisterFilter("day", dayFilter)
 	RegisterFilter("week", weekFilter)
 	RegisterFilter("weekday", weekdayFilter)
 	RegisterFilter("timeAgo", timeAgoFilter)
-	RegisterFilter("timeago", timeAgoFilter) // Alias for backward compatibility
+	RegisterFilter("timeago", timeAgoFilter)
 }
 
 // dateFilter formats a timestamp into a specified format using PHP-style format strings.
-func dateFilter(value interface{}, args ...string) (interface{}, error) {
+func dateFilter(value any, args ...string) (any, error) {
 	format := ""
 	if len(args) > 0 {
 		format = args[0]
@@ -28,36 +28,36 @@ func dateFilter(value interface{}, args ...string) (interface{}, error) {
 }
 
 // dayFilter extracts and returns the day of the month.
-func dayFilter(value interface{}, _ ...string) (interface{}, error) {
+func dayFilter(value any, _ ...string) (any, error) {
 	return filter.Day(value)
 }
 
 // monthFilter extracts and returns the month number.
-func monthFilter(value interface{}, _ ...string) (interface{}, error) {
+func monthFilter(value any, _ ...string) (any, error) {
 	return filter.Month(value)
 }
 
 // monthFullFilter returns the full month name.
-func monthFullFilter(value interface{}, _ ...string) (interface{}, error) {
+func monthFullFilter(value any, _ ...string) (any, error) {
 	return filter.MonthFull(value)
 }
 
 // yearFilter extracts and returns the year.
-func yearFilter(value interface{}, _ ...string) (interface{}, error) {
+func yearFilter(value any, _ ...string) (any, error) {
 	return filter.Year(value)
 }
 
 // weekFilter returns the ISO week number.
-func weekFilter(value interface{}, _ ...string) (interface{}, error) {
+func weekFilter(value any, _ ...string) (any, error) {
 	return filter.Week(value)
 }
 
 // weekdayFilter returns the day of the week.
-func weekdayFilter(value interface{}, _ ...string) (interface{}, error) {
+func weekdayFilter(value any, _ ...string) (any, error) {
 	return filter.Weekday(value)
 }
 
 // timeAgoFilter returns a human-readable string representing the time difference.
-func timeAgoFilter(value interface{}, _ ...string) (interface{}, error) {
+func timeAgoFilter(value any, _ ...string) (any, error) {
 	return filter.TimeAgo(value)
 }

@@ -1,6 +1,9 @@
 package template
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 // TokenType represents the type of a token.
 type TokenType int
@@ -15,28 +18,28 @@ const (
 	// TokenText represents plain text outside of template tags.
 	TokenText
 
-	// TokenVarBegin represents {{ (variable tag start).
+	// TokenVarBegin represents the {{ variable tag opener.
 	TokenVarBegin
 
-	// TokenVarEnd represents }} (variable tag end).
+	// TokenVarEnd represents the }} variable tag closer.
 	TokenVarEnd
 
-	// TokenTagBegin represents {% (block tag start).
+	// TokenTagBegin represents the {% block tag opener.
 	TokenTagBegin
 
-	// TokenTagEnd represents %} (block tag end).
+	// TokenTagEnd represents the %} block tag closer.
 	TokenTagEnd
 
-	// TokenIdentifier represents an identifier (variable name, keyword, etc).
+	// TokenIdentifier represents an identifier such as a variable name or keyword.
 	TokenIdentifier
 
-	// TokenString represents a string literal ("..." or '...').
+	// TokenString represents a quoted string literal.
 	TokenString
 
-	// TokenNumber represents a number literal.
+	// TokenNumber represents an integer or floating-point literal.
 	TokenNumber
 
-	// TokenSymbol represents operators and punctuation (+, -, *, /, ==, !=, |, :, ,, ., etc).
+	// TokenSymbol represents an operator or punctuation character.
 	TokenSymbol
 )
 
@@ -73,78 +76,51 @@ func (t TokenType) String() string {
 
 // String returns a human-readable representation of the token.
 func (t *Token) String() string {
-	pos := " at line " + strconv.Itoa(t.Line) + ", col " + strconv.Itoa(t.Col)
+	var b strings.Builder
+	b.Grow(48) // pre-size for typical output
+
 	name := t.Type.String()
+	b.WriteString(name)
 
-	if t.Type == TokenEOF {
-		return name + pos
+	if t.Type != TokenEOF {
+		b.WriteByte('(')
+		v := t.Value
+		if len(v) > 20 {
+			b.WriteString(strconv.Quote(v[:20]))
+			b.WriteString("...")
+		} else {
+			b.WriteString(strconv.Quote(v))
+		}
+		b.WriteByte(')')
 	}
 
-	v := t.Value
-	if len(v) > 20 {
-		return name + "(" + strconv.Quote(v[:20]) + "...)" + pos
-	}
-	return name + "(" + strconv.Quote(v) + ")" + pos
+	b.WriteString(" at line ")
+	b.WriteString(strconv.Itoa(t.Line))
+	b.WriteString(", col ")
+	b.WriteString(strconv.Itoa(t.Col))
+	return b.String()
 }
 
-// keywords is the set of reserved keywords.
-var keywords = map[string]bool{
-	"in":       true,
-	"and":      true,
-	"or":       true,
-	"not":      true,
-	"true":     true,
-	"false":    true,
-	"if":       true,
-	"elif":     true,
-	"else":     true,
-	"endif":    true,
-	"for":      true,
-	"endfor":   true,
-	"break":    true,
-	"continue": true,
-}
-
-// IsKeyword checks if an identifier is a reserved keyword.
+// IsKeyword reports whether ident is a reserved keyword.
 func IsKeyword(ident string) bool {
-	return keywords[ident]
+	switch ident {
+	case "in", "and", "or", "not", "true", "false",
+		"if", "elif", "else", "endif",
+		"for", "endfor", "break", "continue":
+		return true
+	}
+	return false
 }
 
-// symbols is the set of valid operator and punctuation symbols.
-var symbols = map[string]bool{
-	// Comparison operators
-	"==": true,
-	"!=": true,
-	"<":  true,
-	">":  true,
-	"<=": true,
-	">=": true,
-
-	// Arithmetic operators
-	"+": true,
-	"-": true,
-	"*": true,
-	"/": true,
-	"%": true,
-
-	// Logical operators
-	"&&": true,
-	"||": true,
-	"!":  true,
-
-	// Other symbols
-	"|": true, // Filter pipe
-	":": true, // Filter argument separator
-	",": true, // Argument separator
-	".": true, // Property access
-	"(": true, // Parenthesis
-	")": true,
-	"[": true, // Bracket
-	"]": true,
-	"=": true, // Assignment (for {% set %})
-}
-
-// IsSymbol checks if a string is a valid symbol.
+// IsSymbol reports whether s is a valid operator or punctuation symbol.
 func IsSymbol(s string) bool {
-	return symbols[s]
+	switch s {
+	case "==", "!=", "<", ">", "<=", ">=",
+		"+", "-", "*", "/", "%",
+		"&&", "||", "!",
+		"|", ":", ",", ".",
+		"(", ")", "[", "]", "=":
+		return true
+	}
+	return false
 }

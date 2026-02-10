@@ -4,121 +4,139 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
+// saveTagRegistry returns a snapshot of the current tag registry.
+func saveTagRegistry() map[string]TagParser {
+	tagMu.RLock()
+	defer tagMu.RUnlock()
+	saved := make(map[string]TagParser, len(tagRegistry))
+	for k, v := range tagRegistry {
+		saved[k] = v
+	}
+	return saved
+}
+
+// restoreTagRegistry restores the tag registry from a snapshot.
+func restoreTagRegistry(saved map[string]TagParser) {
+	tagMu.Lock()
+	defer tagMu.Unlock()
+	tagRegistry = saved
+}
+
 func TestRegisterTag(t *testing.T) {
-	// Save original registry and restore after test.
-	originalRegistry := tagRegistry
-	defer func() { tagRegistry = originalRegistry }()
+	saved := saveTagRegistry()
+	defer restoreTagRegistry(saved)
 
 	tests := []struct {
-		name          string
-		setupFunc     func()
-		tagName       string
-		parser        TagParser
-		expectedError bool
-		wantErr       error
+		name    string
+		setup   func()
+		tagName string
+		parser  TagParser
+		wantErr error
 	}{
 		{
-			name: "register new tag successfully",
-			setupFunc: func() {
+			name: "new tag",
+			setup: func() {
 				tagRegistry = make(map[string]TagParser)
 			},
-			tagName:       "customtag",
-			parser:        parseIfTag,
-			expectedError: false,
+			tagName: "customtag",
+			parser:  parseIfTag,
 		},
 		{
-			name: "register duplicate tag returns error",
-			setupFunc: func() {
+			name: "duplicate tag",
+			setup: func() {
 				tagRegistry = make(map[string]TagParser)
 				tagRegistry["duplicate"] = parseIfTag
 			},
-			tagName:       "duplicate",
-			parser:        parseForTag,
-			expectedError: true,
-			wantErr:       ErrTagAlreadyRegistered,
+			tagName: "duplicate",
+			parser:  parseForTag,
+			wantErr: ErrTagAlreadyRegistered,
 		},
 		{
-			name: "register multiple different tags",
-			setupFunc: func() {
+			name: "multiple different tags",
+			setup: func() {
 				tagRegistry = make(map[string]TagParser)
 			},
-			tagName:       "tag1",
-			parser:        parseIfTag,
-			expectedError: false,
+			tagName: "tag1",
+			parser:  parseIfTag,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupFunc()
+			tt.setup()
 			err := RegisterTag(tt.tagName, tt.parser)
-			if tt.expectedError {
-				assert.Error(t, err)
-				assert.True(t, errors.Is(err, tt.wantErr))
-			} else {
-				assert.NoError(t, err)
-				parser, exists := tagRegistry[tt.tagName]
-				assert.True(t, exists)
-				assert.NotNil(t, parser)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("RegisterTag(%q) err = %v, want %v", tt.tagName, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("RegisterTag(%q) = %v, want nil", tt.tagName, err)
+			}
+			if _, ok := tagRegistry[tt.tagName]; !ok {
+				t.Errorf("RegisterTag(%q) did not register tag", tt.tagName)
 			}
 		})
 	}
 }
 
 func TestTag(t *testing.T) {
-	// Save original registry and restore after test.
-	originalRegistry := tagRegistry
-	defer func() { tagRegistry = originalRegistry }()
+	saved := saveTagRegistry()
+	defer restoreTagRegistry(saved)
 
 	tests := []struct {
-		name           string
-		setupFunc      func()
-		tagName        string
-		expectedExists bool
+		name    string
+		setup   func()
+		tagName string
+		want    bool
 	}{
 		{
-			name: "get existing tag",
-			setupFunc: func() {
+			name: "existing tag",
+			setup: func() {
 				tagRegistry = make(map[string]TagParser)
 				tagRegistry["if"] = parseIfTag
 			},
-			tagName:        "if",
-			expectedExists: true,
+			tagName: "if",
+			want:    true,
 		},
 		{
-			name: "get non-existing tag",
-			setupFunc: func() {
+			name: "non-existing tag",
+			setup: func() {
 				tagRegistry = make(map[string]TagParser)
 			},
-			tagName:        "nonexistent",
-			expectedExists: false,
+			tagName: "nonexistent",
 		},
 		{
-			name: "get built-in for tag",
-			setupFunc: func() {
+			name: "built-in for tag",
+			setup: func() {
 				tagRegistry = make(map[string]TagParser)
 				tagRegistry["for"] = parseForTag
 			},
-			tagName:        "for",
-			expectedExists: true,
+			tagName: "for",
+			want:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupFunc()
-			parser, exists := Tag(tt.tagName)
-			assert.Equal(t, tt.expectedExists, exists)
-			if tt.expectedExists {
-				assert.NotNil(t, parser)
-			} else {
-				assert.Nil(t, parser)
+			tt.setup()
+			p, ok := Tag(tt.tagName)
+			if ok != tt.want {
+				t.Errorf("Tag(%q) ok = %v, want %v", tt.tagName, ok, tt.want)
+			}
+			if tt.want && p == nil {
+				t.Errorf("Tag(%q) parser = nil, want non-nil", tt.tagName)
+			}
+			if !tt.want && p != nil {
+				t.Errorf("Tag(%q) parser = non-nil, want nil", tt.tagName)
 			}
 		})
 	}
@@ -126,151 +144,181 @@ func TestTag(t *testing.T) {
 
 func TestParseIfTag(t *testing.T) {
 	tests := []struct {
-		name           string
-		template       string
-		expectedError  bool
-		errorContains  string
-		validateResult func(*testing.T, Statement)
+		name        string
+		tmpl        string
+		wantErr     bool
+		errContains string
+		validate    func(*testing.T, Statement)
 	}{
 		{
-			name:          "simple if",
-			template:      "{% if x %}yes{% endif %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				ifNode, ok := stmt.(*IfNode)
-				assert.True(t, ok, "expected IfNode")
-				assert.Equal(t, 1, len(ifNode.Branches))
-				assert.Equal(t, 0, len(ifNode.ElseBody))
-
-				// Check condition
-				varNode, ok := ifNode.Branches[0].Condition.(*VariableNode)
-				assert.True(t, ok, "expected VariableNode")
-				assert.Equal(t, "x", varNode.Name)
-
-				// Check body has content
-				assert.Equal(t, 1, len(ifNode.Branches[0].Body))
+			name: "simple if",
+			tmpl: `{% if x %}yes{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 1 {
+					t.Errorf("len(Branches) = %d, want 1", got)
+				}
+				if got := len(n.ElseBody); got != 0 {
+					t.Errorf("len(ElseBody) = %d, want 0", got)
+				}
+				if _, ok := n.Branches[0].Condition.(*VariableNode); !ok {
+					t.Errorf("condition type = %T, want *VariableNode", n.Branches[0].Condition)
+				}
+				if got := len(n.Branches[0].Body); got != 1 {
+					t.Errorf("len(Body) = %d, want 1", got)
+				}
 			},
 		},
 		{
-			name:          "if-else",
-			template:      "{% if x %}yes{% else %}no{% endif %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				ifNode, ok := stmt.(*IfNode)
-				assert.True(t, ok)
-				assert.Equal(t, 1, len(ifNode.Branches))
-				assert.Equal(t, 1, len(ifNode.ElseBody))
+			name: "if-else",
+			tmpl: `{% if x %}yes{% else %}no{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 1 {
+					t.Errorf("len(Branches) = %d, want 1", got)
+				}
+				if got := len(n.ElseBody); got != 1 {
+					t.Errorf("len(ElseBody) = %d, want 1", got)
+				}
 			},
 		},
 		{
-			name:          "if-elif-else",
-			template:      "{% if x > 5 %}big{% elif x > 0 %}small{% else %}zero{% endif %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				ifNode, ok := stmt.(*IfNode)
-				assert.True(t, ok)
-				assert.Equal(t, 2, len(ifNode.Branches))
-				assert.Equal(t, 1, len(ifNode.ElseBody))
+			name: "if-elif-else",
+			tmpl: `{% if x > 5 %}big{% elif x > 0 %}small{% else %}zero{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 2 {
+					t.Errorf("len(Branches) = %d, want 2", got)
+				}
+				if got := len(n.ElseBody); got != 1 {
+					t.Errorf("len(ElseBody) = %d, want 1", got)
+				}
 			},
 		},
 		{
-			name:          "multiple elif",
-			template:      "{% if x == 1 %}one{% elif x == 2 %}two{% elif x == 3 %}three{% endif %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				ifNode, ok := stmt.(*IfNode)
-				assert.True(t, ok)
-				assert.Equal(t, 3, len(ifNode.Branches))
-				assert.Equal(t, 0, len(ifNode.ElseBody))
+			name: "multiple elif",
+			tmpl: `{% if x == 1 %}one{% elif x == 2 %}two{% elif x == 3 %}three{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 3 {
+					t.Errorf("len(Branches) = %d, want 3", got)
+				}
+				if got := len(n.ElseBody); got != 0 {
+					t.Errorf("len(ElseBody) = %d, want 0", got)
+				}
 			},
 		},
 		{
-			name:          "if with comparison",
-			template:      "{% if count > 10 %}many{% endif %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				ifNode, ok := stmt.(*IfNode)
-				assert.True(t, ok)
-				assert.Equal(t, 1, len(ifNode.Branches))
-
-				// Check it's a binary operation (comparison)
-				_, ok = ifNode.Branches[0].Condition.(*BinaryOpNode)
-				assert.True(t, ok, "expected BinaryOpNode for comparison")
+			name: "if with comparison",
+			tmpl: `{% if count > 10 %}many{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 1 {
+					t.Errorf("len(Branches) = %d, want 1", got)
+				}
+				if _, ok := n.Branches[0].Condition.(*BinaryOpNode); !ok {
+					t.Errorf("condition type = %T, want *BinaryOpNode", n.Branches[0].Condition)
+				}
 			},
 		},
 		{
-			name:          "if with logical and",
-			template:      "{% if x > 0 and x < 10 %}valid{% endif %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				ifNode, ok := stmt.(*IfNode)
-				assert.True(t, ok)
-				assert.Equal(t, 1, len(ifNode.Branches))
-
-				// Check it's a binary operation (logical and)
-				_, ok = ifNode.Branches[0].Condition.(*BinaryOpNode)
-				assert.True(t, ok, "expected BinaryOpNode for logical operation")
+			name: "if with logical and",
+			tmpl: `{% if x > 0 and x < 10 %}valid{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 1 {
+					t.Errorf("len(Branches) = %d, want 1", got)
+				}
+				if _, ok := n.Branches[0].Condition.(*BinaryOpNode); !ok {
+					t.Errorf("condition type = %T, want *BinaryOpNode", n.Branches[0].Condition)
+				}
 			},
 		},
 		{
-			name:          "empty if body",
-			template:      "{% if x %}{% endif %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				ifNode, ok := stmt.(*IfNode)
-				assert.True(t, ok)
-				assert.Equal(t, 1, len(ifNode.Branches))
-				assert.Equal(t, 0, len(ifNode.Branches[0].Body))
+			name: "empty if body",
+			tmpl: `{% if x %}{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 1 {
+					t.Errorf("len(Branches) = %d, want 1", got)
+				}
+				if got := len(n.Branches[0].Body); got != 0 {
+					t.Errorf("len(Body) = %d, want 0", got)
+				}
 			},
 		},
 		{
-			name:          "extra tokens after condition",
-			template:      "{% if x y %}yes{% endif %}",
-			expectedError: true,
-			errorContains: ErrUnexpectedTokensAfterCondition.Error(),
+			name:        "extra tokens after condition",
+			tmpl:        `{% if x y %}yes{% endif %}`,
+			wantErr:     true,
+			errContains: ErrUnexpectedTokensAfterCondition.Error(),
 		},
 		{
-			name:          "else with arguments",
-			template:      "{% if x %}yes{% else x %}no{% endif %}",
-			expectedError: true,
-			errorContains: ErrElseNoArgs.Error(),
+			name:        "else with arguments",
+			tmpl:        `{% if x %}yes{% else x %}no{% endif %}`,
+			wantErr:     true,
+			errContains: ErrElseNoArgs.Error(),
 		},
 		{
-			name:          "endif with arguments",
-			template:      "{% if x %}yes{% endif x %}",
-			expectedError: true,
-			errorContains: ErrEndifNoArgs.Error(),
+			name:        "endif with arguments",
+			tmpl:        `{% if x %}yes{% endif x %}`,
+			wantErr:     true,
+			errContains: ErrEndifNoArgs.Error(),
 		},
 		{
-			name:          "missing endif",
-			template:      "{% if x %}yes",
-			expectedError: true,
+			name:    "missing endif",
+			tmpl:    `{% if x %}yes`,
+			wantErr: true,
 		},
 		{
-			name:          "elif after else",
-			template:      "{% if x %}a{% else %}b{% elif y %}c{% endif %}",
-			expectedError: true,
-			errorContains: "unknown tag",
+			name:        "elif after else",
+			tmpl:        `{% if x %}a{% else %}b{% elif y %}c{% endif %}`,
+			wantErr:     true,
+			errContains: "unknown tag",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+			tmpl, err := Compile(tt.tmpl)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
 				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, tmpl)
-
-				if tt.validateResult != nil {
-					assert.Equal(t, 1, len(tmpl.root))
-					tt.validateResult(t, tmpl.root[0])
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if tt.validate != nil {
+				if len(tmpl.root) != 1 {
+					t.Fatalf("len(root) = %d, want 1", len(tmpl.root))
+				}
+				tt.validate(t, tmpl.root[0])
 			}
 		})
 	}
@@ -278,126 +326,143 @@ func TestParseIfTag(t *testing.T) {
 
 func TestParseForTag(t *testing.T) {
 	tests := []struct {
-		name           string
-		template       string
-		expectedError  bool
-		errorContains  string
-		validateResult func(*testing.T, Statement)
+		name        string
+		tmpl        string
+		wantErr     bool
+		errContains string
+		validate    func(*testing.T, Statement)
 	}{
 		{
-			name:          "simple for loop",
-			template:      "{% for item in items %}{{ item }}{% endfor %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				forNode, ok := stmt.(*ForNode)
-				assert.True(t, ok, "expected ForNode")
-				assert.Equal(t, []string{"item"}, forNode.LoopVars)
-				assert.Equal(t, 1, len(forNode.Body))
-
-				// Check collection
-				varNode, ok := forNode.Collection.(*VariableNode)
-				assert.True(t, ok, "expected VariableNode")
-				assert.Equal(t, "items", varNode.Name)
+			name: "simple for loop",
+			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				if diff := cmp.Diff([]string{"item"}, n.Vars); diff != "" {
+					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
+				}
+				if got := len(n.Body); got != 1 {
+					t.Errorf("len(Body) = %d, want 1", got)
+				}
+				if _, ok := n.Collection.(*VariableNode); !ok {
+					t.Errorf("collection type = %T, want *VariableNode", n.Collection)
+				}
 			},
 		},
 		{
-			name:          "for loop with key-value",
-			template:      "{% for key, value in dict %}{{ key }}: {{ value }}{% endfor %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				forNode, ok := stmt.(*ForNode)
-				assert.True(t, ok)
-				assert.Equal(t, []string{"key", "value"}, forNode.LoopVars)
-				assert.Equal(t, 3, len(forNode.Body)) // key, text(": "), value
+			name: "for loop with key-value",
+			tmpl: `{% for key, value in dict %}{{ key }}: {{ value }}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				if diff := cmp.Diff([]string{"key", "value"}, n.Vars); diff != "" {
+					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
+				}
+				if got := len(n.Body); got != 3 {
+					t.Errorf("len(Body) = %d, want 3", got)
+				}
 			},
 		},
 		{
-			name:          "for loop with index-item",
-			template:      "{% for i, item in list %}{{ i }}{% endfor %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				forNode, ok := stmt.(*ForNode)
-				assert.True(t, ok)
-				assert.Equal(t, []string{"i", "item"}, forNode.LoopVars)
+			name: "for loop with index-item",
+			tmpl: `{% for i, item in list %}{{ i }}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				if diff := cmp.Diff([]string{"i", "item"}, n.Vars); diff != "" {
+					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
+				}
 			},
 		},
 		{
-			name:          "empty for body",
-			template:      "{% for item in items %}{% endfor %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				forNode, ok := stmt.(*ForNode)
-				assert.True(t, ok)
-				assert.Equal(t, 0, len(forNode.Body))
+			name: "empty for body",
+			tmpl: `{% for item in items %}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				if got := len(n.Body); got != 0 {
+					t.Errorf("len(Body) = %d, want 0", got)
+				}
 			},
 		},
 		{
-			name:          "for with complex collection",
-			template:      "{% for item in user.items %}{{ item }}{% endfor %}",
-			expectedError: false,
-			validateResult: func(t *testing.T, stmt Statement) {
-				forNode, ok := stmt.(*ForNode)
-				assert.True(t, ok)
-
-				// Check collection is property access
-				_, ok = forNode.Collection.(*PropertyAccessNode)
-				assert.True(t, ok, "expected PropertyAccessNode")
+			name: "for with complex collection",
+			tmpl: `{% for item in user.items %}{{ item }}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				if _, ok := n.Collection.(*PropertyAccessNode); !ok {
+					t.Errorf("collection type = %T, want *PropertyAccessNode", n.Collection)
+				}
 			},
 		},
 		{
-			name:          "missing variable name",
-			template:      "{% for in items %}{% endfor %}",
-			expectedError: true,
-			errorContains: ErrExpectedInKeyword.Error(),
+			name:        "missing variable name",
+			tmpl:        `{% for in items %}{% endfor %}`,
+			wantErr:     true,
+			errContains: ErrExpectedInKeyword.Error(),
 		},
 		{
-			name:          "missing in keyword",
-			template:      "{% for item items %}{% endfor %}",
-			expectedError: true,
-			errorContains: ErrExpectedInKeyword.Error(),
+			name:        "missing in keyword",
+			tmpl:        `{% for item items %}{% endfor %}`,
+			wantErr:     true,
+			errContains: ErrExpectedInKeyword.Error(),
 		},
 		{
-			name:          "missing second variable after comma",
-			template:      "{% for item, in items %}{% endfor %}",
-			expectedError: true,
-			errorContains: ErrExpectedInKeyword.Error(),
+			name:        "missing second variable after comma",
+			tmpl:        `{% for item, in items %}{% endfor %}`,
+			wantErr:     true,
+			errContains: ErrExpectedInKeyword.Error(),
 		},
 		{
-			name:          "extra tokens after collection",
-			template:      "{% for item in items extra %}{% endfor %}",
-			expectedError: true,
-			errorContains: ErrUnexpectedTokensAfterCollection.Error(),
+			name:        "extra tokens after collection",
+			tmpl:        `{% for item in items extra %}{% endfor %}`,
+			wantErr:     true,
+			errContains: ErrUnexpectedTokensAfterCollection.Error(),
 		},
 		{
-			name:          "endfor with arguments",
-			template:      "{% for item in items %}{% endfor x %}",
-			expectedError: true,
-			errorContains: ErrEndforNoArgs.Error(),
+			name:        "endfor with arguments",
+			tmpl:        `{% for item in items %}{% endfor x %}`,
+			wantErr:     true,
+			errContains: ErrEndforNoArgs.Error(),
 		},
 		{
-			name:          "missing endfor",
-			template:      "{% for item in items %}{{ item }}",
-			expectedError: true,
+			name:    "missing endfor",
+			tmpl:    `{% for item in items %}{{ item }}`,
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+			tmpl, err := Compile(tt.tmpl)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
 				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, tmpl)
-
-				if tt.validateResult != nil {
-					assert.Equal(t, 1, len(tmpl.root))
-					tt.validateResult(t, tmpl.root[0])
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if tt.validate != nil {
+				if len(tmpl.root) != 1 {
+					t.Fatalf("len(root) = %d, want 1", len(tmpl.root))
+				}
+				tt.validate(t, tmpl.root[0])
 			}
 		})
 	}
@@ -405,66 +470,63 @@ func TestParseForTag(t *testing.T) {
 
 func TestParseBreakTag(t *testing.T) {
 	tests := []struct {
-		name          string
-		template      string
-		expectedError bool
-		errorContains string
+		name        string
+		tmpl        string
+		wantErr     bool
+		errContains string
+		validate    func(*testing.T, Statement)
 	}{
 		{
-			name:          "break without arguments",
-			template:      "{% for item in items %}{% break %}{% endfor %}",
-			expectedError: false,
+			name: "break without arguments",
+			tmpl: `{% for item in items %}{% break %}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				found := false
+				for _, node := range n.Body {
+					if _, ok := node.(*BreakNode); ok {
+						found = true
+					}
+				}
+				if !found {
+					t.Error("BreakNode not found in for body")
+				}
+			},
 		},
 		{
-			name:          "break with arguments should fail",
-			template:      "{% for item in items %}{% break now %}{% endfor %}",
-			expectedError: true,
-			errorContains: ErrBreakNoArgs.Error(),
+			name:        "break with arguments should fail",
+			tmpl:        `{% for item in items %}{% break now %}{% endfor %}`,
+			wantErr:     true,
+			errContains: ErrBreakNoArgs.Error(),
 		},
 		{
-			name:          "multiple breaks in loop",
-			template:      "{% for item in items %}{% if item %}{% break %}{% endif %}{% break %}{% endfor %}",
-			expectedError: false,
+			name: "multiple breaks in loop",
+			tmpl: `{% for item in items %}{% if item %}{% break %}{% endif %}{% break %}{% endfor %}`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+			tmpl, err := Compile(tt.tmpl)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
 				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, tmpl)
-
-				// Validate break node exists in the tree
-				forNode, ok := tmpl.root[0].(*ForNode)
-				assert.True(t, ok, "expected ForNode")
-
-				// Check if break node is in the body
-				hasBreak := false
-				for _, node := range forNode.Body {
-					if _, ok := node.(*BreakNode); ok {
-						hasBreak = true
-						break
-					}
-					// Break might be inside an if
-					if ifNode, ok := node.(*IfNode); ok {
-						for _, branch := range ifNode.Branches {
-							for _, n := range branch.Body {
-								if _, ok := n.(*BreakNode); ok {
-									hasBreak = true
-									break
-								}
-							}
-						}
-					}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
-				assert.True(t, hasBreak, "expected to find BreakNode in for loop")
+				return
+			}
+			if err != nil {
+				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if tt.validate != nil {
+				if len(tmpl.root) != 1 {
+					t.Fatalf("len(root) = %d, want 1", len(tmpl.root))
+				}
+				tt.validate(t, tmpl.root[0])
 			}
 		})
 	}
@@ -472,66 +534,63 @@ func TestParseBreakTag(t *testing.T) {
 
 func TestParseContinueTag(t *testing.T) {
 	tests := []struct {
-		name          string
-		template      string
-		expectedError bool
-		errorContains string
+		name        string
+		tmpl        string
+		wantErr     bool
+		errContains string
+		validate    func(*testing.T, Statement)
 	}{
 		{
-			name:          "continue without arguments",
-			template:      "{% for item in items %}{% continue %}{% endfor %}",
-			expectedError: false,
+			name: "continue without arguments",
+			tmpl: `{% for item in items %}{% continue %}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				found := false
+				for _, node := range n.Body {
+					if _, ok := node.(*ContinueNode); ok {
+						found = true
+					}
+				}
+				if !found {
+					t.Error("ContinueNode not found in for body")
+				}
+			},
 		},
 		{
-			name:          "continue with arguments should fail",
-			template:      "{% for item in items %}{% continue now %}{% endfor %}",
-			expectedError: true,
-			errorContains: ErrContinueNoArgs.Error(),
+			name:        "continue with arguments should fail",
+			tmpl:        `{% for item in items %}{% continue now %}{% endfor %}`,
+			wantErr:     true,
+			errContains: ErrContinueNoArgs.Error(),
 		},
 		{
-			name:          "multiple continues in loop",
-			template:      "{% for item in items %}{% if item %}{% continue %}{% endif %}{% continue %}{% endfor %}",
-			expectedError: false,
+			name: "multiple continues in loop",
+			tmpl: `{% for item in items %}{% if item %}{% continue %}{% endif %}{% continue %}{% endfor %}`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+			tmpl, err := Compile(tt.tmpl)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
 				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, tmpl)
-
-				// Validate continue node exists in the tree
-				forNode, ok := tmpl.root[0].(*ForNode)
-				assert.True(t, ok, "expected ForNode")
-
-				// Check if continue node is in the body
-				hasContinue := false
-				for _, node := range forNode.Body {
-					if _, ok := node.(*ContinueNode); ok {
-						hasContinue = true
-						break
-					}
-					// Continue might be inside an if
-					if ifNode, ok := node.(*IfNode); ok {
-						for _, branch := range ifNode.Branches {
-							for _, n := range branch.Body {
-								if _, ok := n.(*ContinueNode); ok {
-									hasContinue = true
-									break
-								}
-							}
-						}
-					}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
-				assert.True(t, hasContinue, "expected to find ContinueNode in for loop")
+				return
+			}
+			if err != nil {
+				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if tt.validate != nil {
+				if len(tmpl.root) != 1 {
+					t.Fatalf("len(root) = %d, want 1", len(tmpl.root))
+				}
+				tt.validate(t, tmpl.root[0])
 			}
 		})
 	}
@@ -539,72 +598,76 @@ func TestParseContinueTag(t *testing.T) {
 
 func TestIfTagExecution(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "if true condition",
-			template: "{% if x %}yes{% endif %}",
-			data:     map[string]interface{}{"x": true},
-			expected: "yes",
+			name: "if true condition",
+			tmpl: `{% if x %}yes{% endif %}`,
+			data: map[string]any{"x": true},
+			want: "yes",
 		},
 		{
-			name:     "if false condition",
-			template: "{% if x %}yes{% endif %}",
-			data:     map[string]interface{}{"x": false},
-			expected: "",
+			name: "if false condition",
+			tmpl: `{% if x %}yes{% endif %}`,
+			data: map[string]any{"x": false},
+			want: "",
 		},
 		{
-			name:     "if-else true",
-			template: "{% if x %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"x": true},
-			expected: "yes",
+			name: "if-else true",
+			tmpl: `{% if x %}yes{% else %}no{% endif %}`,
+			data: map[string]any{"x": true},
+			want: "yes",
 		},
 		{
-			name:     "if-else false",
-			template: "{% if x %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"x": false},
-			expected: "no",
+			name: "if-else false",
+			tmpl: `{% if x %}yes{% else %}no{% endif %}`,
+			data: map[string]any{"x": false},
+			want: "no",
 		},
 		{
-			name:     "if-elif first true",
-			template: "{% if first %}one{% elif second %}two{% else %}other{% endif %}",
-			data:     map[string]interface{}{"first": true, "second": false},
-			expected: "one",
+			name: "if-elif first true",
+			tmpl: `{% if first %}one{% elif second %}two{% else %}other{% endif %}`,
+			data: map[string]any{"first": true, "second": false},
+			want: "one",
 		},
 		{
-			name:     "if-elif second true",
-			template: "{% if first %}one{% elif second %}two{% else %}other{% endif %}",
-			data:     map[string]interface{}{"first": false, "second": true},
-			expected: "two",
+			name: "if-elif second true",
+			tmpl: `{% if first %}one{% elif second %}two{% else %}other{% endif %}`,
+			data: map[string]any{"first": false, "second": true},
+			want: "two",
 		},
 		{
-			name:     "if-elif else",
-			template: "{% if first %}one{% elif second %}two{% else %}other{% endif %}",
-			data:     map[string]interface{}{"first": false, "second": false},
-			expected: "other",
+			name: "if-elif else",
+			tmpl: `{% if first %}one{% elif second %}two{% else %}other{% endif %}`,
+			data: map[string]any{"first": false, "second": false},
+			want: "other",
 		},
 		{
-			name:     "if with comparison",
-			template: "{% if count > 5 %}many{% else %}few{% endif %}",
-			data:     map[string]interface{}{"count": 10},
-			expected: "many",
+			name: "if with comparison",
+			tmpl: `{% if count > 5 %}many{% else %}few{% endif %}`,
+			data: map[string]any{"count": 10},
+			want: "many",
 		},
 		{
-			name:     "nested if",
-			template: "{% if outer %}{% if inner %}yes{% endif %}{% endif %}",
-			data:     map[string]interface{}{"outer": true, "inner": true},
-			expected: "yes",
+			name: "nested if",
+			tmpl: `{% if outer %}{% if inner %}yes{% endif %}{% endif %}`,
+			data: map[string]any{"outer": true, "inner": true},
+			want: "yes",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
@@ -612,59 +675,62 @@ func TestIfTagExecution(t *testing.T) {
 func TestForTagExecution(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		tmpl     string
+		data     map[string]any
+		want     string
+		contains []string
 	}{
 		{
-			name:     "simple for loop",
-			template: "{% for item in items %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "123",
+			name: "simple for loop",
+			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "123",
 		},
 		{
-			name:     "for loop with separator",
-			template: "{% for item in items %}{{ item }},{% endfor %}",
-			data:     map[string]interface{}{"items": []string{"a", "b", "c"}},
-			expected: "a,b,c,",
+			name: "for loop with separator",
+			tmpl: `{% for item in items %}{{ item }},{% endfor %}`,
+			data: map[string]any{"items": []string{"a", "b", "c"}},
+			want: "a,b,c,",
 		},
 		{
-			name:     "empty collection",
-			template: "{% for item in items %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{}},
-			expected: "",
+			name: "empty collection",
+			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{}},
+			want: "",
 		},
 		{
 			name:     "for with key-value",
-			template: "{% for k, v in dict %}{{ k }}:{{ v }};{% endfor %}",
-			data:     map[string]interface{}{"dict": map[string]int{"a": 1, "b": 2}},
-			expected: "a:1;b:2;", // Note: map iteration order is not guaranteed in Go
+			tmpl:     `{% for k, v in dict %}{{ k }}:{{ v }};{% endfor %}`,
+			data:     map[string]any{"dict": map[string]int{"a": 1, "b": 2}},
+			contains: []string{"a:1", "b:2"},
 		},
 		{
 			name:     "for map single var binds key",
-			template: "{% for item in dict %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"dict": map[string]int{"a": 1, "b": 2}},
-			expected: "ab",
+			tmpl:     `{% for item in dict %}{{ item }}{% endfor %}`,
+			data:     map[string]any{"dict": map[string]int{"a": 1, "b": 2}},
+			contains: []string{"a", "b"},
 		},
 		{
-			name:     "nested for loops",
-			template: "{% for i in outer %}{% for j in inner %}{{ i }}{{ j }}{% endfor %}{% endfor %}",
-			data:     map[string]interface{}{"outer": []int{1, 2}, "inner": []string{"a", "b"}},
-			expected: "1a1b2a2b",
+			name: "nested for loops",
+			tmpl: `{% for i in outer %}{% for j in inner %}{{ i }}{{ j }}{% endfor %}{% endfor %}`,
+			data: map[string]any{"outer": []int{1, 2}, "inner": []string{"a", "b"}},
+			want: "1a1b2a2b",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-
-			// For map iteration, order is not guaranteed, so we check if result contains expected parts
-			if tt.name == "for with key-value" {
-				assert.Contains(t, result, "a:1")
-				assert.Contains(t, result, "b:2")
-			} else {
-				assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if tt.want != "" && got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
+			for _, c := range tt.contains {
+				if !strings.Contains(got, c) {
+					t.Errorf("Render(%q) = %q, want containing %q", tt.tmpl, got, c)
+				}
 			}
 		})
 	}
@@ -672,147 +738,144 @@ func TestForTagExecution(t *testing.T) {
 
 func TestBreakTagExecution(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "break immediately",
-			template: "{% for item in items %}{% break %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "",
+			name: "break immediately",
+			tmpl: `{% for item in items %}{% break %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "",
 		},
 		{
-			name:     "break after first item",
-			template: "{% for item in items %}{{ item }}{% break %}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "1",
+			name: "break after first item",
+			tmpl: `{% for item in items %}{{ item }}{% break %}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "1",
 		},
 		{
-			name:     "conditional break",
-			template: "{% for item in items %}{% if item > 2 %}{% break %}{% endif %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3, 4}},
-			expected: "12",
+			name: "conditional break",
+			tmpl: `{% for item in items %}{% if item > 2 %}{% break %}{% endif %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3, 4}},
+			want: "12",
 		},
 		{
-			name:     "break in nested loop",
-			template: "{% for i in outer %}{% for j in inner %}{{ i }}{{ j }}{% if j == 'b' %}{% break %}{% endif %}{% endfor %}{% endfor %}",
-			data:     map[string]interface{}{"outer": []int{1, 2}, "inner": []string{"a", "b", "c"}},
-			expected: "1a1b2a2b",
+			name: "break in nested loop",
+			tmpl: `{% for i in outer %}{% for j in inner %}{{ i }}{{ j }}{% if j == 'b' %}{% break %}{% endif %}{% endfor %}{% endfor %}`,
+			data: map[string]any{"outer": []int{1, 2}, "inner": []string{"a", "b", "c"}},
+			want: "1a1b2a2b",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
 func TestContinueTagExecution(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "continue immediately",
-			template: "{% for item in items %}{% continue %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "",
+			name: "continue immediately",
+			tmpl: `{% for item in items %}{% continue %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "",
 		},
 		{
-			name:     "continue after output",
-			template: "{% for item in items %}{{ item }}{% continue %}X{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "123",
+			name: "continue after output",
+			tmpl: `{% for item in items %}{{ item }}{% continue %}X{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "123",
 		},
 		{
-			name:     "conditional continue",
-			template: "{% for item in items %}{% if item > 1 and item < 3 %}{% continue %}{% endif %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "13",
+			name: "conditional continue",
+			tmpl: `{% for item in items %}{% if item > 1 and item < 3 %}{% continue %}{% endif %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "13",
 		},
 		{
-			name:     "continue in nested loop",
-			template: "{% for i in outer %}{% for j in inner %}{% if j %}{% continue %}{% endif %}X{% endfor %}{% endfor %}",
-			data:     map[string]interface{}{"outer": []int{1, 2}, "inner": []bool{true, true}},
-			expected: "",
+			name: "continue in nested loop",
+			tmpl: `{% for i in outer %}{% for j in inner %}{% if j %}{% continue %}{% endif %}X{% endfor %}{% endfor %}`,
+			data: map[string]any{"outer": []int{1, 2}, "inner": []bool{true, true}},
+			want: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
 func TestComplexTagCombinations(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "if inside for",
-			template: `{% for item in items %}{% if item > 2 %}{{ item }}{% endif %}{% endfor %}`,
-			data: map[string]interface{}{
-				"items": []int{1, 2, 3, 4},
-			},
-			expected: "34",
+			name: "if inside for",
+			tmpl: `{% for item in items %}{% if item > 2 %}{{ item }}{% endif %}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3, 4}},
+			want: "34",
 		},
 		{
-			name:     "for inside if",
-			template: `{% if show %}{% for item in items %}{{ item }}{% endfor %}{% endif %}`,
-			data: map[string]interface{}{
-				"show":  true,
-				"items": []int{1, 2, 3},
-			},
-			expected: "123",
+			name: "for inside if",
+			tmpl: `{% if show %}{% for item in items %}{{ item }}{% endfor %}{% endif %}`,
+			data: map[string]any{"show": true, "items": []int{1, 2, 3}},
+			want: "123",
 		},
 		{
-			name:     "nested if-for with break",
-			template: `{% if show %}{% for item in items %}{% if item > 2 %}{% break %}{% endif %}{{ item }}{% endfor %}{% endif %}`,
-			data: map[string]interface{}{
-				"show":  true,
-				"items": []int{1, 2, 3, 4},
-			},
-			expected: "12",
+			name: "nested if-for with break",
+			tmpl: `{% if show %}{% for item in items %}{% if item > 2 %}{% break %}{% endif %}{{ item }}{% endfor %}{% endif %}`,
+			data: map[string]any{"show": true, "items": []int{1, 2, 3, 4}},
+			want: "12",
 		},
 		{
-			name:     "nested for with continue",
-			template: `{% for i in outer %}{% for j in inner %}{% if j > 1 and j < 3 %}{% continue %}{% endif %}{{ i }}{{ j }}{% endfor %}{% endfor %}`,
-			data: map[string]interface{}{
-				"outer": []int{1, 2},
-				"inner": []int{1, 2, 3},
-			},
-			expected: "11132123", // Skip j=2 for both i=1 and i=2
+			name: "nested for with continue",
+			tmpl: `{% for i in outer %}{% for j in inner %}{% if j > 1 and j < 3 %}{% continue %}{% endif %}{{ i }}{{ j }}{% endfor %}{% endfor %}`,
+			data: map[string]any{"outer": []int{1, 2}, "inner": []int{1, 2, 3}},
+			want: "11132123",
 		},
 		{
-			name:     "multiple elif with for",
-			template: `{% if first %}one{% elif second %}{% for i in items %}{{ i }}{% endfor %}{% else %}other{% endif %}`,
-			data: map[string]interface{}{
-				"first":  false,
-				"second": true,
-				"items":  []string{"a", "b"},
-			},
-			expected: "ab",
+			name: "multiple elif with for",
+			tmpl: `{% if first %}one{% elif second %}{% for i in items %}{{ i }}{% endfor %}{% else %}other{% endif %}`,
+			data: map[string]any{"first": false, "second": true, "items": []string{"a", "b"}},
+			want: "ab",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
@@ -820,384 +883,416 @@ func TestComplexTagCombinations(t *testing.T) {
 func TestTagNodeStructure(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
-		validate func(*testing.T, *Template)
+		tmpl     string
+		validate func(*testing.T, Statement)
 	}{
 		{
-			name:     "if node structure",
-			template: "{% if x %}yes{% endif %}",
-			validate: func(t *testing.T, tmpl *Template) {
-				// Find the IfNode in the root statements
-				var ifNode *IfNode
-				for _, stmt := range tmpl.root {
-					if node, ok := stmt.(*IfNode); ok {
-						ifNode = node
-						break
+			name: "if node structure",
+			tmpl: `{% if x %}yes{% endif %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*IfNode)
+				if !ok {
+					t.Fatalf("got %T, want *IfNode", s)
+				}
+				if got := len(n.Branches); got != 1 {
+					t.Errorf("len(Branches) = %d, want 1", got)
+				}
+				if got := len(n.ElseBody); got != 0 {
+					t.Errorf("len(ElseBody) = %d, want 0", got)
+				}
+				line, _ := n.Position()
+				if line < 1 {
+					t.Errorf("Position() line = %d, want >= 1", line)
+				}
+			},
+		},
+		{
+			name: "for node structure",
+			tmpl: `{% for item in items %}x{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				if diff := cmp.Diff([]string{"item"}, n.Vars); diff != "" {
+					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
+				}
+				if n.Collection == nil {
+					t.Error("Collection = nil, want non-nil")
+				}
+				if got := len(n.Body); got < 1 {
+					t.Errorf("len(Body) = %d, want >= 1", got)
+				}
+				line, _ := n.Position()
+				if line < 1 {
+					t.Errorf("Position() line = %d, want >= 1", line)
+				}
+			},
+		},
+		{
+			name: "break node structure",
+			tmpl: `{% for item in items %}{% break %}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				var brk *BreakNode
+				for _, node := range n.Body {
+					if b, ok := node.(*BreakNode); ok {
+						brk = b
 					}
 				}
-				assert.NotNil(t, ifNode, "IfNode should exist in root")
-
-				// Validate structure using reflection
-				expectedBranches := 1
-				expectedElseBody := 0
-				assert.Equal(t, expectedBranches, len(ifNode.Branches))
-				assert.Equal(t, expectedElseBody, len(ifNode.ElseBody))
-
-				// Check position info
-				line, col := ifNode.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if brk == nil {
+					t.Fatal("BreakNode not found in for body")
+				}
+				line, col := brk.Position()
+				if line != 1 {
+					t.Errorf("Position() line = %d, want 1", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %d, want > 0", col)
+				}
+				if got := brk.String(); got != "Break" {
+					t.Errorf("String() = %q, want %q", got, "Break")
+				}
 			},
 		},
 		{
-			name:     "for node structure",
-			template: "{% for item in items %}x{% endfor %}",
-			validate: func(t *testing.T, tmpl *Template) {
-				// Find the ForNode in the root statements
-				var forNode *ForNode
-				for _, stmt := range tmpl.root {
-					if node, ok := stmt.(*ForNode); ok {
-						forNode = node
-						break
+			name: "continue node structure",
+			tmpl: `{% for item in items %}{% continue %}{% endfor %}`,
+			validate: func(t *testing.T, s Statement) {
+				n, ok := s.(*ForNode)
+				if !ok {
+					t.Fatalf("got %T, want *ForNode", s)
+				}
+				var cont *ContinueNode
+				for _, node := range n.Body {
+					if c, ok := node.(*ContinueNode); ok {
+						cont = c
 					}
 				}
-				assert.NotNil(t, forNode, "ForNode should exist in root")
-
-				// Validate structure
-				expectedLoopVars := []string{"item"}
-				assert.True(t, reflect.DeepEqual(expectedLoopVars, forNode.LoopVars))
-				assert.NotNil(t, forNode.Collection)
-				assert.GreaterOrEqual(t, len(forNode.Body), 1)
-
-				// Check position info
-				line, col := forNode.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
-			},
-		},
-		{
-			name:     "break node structure",
-			template: "{% for item in items %}{% break %}{% endfor %}",
-			validate: func(t *testing.T, tmpl *Template) {
-				forNode := tmpl.root[0].(*ForNode)
-				breakNode, ok := forNode.Body[0].(*BreakNode)
-				assert.True(t, ok)
-
-				// Check position info
-				line, col := breakNode.Position()
-				assert.Equal(t, 1, line)
-				assert.Greater(t, col, 0)
-
-				// Check String() method
-				assert.Equal(t, "Break", breakNode.String())
-			},
-		},
-		{
-			name:     "continue node structure",
-			template: "{% for item in items %}{% continue %}{% endfor %}",
-			validate: func(t *testing.T, tmpl *Template) {
-				forNode := tmpl.root[0].(*ForNode)
-				continueNode, ok := forNode.Body[0].(*ContinueNode)
-				assert.True(t, ok)
-
-				// Check position info
-				line, col := continueNode.Position()
-				assert.Equal(t, 1, line)
-				assert.Greater(t, col, 0)
-
-				// Check String() method
-				assert.Equal(t, "Continue", continueNode.String())
+				if cont == nil {
+					t.Fatal("ContinueNode not found in for body")
+				}
+				line, col := cont.Position()
+				if line != 1 {
+					t.Errorf("Position() line = %d, want 1", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %d, want > 0", col)
+				}
+				if got := cont.String(); got != "Continue" {
+					t.Errorf("String() = %q, want %q", got, "Continue")
+				}
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
-			assert.NoError(t, err)
-			tt.validate(t, tmpl)
+			tmpl, err := Compile(tt.tmpl)
+			if err != nil {
+				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if len(tmpl.root) != 1 {
+				t.Fatalf("len(root) = %d, want 1", len(tmpl.root))
+			}
+			tt.validate(t, tmpl.root[0])
 		})
 	}
 }
 
-// Moved from integration_test.go
 func TestIntegration_BasicTemplateRendering(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "plain text",
-			template: "Hello, world!",
-			data:     map[string]interface{}{},
-			expected: "Hello, world!",
+			name: "plain text",
+			tmpl: "Hello, world!",
+			data: map[string]any{},
+			want: "Hello, world!",
 		},
 		{
-			name:     "simple variable",
-			template: "Hello, {{ name }}!",
-			data:     map[string]interface{}{"name": "Alice"},
-			expected: "Hello, Alice!",
+			name: "simple variable",
+			tmpl: "Hello, {{ name }}!",
+			data: map[string]any{"name": "Alice"},
+			want: "Hello, Alice!",
 		},
 		{
-			name:     "multiple variables",
-			template: "{{ greeting }}, {{ name }}!",
-			data:     map[string]interface{}{"greeting": "Hello", "name": "Bob"},
-			expected: "Hello, Bob!",
+			name: "multiple variables",
+			tmpl: "{{ greeting }}, {{ name }}!",
+			data: map[string]any{"greeting": "Hello", "name": "Bob"},
+			want: "Hello, Bob!",
 		},
 		{
-			name:     "variable with number",
-			template: "Age: {{ age }}",
-			data:     map[string]interface{}{"age": 30},
-			expected: "Age: 30",
+			name: "variable with number",
+			tmpl: "Age: {{ age }}",
+			data: map[string]any{"age": 30},
+			want: "Age: 30",
 		},
 		{
-			name:     "nested property",
-			template: "{{ user.name }}",
-			data: map[string]interface{}{
-				"user": map[string]interface{}{"name": "Charlie"},
-			},
-			expected: "Charlie",
+			name: "nested property",
+			tmpl: "{{ user.name }}",
+			data: map[string]any{"user": map[string]any{"name": "Charlie"}},
+			want: "Charlie",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
-// Moved from integration_test.go
 func TestIntegration_IfElseConditions(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "if true",
-			template: "{% if show %}visible{% endif %}",
-			data:     map[string]interface{}{"show": true},
-			expected: "visible",
+			name: "if true",
+			tmpl: `{% if show %}visible{% endif %}`,
+			data: map[string]any{"show": true},
+			want: "visible",
 		},
 		{
-			name:     "if false",
-			template: "{% if show %}visible{% endif %}",
-			data:     map[string]interface{}{"show": false},
-			expected: "",
+			name: "if false",
+			tmpl: `{% if show %}visible{% endif %}`,
+			data: map[string]any{"show": false},
+			want: "",
 		},
 		{
-			name:     "if-else true branch",
-			template: "{% if flag %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"flag": true},
-			expected: "yes",
+			name: "if-else true branch",
+			tmpl: `{% if flag %}yes{% else %}no{% endif %}`,
+			data: map[string]any{"flag": true},
+			want: "yes",
 		},
 		{
-			name:     "if-else false branch",
-			template: "{% if flag %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"flag": false},
-			expected: "no",
+			name: "if-else false branch",
+			tmpl: `{% if flag %}yes{% else %}no{% endif %}`,
+			data: map[string]any{"flag": false},
+			want: "no",
 		},
 		{
-			name:     "if-elif-else first",
-			template: "{% if x %}first{% elif y %}second{% else %}third{% endif %}",
-			data:     map[string]interface{}{"x": true, "y": false},
-			expected: "first",
+			name: "if-elif-else first",
+			tmpl: `{% if x %}first{% elif y %}second{% else %}third{% endif %}`,
+			data: map[string]any{"x": true, "y": false},
+			want: "first",
 		},
 		{
-			name:     "if-elif-else second",
-			template: "{% if x %}first{% elif y %}second{% else %}third{% endif %}",
-			data:     map[string]interface{}{"x": false, "y": true},
-			expected: "second",
+			name: "if-elif-else second",
+			tmpl: `{% if x %}first{% elif y %}second{% else %}third{% endif %}`,
+			data: map[string]any{"x": false, "y": true},
+			want: "second",
 		},
 		{
-			name:     "if-elif-else third",
-			template: "{% if x %}first{% elif y %}second{% else %}third{% endif %}",
-			data:     map[string]interface{}{"x": false, "y": false},
-			expected: "third",
+			name: "if-elif-else third",
+			tmpl: `{% if x %}first{% elif y %}second{% else %}third{% endif %}`,
+			data: map[string]any{"x": false, "y": false},
+			want: "third",
 		},
 		{
-			name:     "nested if",
-			template: "{% if outer %}{% if inner %}both{% endif %}{% endif %}",
-			data:     map[string]interface{}{"outer": true, "inner": true},
-			expected: "both",
+			name: "nested if",
+			tmpl: `{% if outer %}{% if inner %}both{% endif %}{% endif %}`,
+			data: map[string]any{"outer": true, "inner": true},
+			want: "both",
 		},
 		{
-			name:     "if with comparison",
-			template: "{% if count > 5 %}many{% else %}few{% endif %}",
-			data:     map[string]interface{}{"count": 10},
-			expected: "many",
+			name: "if with comparison",
+			tmpl: `{% if count > 5 %}many{% else %}few{% endif %}`,
+			data: map[string]any{"count": 10},
+			want: "many",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
-// Moved from integration_test.go
 func TestIntegration_ForLoops(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "simple for loop",
-			template: "{% for item in items %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "123",
+			name: "simple for loop",
+			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "123",
 		},
 		{
-			name:     "for loop with separator",
-			template: "{% for item in items %}{{ item }},{% endfor %}",
-			data:     map[string]interface{}{"items": []string{"a", "b", "c"}},
-			expected: "a,b,c,",
+			name: "for loop with separator",
+			tmpl: `{% for item in items %}{{ item }},{% endfor %}`,
+			data: map[string]any{"items": []string{"a", "b", "c"}},
+			want: "a,b,c,",
 		},
 		{
-			name:     "for loop with index",
-			template: "{% for i, item in items %}{{ i }}:{{ item }};{% endfor %}",
-			data:     map[string]interface{}{"items": []string{"x", "y"}},
-			expected: "0:x;1:y;",
+			name: "for loop with index",
+			tmpl: `{% for i, item in items %}{{ i }}:{{ item }};{% endfor %}`,
+			data: map[string]any{"items": []string{"x", "y"}},
+			want: "0:x;1:y;",
 		},
 		{
-			name:     "empty for loop",
-			template: "{% for item in items %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{}},
-			expected: "",
+			name: "empty for loop",
+			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{}},
+			want: "",
 		},
 		{
-			name:     "nested for loops",
-			template: "{% for i in outer %}{% for j in inner %}{{ i }}{{ j }}{% endfor %}{% endfor %}",
-			data:     map[string]interface{}{"outer": []int{1, 2}, "inner": []string{"a", "b"}},
-			expected: "1a1b2a2b",
+			name: "nested for loops",
+			tmpl: `{% for i in outer %}{% for j in inner %}{{ i }}{{ j }}{% endfor %}{% endfor %}`,
+			data: map[string]any{"outer": []int{1, 2}, "inner": []string{"a", "b"}},
+			want: "1a1b2a2b",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
-// Moved from integration_test.go
 func TestIntegration_BreakContinue(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "break in loop",
-			template: "{% for item in items %}{% if item > 2 %}{% break %}{% endif %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3, 4}},
-			expected: "12",
+			name: "break in loop",
+			tmpl: `{% for item in items %}{% if item > 2 %}{% break %}{% endif %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3, 4}},
+			want: "12",
 		},
 		{
-			name:     "continue in loop",
-			template: "{% for item in items %}{% if item > 1 and item < 4 %}{% continue %}{% endif %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3, 4}},
-			expected: "14",
+			name: "continue in loop",
+			tmpl: `{% for item in items %}{% if item > 1 and item < 4 %}{% continue %}{% endif %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3, 4}},
+			want: "14",
 		},
 		{
-			name:     "break immediately",
-			template: "{% for item in items %}{% break %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "",
+			name: "break immediately",
+			tmpl: `{% for item in items %}{% break %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "",
 		},
 		{
-			name:     "continue all iterations",
-			template: "{% for item in items %}{% continue %}{{ item }}{% endfor %}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3}},
-			expected: "",
+			name: "continue all iterations",
+			tmpl: `{% for item in items %}{% continue %}{{ item }}{% endfor %}`,
+			data: map[string]any{"items": []int{1, 2, 3}},
+			want: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
-// Moved from integration_test.go
 func TestIntegration_Filters(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "upper filter",
-			template: "{{ name|upper }}",
-			data:     map[string]interface{}{"name": "alice"},
-			expected: "ALICE",
+			name: "upper filter",
+			tmpl: "{{ name|upper }}",
+			data: map[string]any{"name": "alice"},
+			want: "ALICE",
 		},
 		{
-			name:     "lower filter",
-			template: "{{ name|lower }}",
-			data:     map[string]interface{}{"name": "ALICE"},
-			expected: "alice",
+			name: "lower filter",
+			tmpl: "{{ name|lower }}",
+			data: map[string]any{"name": "ALICE"},
+			want: "alice",
 		},
 		{
-			name:     "capitalize filter",
-			template: "{{ name|capitalize }}",
-			data:     map[string]interface{}{"name": "alice"},
-			expected: "Alice",
+			name: "capitalize filter",
+			tmpl: "{{ name|capitalize }}",
+			data: map[string]any{"name": "alice"},
+			want: "Alice",
 		},
 		{
-			name:     "length filter",
-			template: "{{ items|length }}",
-			data:     map[string]interface{}{"items": []int{1, 2, 3, 4, 5}},
-			expected: "5",
+			name: "length filter",
+			tmpl: "{{ items|length }}",
+			data: map[string]any{"items": []int{1, 2, 3, 4, 5}},
+			want: "5",
 		},
 		{
-			name:     "default filter with value",
-			template: `{{ name|default:"Anonymous" }}`,
-			data:     map[string]interface{}{"name": "Alice"},
-			expected: "Alice",
+			name: "default filter with value",
+			tmpl: `{{ name|default:"Anonymous" }}`,
+			data: map[string]any{"name": "Alice"},
+			want: "Alice",
 		},
 		{
-			name:     "default filter without value",
-			template: `{{ name|default:"Anonymous" }}`,
-			data:     map[string]interface{}{},
-			expected: "Anonymous",
+			name: "default filter without value",
+			tmpl: `{{ name|default:"Anonymous" }}`,
+			data: map[string]any{},
+			want: "Anonymous",
 		},
 		{
-			name:     "chained filters",
-			template: "{{ name|lower|capitalize }}",
-			data:     map[string]interface{}{"name": "ALICE"},
-			expected: "Alice",
+			name: "chained filters",
+			tmpl: "{{ name|lower|capitalize }}",
+			data: map[string]any{"name": "ALICE"},
+			want: "Alice",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
-// Moved from integration_test.go
 func TestIntegration_ComplexStructures(t *testing.T) {
 	type User struct {
 		Name    string
@@ -1211,23 +1306,23 @@ func TestIntegration_ComplexStructures(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "struct field access",
-			template: "{{ user.Name }}",
-			data: map[string]interface{}{
+			name: "struct field access",
+			tmpl: "{{ user.Name }}",
+			data: map[string]any{
 				"user": User{Name: "Alice", Age: 30},
 			},
-			expected: "Alice",
+			want: "Alice",
 		},
 		{
-			name:     "nested struct field",
-			template: "{{ user.Profile.Bio }}",
-			data: map[string]interface{}{
+			name: "nested struct field",
+			tmpl: "{{ user.Profile.Bio }}",
+			data: map[string]any{
 				"user": User{
 					Name: "Alice",
 					Profile: struct {
@@ -1236,307 +1331,248 @@ func TestIntegration_ComplexStructures(t *testing.T) {
 					}{Bio: "Software Engineer", Website: "https://example.com"},
 				},
 			},
-			expected: "Software Engineer",
+			want: "Software Engineer",
 		},
 		{
-			name:     "struct in loop",
-			template: "{% for user in users %}{{ user.Name }},{% endfor %}",
-			data: map[string]interface{}{
+			name: "struct in loop",
+			tmpl: "{% for user in users %}{{ user.Name }},{% endfor %}",
+			data: map[string]any{
 				"users": []User{
 					{Name: "Alice"},
 					{Name: "Bob"},
 					{Name: "Charlie"},
 				},
 			},
-			expected: "Alice,Bob,Charlie,",
+			want: "Alice,Bob,Charlie,",
 		},
 		{
-			name:     "struct with if condition",
-			template: "{% if user.Active %}{{ user.Name }} is active{% endif %}",
-			data: map[string]interface{}{
+			name: "struct with if condition",
+			tmpl: "{% if user.Active %}{{ user.Name }} is active{% endif %}",
+			data: map[string]any{
 				"user": User{Name: "Alice", Active: true},
 			},
-			expected: "Alice is active",
+			want: "Alice is active",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// Moved from integration_test.go
-func TestIntegration_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name        string
-		template    string
-		data        map[string]interface{}
-		expectError bool
-		expected    string
-	}{
-		{
-			name:        "empty template",
-			template:    "",
-			data:        map[string]interface{}{},
-			expectError: false,
-			expected:    "",
-		},
-		{
-			name:        "whitespace only",
-			template:    "   \n\t  ",
-			data:        map[string]interface{}{},
-			expectError: false,
-			expected:    "   \n\t  ",
-		},
-		{
-			name:        "unclosed variable tag",
-			template:    "{{ name",
-			data:        map[string]interface{}{"name": "Alice"},
-			expectError: true,
-		},
-		{
-			name:        "unclosed block tag",
-			template:    "{% if x",
-			data:        map[string]interface{}{"x": true},
-			expectError: true,
-		},
-		{
-			name:        "missing endif",
-			template:    "{% if x %}yes",
-			data:        map[string]interface{}{"x": true},
-			expectError: true,
-		},
-		{
-			name:        "missing endfor",
-			template:    "{% for item in items %}{{ item }}",
-			data:        map[string]interface{}{"items": []int{1, 2}},
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
 }
 
-// Moved from integration_test.go
+func TestIntegration_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		tmpl    string
+		data    map[string]any
+		wantErr bool
+		want    string
+	}{
+		{
+			name: "empty template",
+			tmpl: "",
+			data: map[string]any{},
+			want: "",
+		},
+		{
+			name: "whitespace only",
+			tmpl: "   \n\t  ",
+			data: map[string]any{},
+			want: "   \n\t  ",
+		},
+		{
+			name:    "unclosed variable tag",
+			tmpl:    "{{ name",
+			data:    map[string]any{"name": "Alice"},
+			wantErr: true,
+		},
+		{
+			name:    "unclosed block tag",
+			tmpl:    "{% if x",
+			data:    map[string]any{"x": true},
+			wantErr: true,
+		},
+		{
+			name:    "missing endif",
+			tmpl:    "{% if x %}yes",
+			data:    map[string]any{"x": true},
+			wantErr: true,
+		},
+		{
+			name:    "missing endfor",
+			tmpl:    "{% for item in items %}{{ item }}",
+			data:    map[string]any{"items": []int{1, 2}},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Render(tt.tmpl, tt.data)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Render(%q) err = nil, want error", tt.tmpl)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIntegration_ComplexTemplates(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
 			name: "user profile template",
-			template: `
-Name: {{ user.name }}
-Age: {{ user.age }}
-{% if user.active %}Status: Active{% else %}Status: Inactive{% endif %}
-`,
-			data: map[string]interface{}{
-				"user": map[string]interface{}{
+			tmpl: "\nName: {{ user.name }}\nAge: {{ user.age }}\n{% if user.active %}Status: Active{% else %}Status: Inactive{% endif %}\n",
+			data: map[string]any{
+				"user": map[string]any{
 					"name":   "Alice",
 					"age":    30,
 					"active": true,
 				},
 			},
-			expected: `
-Name: Alice
-Age: 30
-Status: Active
-`,
+			want: "\nName: Alice\nAge: 30\nStatus: Active\n",
 		},
 		{
 			name: "list rendering with conditions",
-			template: `{% for item in items %}{% if item > 5 %}{{ item }} is big
-{% else %}{{ item }} is small
-{% endif %}{% endfor %}`,
-			data: map[string]interface{}{
+			tmpl: "{% for item in items %}{% if item > 5 %}{{ item }} is big\n{% else %}{{ item }} is small\n{% endif %}{% endfor %}",
+			data: map[string]any{
 				"items": []int{3, 7, 4, 9},
 			},
-			expected: `3 is small
-7 is big
-4 is small
-9 is big
-`,
+			want: "3 is small\n7 is big\n4 is small\n9 is big\n",
 		},
 		{
 			name: "nested loops with break",
-			template: `{% for i in rows %}Row {{ i }}:{% for j in cols %}{% if j > 2 %}{% break %}{% endif %} {{ j }}{% endfor %}
-{% endfor %}`,
-			data: map[string]interface{}{
+			tmpl: "{% for i in rows %}Row {{ i }}:{% for j in cols %}{% if j > 2 %}{% break %}{% endif %} {{ j }}{% endfor %}\n{% endfor %}",
+			data: map[string]any{
 				"rows": []int{1, 2},
 				"cols": []int{1, 2, 3, 4},
 			},
-			expected: `Row 1: 1 2
-Row 2: 1 2
-`,
+			want: "Row 1: 1 2\nRow 2: 1 2\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
-// Moved from integration_test.go
 func TestIntegration_ArithmeticAndComparison(t *testing.T) {
 	tests := []struct {
-		name     string
-		template string
-		data     map[string]interface{}
-		expected string
+		name string
+		tmpl string
+		data map[string]any
+		want string
 	}{
 		{
-			name:     "addition",
-			template: "{{ a + b }}",
-			data:     map[string]interface{}{"a": 5, "b": 3},
-			expected: "8",
+			name: "addition",
+			tmpl: "{{ a + b }}",
+			data: map[string]any{"a": 5, "b": 3},
+			want: "8",
 		},
 		{
-			name:     "subtraction",
-			template: "{{ a - b }}",
-			data:     map[string]interface{}{"a": 10, "b": 3},
-			expected: "7",
+			name: "subtraction",
+			tmpl: "{{ a - b }}",
+			data: map[string]any{"a": 10, "b": 3},
+			want: "7",
 		},
 		{
-			name:     "multiplication",
-			template: "{{ a * b }}",
-			data:     map[string]interface{}{"a": 4, "b": 3},
-			expected: "12",
+			name: "multiplication",
+			tmpl: "{{ a * b }}",
+			data: map[string]any{"a": 4, "b": 3},
+			want: "12",
 		},
 		{
-			name:     "division",
-			template: "{{ a / b }}",
-			data:     map[string]interface{}{"a": 10, "b": 2},
-			expected: "5",
+			name: "division",
+			tmpl: "{{ a / b }}",
+			data: map[string]any{"a": 10, "b": 2},
+			want: "5",
 		},
 		{
-			name:     "modulo",
-			template: "{{ a % b }}",
-			data:     map[string]interface{}{"a": 10, "b": 3},
-			expected: "1",
+			name: "modulo",
+			tmpl: "{{ a % b }}",
+			data: map[string]any{"a": 10, "b": 3},
+			want: "1",
 		},
 		{
-			name:     "comparison greater than",
-			template: "{% if a > b %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"a": 10, "b": 5},
-			expected: "yes",
+			name: "comparison greater than",
+			tmpl: "{% if a > b %}yes{% else %}no{% endif %}",
+			data: map[string]any{"a": 10, "b": 5},
+			want: "yes",
 		},
 		{
-			name:     "comparison less than",
-			template: "{% if a < b %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"a": 3, "b": 5},
-			expected: "yes",
+			name: "comparison less than",
+			tmpl: "{% if a < b %}yes{% else %}no{% endif %}",
+			data: map[string]any{"a": 3, "b": 5},
+			want: "yes",
 		},
 		{
-			name:     "logical and",
-			template: "{% if a and b %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"a": true, "b": true},
-			expected: "yes",
+			name: "logical and",
+			tmpl: "{% if a and b %}yes{% else %}no{% endif %}",
+			data: map[string]any{"a": true, "b": true},
+			want: "yes",
 		},
 		{
-			name:     "logical or",
-			template: "{% if a or b %}yes{% else %}no{% endif %}",
-			data:     map[string]interface{}{"a": false, "b": true},
-			expected: "yes",
+			name: "logical or",
+			tmpl: "{% if a or b %}yes{% else %}no{% endif %}",
+			data: map[string]any{"a": false, "b": true},
+			want: "yes",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			got, err := Render(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if got != tt.want {
+				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
 		})
 	}
 }
 
-// saveTagRegistry saves and returns the current tag registry for later restoration.
-func saveTagRegistry() map[string]TagParser {
-	saved := tagRegistry
-	tagRegistry = make(map[string]TagParser)
-	// Copy built-in tags so tests start from a known state.
-	for k, v := range saved {
-		tagRegistry[k] = v
-	}
-	return saved
-}
-
-func restoreTagRegistry(saved map[string]TagParser) {
-	tagRegistry = saved
-}
-
-func TestRegisterTagExternalStatement(t *testing.T) {
-	saved := saveTagRegistry()
-	defer restoreTagRegistry(saved)
-
-	// Register a "set" tag demonstrating that external packages
-	// can now implement Statement directly.
-	UnregisterTag("set")
-	err := RegisterTag("set", func(_ *Parser, start *Token, arguments *Parser) (Statement, error) {
-		varToken, err := arguments.ExpectIdentifier()
-		if err != nil {
-			return nil, arguments.Error("expected variable name after 'set'")
-		}
-
-		if arguments.Match(TokenSymbol, "=") == nil {
-			return nil, arguments.Error("expected '=' after variable name")
-		}
-
-		expr, err := arguments.ParseExpression()
-		if err != nil {
-			return nil, err
-		}
-
-		if arguments.Remaining() > 0 {
-			return nil, arguments.Error("unexpected tokens after expression")
-		}
-
-		return &testSetNode{
-			varName:    varToken.Value,
-			expression: expr,
-			line:       start.Line,
-			col:        start.Col,
-		}, nil
-	})
-	assert.NoError(t, err)
-
-	result, err := Render(`{% set greeting = "Hello" %}{{ greeting }}, World!`, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, "Hello, World!", result)
-}
-
-// testSetNode is a Statement implementation used in TestRegisterTagLowLevel.
+// testSetNode is a Statement implementation used in TestRegisterTagExternalStatement.
 type testSetNode struct {
-	varName    string
-	expression Expression
-	line       int
-	col        int
+	varName string
+	expr    Expression
+	line    int
+	col     int
 }
 
 func (n *testSetNode) Position() (int, int) { return n.line, n.col }
 func (n *testSetNode) String() string       { return fmt.Sprintf("Set(%s)", n.varName) }
 
 func (n *testSetNode) Execute(ctx *ExecutionContext, _ io.Writer) error {
-	val, err := n.expression.Evaluate(ctx)
+	val, err := n.expr.Evaluate(ctx)
 	if err != nil {
 		return err
 	}
@@ -1544,20 +1580,58 @@ func (n *testSetNode) Execute(ctx *ExecutionContext, _ io.Writer) error {
 	return nil
 }
 
+func TestRegisterTagExternalStatement(t *testing.T) {
+	saved := saveTagRegistry()
+	defer restoreTagRegistry(saved)
+
+	UnregisterTag("set")
+	err := RegisterTag("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+		v, err := args.ExpectIdentifier()
+		if err != nil {
+			return nil, args.Error("expected variable name after 'set'")
+		}
+		if args.Match(TokenSymbol, "=") == nil {
+			return nil, args.Error("expected '=' after variable name")
+		}
+		expr, err := args.ParseExpression()
+		if err != nil {
+			return nil, err
+		}
+		if args.Remaining() > 0 {
+			return nil, args.Error("unexpected tokens after expression")
+		}
+		return &testSetNode{
+			varName: v.Value,
+			expr:    expr,
+			line:    start.Line,
+			col:     start.Col,
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("RegisterTag(\"set\") = %v, want nil", err)
+	}
+
+	got, err := Render(`{% set greeting = "Hello" %}{{ greeting }}, World!`, nil)
+	if err != nil {
+		t.Fatalf("Render() = %v, want nil", err)
+	}
+	if want := "Hello, World!"; got != want {
+		t.Errorf("Render() = %q, want %q", got, want)
+	}
+}
+
 func TestListTags(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
 	tags := ListTags()
-	// Built-in tags should be present.
-	assert.Contains(t, tags, "if")
-	assert.Contains(t, tags, "for")
-	assert.Contains(t, tags, "break")
-	assert.Contains(t, tags, "continue")
-
-	// Should be sorted.
-	for i := 1; i < len(tags); i++ {
-		assert.LessOrEqual(t, tags[i-1], tags[i])
+	for _, want := range []string{"if", "for", "break", "continue"} {
+		if !slices.Contains(tags, want) {
+			t.Errorf("ListTags() missing %q", want)
+		}
+	}
+	if !slices.IsSorted(tags) {
+		t.Errorf("ListTags() = %v, want sorted", tags)
 	}
 }
 
@@ -1565,19 +1639,28 @@ func TestHasTag(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
-	assert.True(t, HasTag("if"))
-	assert.True(t, HasTag("for"))
-	assert.False(t, HasTag("nonexistent"))
+	if !HasTag("if") {
+		t.Error("HasTag(\"if\") = false, want true")
+	}
+	if !HasTag("for") {
+		t.Error("HasTag(\"for\") = false, want true")
+	}
+	if HasTag("nonexistent") {
+		t.Error("HasTag(\"nonexistent\") = true, want false")
+	}
 }
 
 func TestUnregisterTag(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
-	assert.True(t, HasTag("if"))
+	if !HasTag("if") {
+		t.Fatal("HasTag(\"if\") = false, want true (before unregister)")
+	}
 	UnregisterTag("if")
-	assert.False(t, HasTag("if"))
-
+	if HasTag("if") {
+		t.Error("HasTag(\"if\") = true, want false (after unregister)")
+	}
 	// Unregistering a non-existent tag is a no-op.
 	UnregisterTag("nonexistent")
 }
@@ -1586,32 +1669,35 @@ func TestDuplicateRegistration(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
-	// Registering a tag with the same name as a built-in should fail.
 	err := RegisterTag("if", parseIfTag)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrTagAlreadyRegistered))
-
+	if !errors.Is(err, ErrTagAlreadyRegistered) {
+		t.Errorf("RegisterTag(\"if\") err = %v, want %v", err, ErrTagAlreadyRegistered)
+	}
 	err = RegisterTag("for", parseForTag)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, ErrTagAlreadyRegistered))
+	if !errors.Is(err, ErrTagAlreadyRegistered) {
+		t.Errorf("RegisterTag(\"for\") err = %v, want %v", err, ErrTagAlreadyRegistered)
+	}
 }
 
 func TestTagRegistrySaveRestore(t *testing.T) {
-	// Verify that save/restore works correctly for test isolation.
 	saved := saveTagRegistry()
 
-	// Add a custom tag.
 	err := RegisterTag("mytesttag", func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
 		return NewTextNode("", start.Line, start.Col), nil
 	})
-	assert.NoError(t, err)
-	assert.True(t, HasTag("mytesttag"))
+	if err != nil {
+		t.Fatalf("RegisterTag(\"mytesttag\") = %v, want nil", err)
+	}
+	if !HasTag("mytesttag") {
+		t.Error("HasTag(\"mytesttag\") = false, want true (before restore)")
+	}
 
-	// Restore.
 	restoreTagRegistry(saved)
 
-	// Custom tag should be gone.
-	assert.False(t, HasTag("mytesttag"))
-	// Built-in tags should still be present.
-	assert.True(t, HasTag("if"))
+	if HasTag("mytesttag") {
+		t.Error("HasTag(\"mytesttag\") = true, want false (after restore)")
+	}
+	if !HasTag("if") {
+		t.Error("HasTag(\"if\") = false, want true (after restore)")
+	}
 }

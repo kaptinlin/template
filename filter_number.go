@@ -13,15 +13,15 @@ func registerNumberFilters() {
 }
 
 // numberFilter formats a numeric value according to the specified format string.
-func numberFilter(value interface{}, args ...string) (interface{}, error) {
+func numberFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("number requires a format string: %w", ErrInsufficientArgs)
+		return nil, fmt.Errorf("%w: number filter requires a format string", ErrInsufficientArgs)
 	}
 	format := args[0]
 	return filter.Number(value, format)
 }
 
 // bytesFilter converts a numeric value into a human-readable byte format.
-func bytesFilter(value interface{}, _ ...string) (interface{}, error) {
+func bytesFilter(value any, _ ...string) (any, error) {
 	return filter.Bytes(value)
 }

@@ -1,101 +1,90 @@
 package template
 
-// parseIfTag parses the if tag.
-// {% if condition %}...{% elif condition %}...{% else %}...{% endif %}
-func parseIfTag(doc *Parser, start *Token, arguments *Parser) (Statement, error) {
+// parseIfTag parses an if-elif-else-endif block into an IfNode.
+//
+// Syntax:
+//
+//	{% if condition %}...{% elif condition %}...{% else %}...{% endif %}
+func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 	var branches []IfBranch
 	var elseBody []Node
 
-	// 1. Parse the first if condition.
-	condition, err := arguments.ParseExpression()
+	// Parse the first condition.
+	cond, err := args.ParseExpression()
 	if err != nil {
 		return nil, err
 	}
-
-	if arguments.Remaining() > 0 {
-		return nil, arguments.Error(ErrUnexpectedTokensAfterCondition.Error())
+	if args.Remaining() > 0 {
+		return nil, args.Error(ErrUnexpectedTokensAfterCondition.Error())
 	}
 
-	// 2. Parse the if body (until elif/else/endif).
-	body, endTag, argParser, err := doc.ParseUntilWithArgs("elif", "else", "endif")
+	// Parse the if body until elif/else/endif.
+	body, tag, ap, err := doc.ParseUntilWithArgs("elif", "else", "endif")
 	if err != nil {
 		return nil, err
 	}
-
 	branches = append(branches, IfBranch{
-		Condition: condition,
+		Condition: cond,
 		Body:      convertStatementsToNodes(body),
 	})
 
-	// 3. Process elif and else branches.
+	// Process elif and else branches.
 	hasElse := false
-	for endTag == "elif" || endTag == "else" {
-		switch endTag {
+	for tag == "elif" || tag == "else" {
+		switch tag {
 		case "elif":
 			if hasElse {
 				return nil, doc.Error(ErrElifAfterElse.Error())
 			}
-
-			// Parse the elif condition. Use = to avoid shadowing outer condition/err.
-			condition, err = argParser.ParseExpression()
+			cond, err = ap.ParseExpression()
 			if err != nil {
 				return nil, err
 			}
-
-			if argParser.Remaining() > 0 {
-				return nil, argParser.Error(ErrUnexpectedTokensAfterCondition.Error())
+			if ap.Remaining() > 0 {
+				return nil, ap.Error(ErrUnexpectedTokensAfterCondition.Error())
 			}
 
-			// Parse the elif body.
-			var nextBody []Statement
+			var next []Statement
 			var nextTag string
-			var nextArgParser *Parser
-			nextBody, nextTag, nextArgParser, err = doc.ParseUntilWithArgs("elif", "else", "endif")
+			var nextAP *Parser
+			next, nextTag, nextAP, err = doc.ParseUntilWithArgs("elif", "else", "endif")
 			if err != nil {
 				return nil, err
 			}
-
 			branches = append(branches, IfBranch{
-				Condition: condition,
-				Body:      convertStatementsToNodes(nextBody),
+				Condition: cond,
+				Body:      convertStatementsToNodes(next),
 			})
-
-			endTag = nextTag
-			argParser = nextArgParser
+			tag = nextTag
+			ap = nextAP
 
 		case "else":
 			if hasElse {
 				return nil, doc.Error(ErrMultipleElseStatements.Error())
 			}
 			hasElse = true
-
-			if argParser.Remaining() > 0 {
-				return nil, argParser.Error(ErrElseNoArgs.Error())
+			if ap.Remaining() > 0 {
+				return nil, ap.Error(ErrElseNoArgs.Error())
 			}
 
-			// Parse the else body (must end with endif).
-			var elseStmts []Statement
+			var stmts []Statement
 			var nextTag string
-			var nextArgParser *Parser
-			elseStmts, nextTag, nextArgParser, err = doc.ParseUntilWithArgs("endif")
+			var nextAP *Parser
+			stmts, nextTag, nextAP, err = doc.ParseUntilWithArgs("endif")
 			if err != nil {
 				return nil, err
 			}
-
-			elseBody = convertStatementsToNodes(elseStmts)
-
-			endTag = nextTag
-			argParser = nextArgParser
+			elseBody = convertStatementsToNodes(stmts)
+			tag = nextTag
+			ap = nextAP
 		}
 	}
 
-	// 4. Validate that the final closing tag is endif.
-	if endTag != "endif" {
-		return nil, doc.Errorf("expected endif, got %s", endTag)
+	if tag != "endif" {
+		return nil, doc.Errorf("expected endif, got %s", tag)
 	}
-
-	if argParser.Remaining() > 0 {
-		return nil, argParser.Error(ErrEndifNoArgs.Error())
+	if ap.Remaining() > 0 {
+		return nil, ap.Error(ErrEndifNoArgs.Error())
 	}
 
 	return &IfNode{

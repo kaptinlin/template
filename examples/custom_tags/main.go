@@ -12,17 +12,17 @@ import (
 
 // SetNode implements template.Statement to support {% set x = expr %}.
 type SetNode struct {
-	VarName    string
-	Expression template.Expression
-	Line       int
-	Col        int
+	VarName string
+	Expr    template.Expression
+	Line    int
+	Col     int
 }
 
 func (n *SetNode) Position() (int, int) { return n.Line, n.Col }
 func (n *SetNode) String() string       { return fmt.Sprintf("Set(%s)", n.VarName) }
 
 func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
-	val, err := n.Expression.Evaluate(ctx)
+	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,10 +52,10 @@ func main() {
 		}
 
 		return &SetNode{
-			VarName:    varToken.Value,
-			Expression: expr,
-			Line:       start.Line,
-			Col:        start.Col,
+			VarName: varToken.Value,
+			Expr:    expr,
+			Line:    start.Line,
+			Col:     start.Col,
 		}, nil
 	})
 	if err != nil {

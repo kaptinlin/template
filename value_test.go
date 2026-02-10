@@ -3,1674 +3,152 @@ package template
 import (
 	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
+
+// Test helpers to reduce repetition in pointer construction.
+
+func intPtr(v int) *int             { return &v }
+func float64Ptr(v float64) *float64 { return &v }
+func stringPtr(v string) *string    { return &v }
+func boolPtr(v bool) *bool          { return &v }
 
 func TestValue_IsNil(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    interface{}
-		expected bool
+		name  string
+		value any
+		want  bool
 	}{
-		{
-			name:     "nil value",
-			value:    nil,
-			expected: true,
-		},
-		{
-			name:     "nil pointer",
-			value:    (*int)(nil),
-			expected: true,
-		},
-		{
-			name:     "nil slice",
-			value:    ([]int)(nil),
-			expected: false,
-		},
-		{
-			name:     "nil map",
-			value:    (map[string]int)(nil),
-			expected: false,
-		},
-		{
-			name:     "nil interface",
-			value:    (interface{})(nil),
-			expected: true,
-		},
-		{
-			name:     "zero int",
-			value:    0,
-			expected: false,
-		},
-		{
-			name:     "non-zero int",
-			value:    42,
-			expected: false,
-		},
-		{
-			name:     "pointer to zero int",
-			value:    func() *int { i := 0; return &i }(),
-			expected: false,
-		},
-		{
-			name:     "pointer to non-zero int",
-			value:    func() *int { i := 42; return &i }(),
-			expected: false,
-		},
-		{
-			name:     "empty string",
-			value:    "",
-			expected: false,
-		},
-		{
-			name:     "non-empty string",
-			value:    "hello",
-			expected: false,
-		},
-		{
-			name:     "empty slice",
-			value:    []int{},
-			expected: false,
-		},
-		{
-			name:     "non-empty slice",
-			value:    []int{1, 2, 3},
-			expected: false,
-		},
-		{
-			name:     "empty map",
-			value:    map[string]int{},
-			expected: false,
-		},
-		{
-			name:     "non-empty map",
-			value:    map[string]int{"a": 1},
-			expected: false,
-		},
+		{"nil value", nil, true},
+		{"nil pointer", (*int)(nil), true},
+		{"nil slice", ([]int)(nil), false},
+		{"nil map", (map[string]int)(nil), false},
+		{"nil interface", (any)(nil), true},
+		{"zero int", 0, false},
+		{"non-zero int", 42, false},
+		{"pointer to zero int", intPtr(0), false},
+		{"pointer to non-zero int", intPtr(42), false},
+		{"empty string", "", false},
+		{"non-empty string", "hello", false},
+		{"empty slice", []int{}, false},
+		{"non-empty slice", []int{1, 2, 3}, false},
+		{"empty map", map[string]int{}, false},
+		{"non-empty map", map[string]int{"a": 1}, false},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result := v.IsNil()
-			assert.Equal(t, tt.expected, result)
+			if got := NewValue(tt.value).IsNil(); got != tt.want {
+				t.Errorf("NewValue(%v).IsNil() = %v, want %v", tt.value, got, tt.want)
+			}
 		})
 	}
 }
 
 func TestValue_IsTrue(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    interface{}
-		expected bool
+		name  string
+		value any
+		want  bool
 	}{
-		// Nil values
-		{
-			name:     "nil",
-			value:    nil,
-			expected: false,
-		},
-		{
-			name:     "nil pointer",
-			value:    (*int)(nil),
-			expected: false,
-		},
-		// Boolean values
-		{
-			name:     "bool true",
-			value:    true,
-			expected: true,
-		},
-		{
-			name:     "bool false",
-			value:    false,
-			expected: false,
-		},
-		{
-			name:     "pointer to bool true",
-			value:    func() *bool { b := true; return &b }(),
-			expected: true,
-		},
-		{
-			name:     "pointer to bool false",
-			value:    func() *bool { b := false; return &b }(),
-			expected: false,
-		},
-		// Integer values
-		{
-			name:     "int zero",
-			value:    0,
-			expected: false,
-		},
-		{
-			name:     "int positive",
-			value:    42,
-			expected: true,
-		},
-		{
-			name:     "int negative",
-			value:    -42,
-			expected: true,
-		},
-		{
-			name:     "pointer to int zero",
-			value:    func() *int { i := 0; return &i }(),
-			expected: false,
-		},
-		{
-			name:     "pointer to int positive",
-			value:    func() *int { i := 42; return &i }(),
-			expected: true,
-		},
-		{
-			name:     "int8 zero",
-			value:    int8(0),
-			expected: false,
-		},
-		{
-			name:     "int8 non-zero",
-			value:    int8(42),
-			expected: true,
-		},
-		{
-			name:     "int64 zero",
-			value:    int64(0),
-			expected: false,
-		},
-		{
-			name:     "int64 non-zero",
-			value:    int64(42),
-			expected: true,
-		},
-		// Unsigned integer values
-		{
-			name:     "uint zero",
-			value:    uint(0),
-			expected: false,
-		},
-		{
-			name:     "uint non-zero",
-			value:    uint(42),
-			expected: true,
-		},
-		{
-			name:     "uint64 zero",
-			value:    uint64(0),
-			expected: false,
-		},
-		{
-			name:     "uint64 non-zero",
-			value:    uint64(42),
-			expected: true,
-		},
-		// Float values
-		{
-			name:     "float32 zero",
-			value:    float32(0),
-			expected: false,
-		},
-		{
-			name:     "float32 non-zero",
-			value:    float32(3.14),
-			expected: true,
-		},
-		{
-			name:     "float64 zero",
-			value:    float64(0),
-			expected: false,
-		},
-		{
-			name:     "float64 non-zero",
-			value:    float64(3.14),
-			expected: true,
-		},
-		{
-			name:     "pointer to float64 zero",
-			value:    func() *float64 { f := 0.0; return &f }(),
-			expected: false,
-		},
-		{
-			name:     "pointer to float64 non-zero",
-			value:    func() *float64 { f := 3.14; return &f }(),
-			expected: true,
-		},
-		// String values
-		{
-			name:     "empty string",
-			value:    "",
-			expected: false,
-		},
-		{
-			name:     "non-empty string",
-			value:    "hello",
-			expected: true,
-		},
-		{
-			name:     "pointer to empty string",
-			value:    func() *string { s := ""; return &s }(),
-			expected: false,
-		},
-		{
-			name:     "pointer to non-empty string",
-			value:    func() *string { s := "hello"; return &s }(),
-			expected: true,
-		},
-		// Slice values
-		{
-			name:     "nil slice",
-			value:    ([]int)(nil),
-			expected: false,
-		},
-		{
-			name:     "empty slice",
-			value:    []int{},
-			expected: false,
-		},
-		{
-			name:     "non-empty slice",
-			value:    []int{1, 2, 3},
-			expected: true,
-		},
-		// Map values
-		{
-			name:     "nil map",
-			value:    (map[string]int)(nil),
-			expected: false,
-		},
-		{
-			name:     "empty map",
-			value:    map[string]int{},
-			expected: false,
-		},
-		{
-			name:     "non-empty map",
-			value:    map[string]int{"a": 1},
-			expected: true,
-		},
-		// Array values
-		{
-			name:     "empty array",
-			value:    [0]int{},
-			expected: false,
-		},
-		{
-			name:     "non-empty array",
-			value:    [3]int{1, 2, 3},
-			expected: true,
-		},
-		// Struct values
-		{
-			name:     "empty struct",
-			value:    struct{}{},
-			expected: true,
-		},
-		{
-			name:     "non-empty struct",
-			value:    struct{ Name string }{Name: "test"},
-			expected: true,
-		},
+		{"nil", nil, false},
+		{"nil pointer", (*int)(nil), false},
+		{"bool true", true, true},
+		{"bool false", false, false},
+		{"pointer to bool true", boolPtr(true), true},
+		{"pointer to bool false", boolPtr(false), false},
+		{"int zero", 0, false},
+		{"int positive", 42, true},
+		{"int negative", -42, true},
+		{"pointer to int zero", intPtr(0), false},
+		{"pointer to int positive", intPtr(42), true},
+		{"int8 zero", int8(0), false},
+		{"int8 non-zero", int8(42), true},
+		{"int64 zero", int64(0), false},
+		{"int64 non-zero", int64(42), true},
+		{"uint zero", uint(0), false},
+		{"uint non-zero", uint(42), true},
+		{"uint64 zero", uint64(0), false},
+		{"uint64 non-zero", uint64(42), true},
+		{"float32 zero", float32(0), false},
+		{"float32 non-zero", float32(3.14), true},
+		{"float64 zero", float64(0), false},
+		{"float64 non-zero", float64(3.14), true},
+		{"pointer to float64 zero", float64Ptr(0), false},
+		{"pointer to float64 non-zero", float64Ptr(3.14), true},
+		{"empty string", "", false},
+		{"non-empty string", "hello", true},
+		{"pointer to empty string", stringPtr(""), false},
+		{"pointer to non-empty string", stringPtr("hello"), true},
+		{"nil slice", ([]int)(nil), false},
+		{"empty slice", []int{}, false},
+		{"non-empty slice", []int{1, 2, 3}, true},
+		{"nil map", (map[string]int)(nil), false},
+		{"empty map", map[string]int{}, false},
+		{"non-empty map", map[string]int{"a": 1}, true},
+		{"empty array", [0]int{}, false},
+		{"non-empty array", [3]int{1, 2, 3}, true},
+		{"empty struct", struct{}{}, true},
+		{"non-empty struct", struct{ Name string }{Name: "test"}, true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result := v.IsTrue()
-			assert.Equal(t, tt.expected, result)
+			if got := NewValue(tt.value).IsTrue(); got != tt.want {
+				t.Errorf("NewValue(%v).IsTrue() = %v, want %v", tt.value, got, tt.want)
+			}
 		})
 	}
 }
 
 func TestValue_String(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    interface{}
-		expected string
+		name  string
+		value any
+		want  string
 	}{
-		{
-			name:     "nil",
-			value:    nil,
-			expected: "",
-		},
-		{
-			name:     "nil pointer",
-			value:    (*int)(nil),
-			expected: "",
-		},
-		{
-			name:     "int",
-			value:    42,
-			expected: "42",
-		},
-		{
-			name:     "pointer to int",
-			value:    func() *int { i := 42; return &i }(),
-			expected: "42",
-		},
-		{
-			name:     "negative int",
-			value:    -42,
-			expected: "-42",
-		},
-		{
-			name:     "float",
-			value:    3.14,
-			expected: "3.14",
-		},
-		{
-			name:     "pointer to float",
-			value:    func() *float64 { f := 3.14; return &f }(),
-			expected: "3.14",
-		},
-		{
-			name:     "string",
-			value:    "hello",
-			expected: "hello",
-		},
-		{
-			name:     "pointer to string",
-			value:    func() *string { s := "hello"; return &s }(),
-			expected: "hello",
-		},
-		{
-			name:     "empty string",
-			value:    "",
-			expected: "",
-		},
-		{
-			name:     "bool true",
-			value:    true,
-			expected: "true",
-		},
-		{
-			name:     "bool false",
-			value:    false,
-			expected: "false",
-		},
-		{
-			name:     "pointer to bool",
-			value:    func() *bool { b := true; return &b }(),
-			expected: "true",
-		},
-		{
-			name:     "slice",
-			value:    []int{1, 2, 3},
-			expected: "[1,2,3]",
-		},
-		{
-			name:     "map",
-			value:    map[string]int{"a": 1},
-			expected: "{\"a\":1}",
-		},
+		{"nil", nil, ""},
+		{"nil pointer", (*int)(nil), ""},
+		{"int", 42, "42"},
+		{"pointer to int", intPtr(42), "42"},
+		{"negative int", -42, "-42"},
+		{"float", 3.14, "3.14"},
+		{"pointer to float", float64Ptr(3.14), "3.14"},
+		{"string", "hello", "hello"},
+		{"pointer to string", stringPtr("hello"), "hello"},
+		{"empty string", "", ""},
+		{"bool true", true, "true"},
+		{"bool false", false, "false"},
+		{"pointer to bool", boolPtr(true), "true"},
+		{"slice", []int{1, 2, 3}, "[1,2,3]"},
+		{"map", map[string]int{"a": 1}, `{"a":1}`},
+		{"nested slice", [][]int{{1, 2}, {3, 4}}, "[[1,2],[3,4]]"},
+		{"empty slice", []int{}, "[]"},
+		{"bool slice", []bool{true, false, true}, "[true,false,true]"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result := v.String()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestValue_Int(t *testing.T) {
-	tests := []struct {
-		name        string
-		value       interface{}
-		expected    int64
-		expectError bool
-	}{
-		{
-			name:        "nil",
-			value:       nil,
-			expected:    0,
-			expectError: true,
-		},
-		{
-			name:        "nil pointer",
-			value:       (*int)(nil),
-			expected:    0,
-			expectError: true,
-		},
-		{
-			name:        "int",
-			value:       42,
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "pointer to int",
-			value:       func() *int { i := 42; return &i }(),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "int8",
-			value:       int8(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "int16",
-			value:       int16(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "int32",
-			value:       int32(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "int64",
-			value:       int64(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "uint",
-			value:       uint(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "uint8",
-			value:       uint8(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "uint16",
-			value:       uint16(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "uint32",
-			value:       uint32(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "uint64",
-			value:       uint64(42),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "float32",
-			value:       float32(42.7),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "float64",
-			value:       float64(42.7),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "pointer to float64",
-			value:       func() *float64 { f := 42.7; return &f }(),
-			expected:    42,
-			expectError: false,
-		},
-		{
-			name:        "bool true",
-			value:       true,
-			expected:    1,
-			expectError: false,
-		},
-		{
-			name:        "bool false",
-			value:       false,
-			expected:    0,
-			expectError: false,
-		},
-		{
-			name:        "pointer to bool true",
-			value:       func() *bool { b := true; return &b }(),
-			expected:    1,
-			expectError: false,
-		},
-		{
-			name:        "string",
-			value:       "hello",
-			expected:    0,
-			expectError: true,
-		},
-		{
-			name:        "negative int",
-			value:       -42,
-			expected:    -42,
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result, err := v.Int()
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
+			if got := NewValue(tt.value).String(); got != tt.want {
+				t.Errorf("NewValue(%v).String() = %q, want %q", tt.value, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestValue_Float(t *testing.T) {
-	tests := []struct {
-		name        string
-		value       interface{}
-		expected    float64
-		expectError bool
-	}{
-		{
-			name:        "nil",
-			value:       nil,
-			expected:    0,
-			expectError: true,
-		},
-		{
-			name:        "nil pointer",
-			value:       (*float64)(nil),
-			expected:    0,
-			expectError: true,
-		},
-		{
-			name:        "float32",
-			value:       float32(3.14),
-			expected:    float64(float32(3.14)),
-			expectError: false,
-		},
-		{
-			name:        "float64",
-			value:       float64(3.14),
-			expected:    3.14,
-			expectError: false,
-		},
-		{
-			name:        "pointer to float64",
-			value:       func() *float64 { f := 3.14; return &f }(),
-			expected:    3.14,
-			expectError: false,
-		},
-		{
-			name:        "int",
-			value:       42,
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "pointer to int",
-			value:       func() *int { i := 42; return &i }(),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "int8",
-			value:       int8(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "int16",
-			value:       int16(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "int32",
-			value:       int32(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "int64",
-			value:       int64(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "uint",
-			value:       uint(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "uint8",
-			value:       uint8(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "uint16",
-			value:       uint16(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "uint32",
-			value:       uint32(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "uint64",
-			value:       uint64(42),
-			expected:    42.0,
-			expectError: false,
-		},
-		{
-			name:        "string",
-			value:       "hello",
-			expected:    0,
-			expectError: true,
-		},
-		{
-			name:        "negative float",
-			value:       -3.14,
-			expected:    -3.14,
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result, err := v.Float()
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	}
-}
-
-func TestValue_Bool(t *testing.T) {
-	tests := []struct {
-		name     string
-		value    interface{}
-		expected bool
-	}{
-		{
-			name:     "nil",
-			value:    nil,
-			expected: false,
-		},
-		{
-			name:     "bool true",
-			value:    true,
-			expected: true,
-		},
-		{
-			name:     "bool false",
-			value:    false,
-			expected: false,
-		},
-		{
-			name:     "pointer to bool true",
-			value:    func() *bool { b := true; return &b }(),
-			expected: true,
-		},
-		{
-			name:     "pointer to bool false",
-			value:    func() *bool { b := false; return &b }(),
-			expected: false,
-		},
-		{
-			name:     "int zero",
-			value:    0,
-			expected: false,
-		},
-		{
-			name:     "int non-zero",
-			value:    42,
-			expected: true,
-		},
-		{
-			name:     "empty string",
-			value:    "",
-			expected: false,
-		},
-		{
-			name:     "non-empty string",
-			value:    "hello",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result := v.Bool()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestValue_Len(t *testing.T) {
-	tests := []struct {
-		name        string
-		value       interface{}
-		expected    int
-		expectError bool
-	}{
-		{
-			name:        "nil",
-			value:       nil,
-			expected:    0,
-			expectError: false,
-		},
-		{
-			name:        "nil slice",
-			value:       ([]int)(nil),
-			expected:    0,
-			expectError: false,
-		},
-		{
-			name:        "empty slice",
-			value:       []int{},
-			expected:    0,
-			expectError: false,
-		},
-		{
-			name:        "non-empty slice",
-			value:       []int{1, 2, 3},
-			expected:    3,
-			expectError: false,
-		},
-		{
-			name:        "pointer to slice",
-			value:       func() *[]int { s := []int{1, 2, 3}; return &s }(),
-			expected:    3,
-			expectError: false,
-		},
-		{
-			name:        "empty string",
-			value:       "",
-			expected:    0,
-			expectError: false,
-		},
-		{
-			name:        "non-empty string",
-			value:       "hello",
-			expected:    5,
-			expectError: false,
-		},
-		{
-			name:        "pointer to string",
-			value:       func() *string { s := "hello"; return &s }(),
-			expected:    5,
-			expectError: false,
-		},
-		{
-			name:        "empty map",
-			value:       map[string]int{},
-			expected:    0,
-			expectError: false,
-		},
-		{
-			name:        "non-empty map",
-			value:       map[string]int{"a": 1, "b": 2},
-			expected:    2,
-			expectError: false,
-		},
-		{
-			name:        "pointer to map",
-			value:       func() *map[string]int { m := map[string]int{"a": 1}; return &m }(),
-			expected:    1,
-			expectError: false,
-		},
-		{
-			name:        "array",
-			value:       [3]int{1, 2, 3},
-			expected:    3,
-			expectError: false,
-		},
-		{
-			name:        "int",
-			value:       42,
-			expected:    0,
-			expectError: true,
-		},
-		{
-			name:        "bool",
-			value:       true,
-			expected:    0,
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result, err := v.Len()
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	}
-}
-
-func TestValue_Index(t *testing.T) {
-	tests := []struct {
-		name        string
-		value       interface{}
-		index       int
-		expected    interface{}
-		expectError bool
-	}{
-		{
-			name:        "nil",
-			value:       nil,
-			index:       0,
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "slice - valid index",
-			value:       []int{10, 20, 30},
-			index:       1,
-			expected:    20,
-			expectError: false,
-		},
-		{
-			name:        "slice - first index",
-			value:       []int{10, 20, 30},
-			index:       0,
-			expected:    10,
-			expectError: false,
-		},
-		{
-			name:        "slice - last index",
-			value:       []int{10, 20, 30},
-			index:       2,
-			expected:    30,
-			expectError: false,
-		},
-		{
-			name:        "slice - negative index",
-			value:       []int{10, 20, 30},
-			index:       -1,
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "slice - out of range index",
-			value:       []int{10, 20, 30},
-			index:       3,
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "pointer to slice",
-			value:       func() *[]int { s := []int{10, 20, 30}; return &s }(),
-			index:       1,
-			expected:    20,
-			expectError: false,
-		},
-		{
-			name:        "array - valid index",
-			value:       [3]int{10, 20, 30},
-			index:       1,
-			expected:    20,
-			expectError: false,
-		},
-		{
-			name:        "string - valid index",
-			value:       "hello",
-			index:       1,
-			expected:    "e",
-			expectError: false,
-		},
-		{
-			name:        "string - first index",
-			value:       "hello",
-			index:       0,
-			expected:    "h",
-			expectError: false,
-		},
-		{
-			name:        "string - last index",
-			value:       "hello",
-			index:       4,
-			expected:    "o",
-			expectError: false,
-		},
-		{
-			name:        "string - out of range",
-			value:       "hello",
-			index:       5,
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "pointer to string",
-			value:       func() *string { s := "hello"; return &s }(),
-			index:       1,
-			expected:    "e",
-			expectError: false,
-		},
-		{
-			name:        "map - not indexable",
-			value:       map[string]int{"a": 1},
-			index:       0,
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "int - not indexable",
-			value:       42,
-			index:       0,
-			expected:    nil,
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result, err := v.Index(tt.index)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result.Interface())
-			}
-		})
-	}
-}
-
-func TestValue_Key(t *testing.T) {
-	tests := []struct {
-		name        string
-		value       interface{}
-		key         interface{}
-		expected    interface{}
-		expectError bool
-	}{
-		{
-			name:        "nil",
-			value:       nil,
-			key:         "key",
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "map with string key - found",
-			value:       map[string]int{"a": 1, "b": 2},
-			key:         "a",
-			expected:    1,
-			expectError: false,
-		},
-		{
-			name:        "map with string key - not found",
-			value:       map[string]int{"a": 1, "b": 2},
-			key:         "c",
-			expected:    nil,
-			expectError: false,
-		},
-		{
-			name:        "pointer to map",
-			value:       func() *map[string]int { m := map[string]int{"a": 1}; return &m }(),
-			key:         "a",
-			expected:    1,
-			expectError: false,
-		},
-		{
-			name:        "map with int key - found",
-			value:       map[int]string{1: "one", 2: "two"},
-			key:         1,
-			expected:    "one",
-			expectError: false,
-		},
-		{
-			name:        "map with int key - not found",
-			value:       map[int]string{1: "one", 2: "two"},
-			key:         3,
-			expected:    nil,
-			expectError: false,
-		},
-		{
-			name:        "slice - not a map",
-			value:       []int{1, 2, 3},
-			key:         0,
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "string - not a map",
-			value:       "hello",
-			key:         0,
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "int - not a map",
-			value:       42,
-			key:         0,
-			expected:    nil,
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result, err := v.Key(tt.key)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result.Interface())
-			}
-		})
-	}
-}
-
-func TestValue_Field(t *testing.T) {
-	type TestStruct struct {
-		Name  string
-		Age   int
-		Email string
-	}
-
-	tests := []struct {
-		name        string
-		value       interface{}
-		field       string
-		expected    interface{}
-		expectError bool
-	}{
-		{
-			name:        "nil",
-			value:       nil,
-			field:       "Name",
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "struct - field exists",
-			value:       TestStruct{Name: "Alice", Age: 30, Email: "alice@example.com"},
-			field:       "Name",
-			expected:    "Alice",
-			expectError: false,
-		},
-		{
-			name:        "struct - field not exists",
-			value:       TestStruct{Name: "Alice", Age: 30, Email: "alice@example.com"},
-			field:       "Phone",
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "pointer to struct",
-			value:       &TestStruct{Name: "Bob", Age: 25, Email: "bob@example.com"},
-			field:       "Age",
-			expected:    25,
-			expectError: false,
-		},
-		{
-			name:        "map - field as string key exists",
-			value:       map[string]interface{}{"Name": "Charlie", "Age": 35},
-			field:       "Name",
-			expected:    "Charlie",
-			expectError: false,
-		},
-		{
-			name:        "map - field as string key not exists",
-			value:       map[string]interface{}{"Name": "Charlie", "Age": 35},
-			field:       "Email",
-			expected:    nil,
-			expectError: false,
-		},
-		{
-			name:        "pointer to map",
-			value:       func() *map[string]string { m := map[string]string{"Name": "David"}; return &m }(),
-			field:       "Name",
-			expected:    "David",
-			expectError: false,
-		},
-		{
-			name:        "slice - not a struct or map",
-			value:       []int{1, 2, 3},
-			field:       "Name",
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "int - not a struct or map",
-			value:       42,
-			field:       "Name",
-			expected:    nil,
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result, err := v.Field(tt.field)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result.Interface())
-			}
-		})
-	}
-}
-
-func TestValue_Iterate(t *testing.T) {
-	tests := []struct {
-		name          string
-		value         interface{}
-		expectedKeys  []interface{}
-		expectedVals  []interface{}
-		expectedCount int
-		expectError   bool
-	}{
-		{
-			name:          "nil",
-			value:         nil,
-			expectedKeys:  []interface{}{},
-			expectedVals:  []interface{}{},
-			expectedCount: 0,
-			expectError:   false,
-		},
-		{
-			name:          "empty slice",
-			value:         []int{},
-			expectedKeys:  []interface{}{},
-			expectedVals:  []interface{}{},
-			expectedCount: 0,
-			expectError:   false,
-		},
-		{
-			name:          "slice with elements",
-			value:         []int{10, 20, 30},
-			expectedKeys:  []interface{}{0, 1, 2},
-			expectedVals:  []interface{}{10, 20, 30},
-			expectedCount: 3,
-			expectError:   false,
-		},
-		{
-			name:          "pointer to slice",
-			value:         func() *[]int { s := []int{10, 20}; return &s }(),
-			expectedKeys:  []interface{}{0, 1},
-			expectedVals:  []interface{}{10, 20},
-			expectedCount: 2,
-			expectError:   false,
-		},
-		{
-			name:          "array",
-			value:         [3]string{"a", "b", "c"},
-			expectedKeys:  []interface{}{0, 1, 2},
-			expectedVals:  []interface{}{"a", "b", "c"},
-			expectedCount: 3,
-			expectError:   false,
-		},
-		{
-			name:          "map",
-			value:         map[string]int{"a": 1, "b": 2},
-			expectedKeys:  []interface{}{"a", "b"},
-			expectedVals:  []interface{}{1, 2},
-			expectedCount: 2,
-			expectError:   false,
-		},
-		{
-			name:          "pointer to map",
-			value:         func() *map[string]int { m := map[string]int{"x": 10}; return &m }(),
-			expectedKeys:  []interface{}{"x"},
-			expectedVals:  []interface{}{10},
-			expectedCount: 1,
-			expectError:   false,
-		},
-		{
-			name:          "int - not iterable",
-			value:         42,
-			expectedKeys:  nil,
-			expectedVals:  nil,
-			expectedCount: 0,
-			expectError:   true,
-		},
-		{
-			name:          "string - iterable",
-			value:         "hello",
-			expectedKeys:  []interface{}{0, 1, 2, 3, 4},
-			expectedVals:  []interface{}{"h", "e", "l", "l", "o"},
-			expectedCount: 5,
-			expectError:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			var keys []interface{}
-			var vals []interface{}
-			var iterCount int
-
-			err := v.Iterate(func(_ int, count int, key, value *Value) bool {
-				iterCount = count
-				keys = append(keys, key.Interface())
-				vals = append(vals, value.Interface())
-				return true
-			})
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedCount, iterCount)
-				// For maps, order is not guaranteed, so we check if all elements are present
-				if tt.expectedCount > 0 {
-					assert.ElementsMatch(t, tt.expectedKeys, keys)
-					assert.ElementsMatch(t, tt.expectedVals, vals)
-				} else {
-					// For empty collections, just check length
-					assert.Equal(t, len(tt.expectedKeys), len(keys))
-					assert.Equal(t, len(tt.expectedVals), len(vals))
-				}
-			}
-		})
-	}
-}
-
-func TestValue_Iterate_EarlyExit(t *testing.T) {
-	v := NewValue([]int{1, 2, 3, 4, 5})
-	var collected []int
-
-	err := v.Iterate(func(idx, _ int, _ *Value, value *Value) bool {
-		collected = append(collected, value.Interface().(int))
-		// Stop after collecting 3 elements
-		return idx < 2
-	})
-
-	assert.NoError(t, err)
-	assert.Equal(t, []int{1, 2, 3}, collected)
-}
-
-func TestValue_Compare(t *testing.T) {
-	tests := []struct {
-		name     string
-		value1   interface{}
-		value2   interface{}
-		expected int
-	}{
-		{
-			name:     "both nil",
-			value1:   nil,
-			value2:   nil,
-			expected: 0,
-		},
-		{
-			name:     "first nil",
-			value1:   nil,
-			value2:   42,
-			expected: -1,
-		},
-		{
-			name:     "second nil",
-			value1:   42,
-			value2:   nil,
-			expected: 1,
-		},
-		{
-			name:     "int equal",
-			value1:   42,
-			value2:   42,
-			expected: 0,
-		},
-		{
-			name:     "int less than",
-			value1:   10,
-			value2:   20,
-			expected: -1,
-		},
-		{
-			name:     "int greater than",
-			value1:   20,
-			value2:   10,
-			expected: 1,
-		},
-		{
-			name:     "pointer to int less than",
-			value1:   func() *int { i := 10; return &i }(),
-			value2:   func() *int { i := 20; return &i }(),
-			expected: -1,
-		},
-		{
-			name:     "float equal",
-			value1:   3.14,
-			value2:   3.14,
-			expected: 0,
-		},
-		{
-			name:     "float less than",
-			value1:   3.14,
-			value2:   6.28,
-			expected: -1,
-		},
-		{
-			name:     "float greater than",
-			value1:   6.28,
-			value2:   3.14,
-			expected: 1,
-		},
-		{
-			name:     "pointer to float less than",
-			value1:   func() *float64 { f := 3.14; return &f }(),
-			value2:   func() *float64 { f := 6.28; return &f }(),
-			expected: -1,
-		},
-		{
-			name:     "mixed int and float equal",
-			value1:   42,
-			value2:   42.0,
-			expected: 0,
-		},
-		{
-			name:     "mixed int and float less than",
-			value1:   10,
-			value2:   20.5,
-			expected: -1,
-		},
-		{
-			name:     "string equal",
-			value1:   "hello",
-			value2:   "hello",
-			expected: 0,
-		},
-		{
-			name:     "string less than",
-			value1:   "abc",
-			value2:   "xyz",
-			expected: -1,
-		},
-		{
-			name:     "string greater than",
-			value1:   "xyz",
-			value2:   "abc",
-			expected: 1,
-		},
-		{
-			name:     "pointer to string less than",
-			value1:   func() *string { s := "abc"; return &s }(),
-			value2:   func() *string { s := "xyz"; return &s }(),
-			expected: -1,
-		},
-		{
-			name:     "negative numbers",
-			value1:   -10,
-			value2:   -5,
-			expected: -1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v1 := NewValue(tt.value1)
-			v2 := NewValue(tt.value2)
-			result, err := v1.Compare(v2)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestValue_Equals(t *testing.T) {
-	tests := []struct {
-		name     string
-		value1   interface{}
-		value2   interface{}
-		expected bool
-	}{
-		{
-			name:     "both nil",
-			value1:   nil,
-			value2:   nil,
-			expected: true,
-		},
-		{
-			name:     "first nil",
-			value1:   nil,
-			value2:   42,
-			expected: false,
-		},
-		{
-			name:     "second nil",
-			value1:   42,
-			value2:   nil,
-			expected: false,
-		},
-		{
-			name:     "int equal",
-			value1:   42,
-			value2:   42,
-			expected: true,
-		},
-		{
-			name:     "int not equal",
-			value1:   42,
-			value2:   43,
-			expected: false,
-		},
-		{
-			name:     "pointer to int equal",
-			value1:   func() *int { i := 42; return &i }(),
-			value2:   func() *int { i := 42; return &i }(),
-			expected: true,
-		},
-		{
-			name:     "pointer to int not equal",
-			value1:   func() *int { i := 42; return &i }(),
-			value2:   func() *int { i := 43; return &i }(),
-			expected: false,
-		},
-		{
-			name:     "float equal",
-			value1:   3.14,
-			value2:   3.14,
-			expected: true,
-		},
-		{
-			name:     "float not equal",
-			value1:   3.14,
-			value2:   6.28,
-			expected: false,
-		},
-		{
-			name:     "pointer to float equal",
-			value1:   func() *float64 { f := 3.14; return &f }(),
-			value2:   func() *float64 { f := 3.14; return &f }(),
-			expected: true,
-		},
-		{
-			name:     "string equal",
-			value1:   "hello",
-			value2:   "hello",
-			expected: true,
-		},
-		{
-			name:     "string not equal",
-			value1:   "hello",
-			value2:   "world",
-			expected: false,
-		},
-		{
-			name:     "pointer to string equal",
-			value1:   func() *string { s := "hello"; return &s }(),
-			value2:   func() *string { s := "hello"; return &s }(),
-			expected: true,
-		},
-		{
-			name:     "bool equal",
-			value1:   true,
-			value2:   true,
-			expected: true,
-		},
-		{
-			name:     "bool not equal",
-			value1:   true,
-			value2:   false,
-			expected: false,
-		},
-		{
-			name:     "pointer to bool equal",
-			value1:   func() *bool { b := true; return &b }(),
-			value2:   func() *bool { b := true; return &b }(),
-			expected: true,
-		},
-		{
-			name:     "slice equal",
-			value1:   []int{1, 2, 3},
-			value2:   []int{1, 2, 3},
-			expected: true,
-		},
-		{
-			name:     "slice not equal",
-			value1:   []int{1, 2, 3},
-			value2:   []int{1, 2, 4},
-			expected: false,
-		},
-		{
-			name:     "map equal",
-			value1:   map[string]int{"a": 1, "b": 2},
-			value2:   map[string]int{"a": 1, "b": 2},
-			expected: true,
-		},
-		{
-			name:     "map not equal",
-			value1:   map[string]int{"a": 1, "b": 2},
-			value2:   map[string]int{"a": 1, "b": 3},
-			expected: false,
-		},
-		{
-			name:     "different types",
-			value1:   42,
-			value2:   "42",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v1 := NewValue(tt.value1)
-			v2 := NewValue(tt.value2)
-			result := v1.Equals(v2)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestValue_Interface(t *testing.T) {
-	tests := []struct {
-		name     string
-		value    interface{}
-		expected interface{}
-	}{
-		{
-			name:     "nil",
-			value:    nil,
-			expected: nil,
-		},
-		{
-			name:     "int",
-			value:    42,
-			expected: 42,
-		},
-		{
-			name:     "pointer to int",
-			value:    func() *int { i := 42; return &i }(),
-			expected: func() *int { i := 42; return &i }(),
-		},
-		{
-			name:     "string",
-			value:    "hello",
-			expected: "hello",
-		},
-		{
-			name:     "bool",
-			value:    true,
-			expected: true,
-		},
-		{
-			name:     "slice",
-			value:    []int{1, 2, 3},
-			expected: []int{1, 2, 3},
-		},
-		{
-			name:     "map",
-			value:    map[string]int{"a": 1},
-			expected: map[string]int{"a": 1},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			result := v.Interface()
-			// Use DeepEqual for complex types
-			if !reflect.DeepEqual(tt.expected, result) {
-				t.Errorf("expected %v, got %v", tt.expected, result)
-			}
-		})
-	}
-}
-
-func TestValue_NewValue(t *testing.T) {
+func TestValue_String_Uint(t *testing.T) {
 	tests := []struct {
 		name  string
-		input interface{}
+		value any
+		want  string
 	}{
-		{
-			name:  "nil",
-			input: nil,
-		},
-		{
-			name:  "int",
-			input: 42,
-		},
-		{
-			name:  "string",
-			input: "hello",
-		},
-		{
-			name:  "bool",
-			input: true,
-		},
-		{
-			name:  "slice",
-			input: []int{1, 2, 3},
-		},
-		{
-			name:  "map",
-			input: map[string]int{"a": 1},
-		},
-		{
-			name:  "pointer",
-			input: func() *int { i := 42; return &i }(),
-		},
+		{"uint", uint(100), "100"},
+		{"uint8", uint8(255), "255"},
+		{"uint16", uint16(1000), "1000"},
+		{"uint32", uint32(70000), "70000"},
+		{"uint64", uint64(99999), "99999"},
+		{"uint zero", uint(0), "0"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.input)
-			assert.NotNil(t, v)
-			// Check that Interface() returns the original value
-			if !reflect.DeepEqual(tt.input, v.Interface()) {
-				t.Errorf("NewValue did not preserve input value")
+			if got := NewValue(tt.value).String(); got != tt.want {
+				t.Errorf("NewValue(%v).String() = %q, want %q", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -1678,58 +156,324 @@ func TestValue_NewValue(t *testing.T) {
 
 func TestFormatFloat(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    float64
-		expected string
+		name  string
+		value float64
+		want  string
 	}{
-		{name: "whole number", value: 42.0, expected: "42"},
-		{name: "zero", value: 0.0, expected: "0"},
-		{name: "negative whole", value: -10.0, expected: "-10"},
-		{name: "decimal", value: 3.14, expected: "3.14"},
-		{name: "negative decimal", value: -2.5, expected: "-2.5"},
-		{name: "small decimal", value: 0.001, expected: "0.001"},
-		{name: "large whole", value: 1000000.0, expected: "1000000"},
+		{"whole number", 42.0, "42"},
+		{"zero", 0.0, "0"},
+		{"negative whole", -10.0, "-10"},
+		{"decimal", 3.14, "3.14"},
+		{"negative decimal", -2.5, "-2.5"},
+		{"small decimal", 0.001, "0.001"},
+		{"large whole", 1000000.0, "1000000"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			assert.Equal(t, tt.expected, v.String())
+			if got := NewValue(tt.value).String(); got != tt.want {
+				t.Errorf("NewValue(%v).String() = %q, want %q", tt.value, got, tt.want)
+			}
 		})
 	}
 }
 
-func TestValue_String_Uint(t *testing.T) {
+func TestValue_Int(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    interface{}
-		expected string
+		name      string
+		value     any
+		want      int64
+		wantError bool
 	}{
-		{name: "uint", value: uint(100), expected: "100"},
-		{name: "uint8", value: uint8(255), expected: "255"},
-		{name: "uint16", value: uint16(1000), expected: "1000"},
-		{name: "uint32", value: uint32(70000), expected: "70000"},
-		{name: "uint64", value: uint64(99999), expected: "99999"},
-		{name: "uint zero", value: uint(0), expected: "0"},
+		{"nil", nil, 0, true},
+		{"nil pointer", (*int)(nil), 0, true},
+		{"int", 42, 42, false},
+		{"pointer to int", intPtr(42), 42, false},
+		{"int8", int8(42), 42, false},
+		{"int16", int16(42), 42, false},
+		{"int32", int32(42), 42, false},
+		{"int64", int64(42), 42, false},
+		{"uint", uint(42), 42, false},
+		{"uint8", uint8(42), 42, false},
+		{"uint16", uint16(42), 42, false},
+		{"uint32", uint32(42), 42, false},
+		{"uint64", uint64(42), 42, false},
+		{"float32", float32(42.7), 42, false},
+		{"float64", float64(42.7), 42, false},
+		{"pointer to float64", float64Ptr(42.7), 42, false},
+		{"bool true", true, 1, false},
+		{"bool false", false, 0, false},
+		{"pointer to bool true", boolPtr(true), 1, false},
+		{"string", "hello", 0, true},
+		{"negative int", -42, -42, false},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
-			assert.Equal(t, tt.expected, v.String())
+			got, err := NewValue(tt.value).Int()
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewValue(%v).Int() error = nil, want error", tt.value)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("NewValue(%v).Int() unexpected error: %v", tt.value, err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("NewValue(%v).Int() = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Float(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     any
+		want      float64
+		wantError bool
+	}{
+		{"nil", nil, 0, true},
+		{"nil pointer", (*float64)(nil), 0, true},
+		{"float32", float32(3.14), float64(float32(3.14)), false},
+		{"float64", float64(3.14), 3.14, false},
+		{"pointer to float64", float64Ptr(3.14), 3.14, false},
+		{"int", 42, 42.0, false},
+		{"pointer to int", intPtr(42), 42.0, false},
+		{"int8", int8(42), 42.0, false},
+		{"int16", int16(42), 42.0, false},
+		{"int32", int32(42), 42.0, false},
+		{"int64", int64(42), 42.0, false},
+		{"uint", uint(42), 42.0, false},
+		{"uint8", uint8(42), 42.0, false},
+		{"uint16", uint16(42), 42.0, false},
+		{"uint32", uint32(42), 42.0, false},
+		{"uint64", uint64(42), 42.0, false},
+		{"string", "hello", 0, true},
+		{"negative float", -3.14, -3.14, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewValue(tt.value).Float()
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewValue(%v).Float() error = nil, want error", tt.value)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("NewValue(%v).Float() unexpected error: %v", tt.value, err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("NewValue(%v).Float() = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Bool(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  bool
+	}{
+		{"nil", nil, false},
+		{"bool true", true, true},
+		{"bool false", false, false},
+		{"pointer to bool true", boolPtr(true), true},
+		{"pointer to bool false", boolPtr(false), false},
+		{"int zero", 0, false},
+		{"int non-zero", 42, true},
+		{"empty string", "", false},
+		{"non-empty string", "hello", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewValue(tt.value).Bool(); got != tt.want {
+				t.Errorf("NewValue(%v).Bool() = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Len(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     any
+		want      int
+		wantError bool
+	}{
+		{"nil", nil, 0, false},
+		{"nil slice", ([]int)(nil), 0, false},
+		{"empty slice", []int{}, 0, false},
+		{"non-empty slice", []int{1, 2, 3}, 3, false},
+		{"pointer to slice", func() *[]int { s := []int{1, 2, 3}; return &s }(), 3, false},
+		{"empty string", "", 0, false},
+		{"non-empty string", "hello", 5, false},
+		{"pointer to string", stringPtr("hello"), 5, false},
+		{"empty map", map[string]int{}, 0, false},
+		{"non-empty map", map[string]int{"a": 1, "b": 2}, 2, false},
+		{"pointer to map", func() *map[string]int { m := map[string]int{"a": 1}; return &m }(), 1, false},
+		{"array", [3]int{1, 2, 3}, 3, false},
+		{"int", 42, 0, true},
+		{"bool", true, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewValue(tt.value).Len()
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewValue(%v).Len() error = nil, want error", tt.value)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("NewValue(%v).Len() unexpected error: %v", tt.value, err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("NewValue(%v).Len() = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Index(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     any
+		index     int
+		want      any
+		wantError bool
+	}{
+		{"nil", nil, 0, nil, true},
+		{"slice-valid", []int{10, 20, 30}, 1, 20, false},
+		{"slice-first", []int{10, 20, 30}, 0, 10, false},
+		{"slice-last", []int{10, 20, 30}, 2, 30, false},
+		{"slice-negative", []int{10, 20, 30}, -1, nil, true},
+		{"slice-out-of-range", []int{10, 20, 30}, 3, nil, true},
+		{"pointer-to-slice", func() *[]int { s := []int{10, 20, 30}; return &s }(), 1, 20, false},
+		{"array-valid", [3]int{10, 20, 30}, 1, 20, false},
+		{"string-valid", "hello", 1, "e", false},
+		{"string-first", "hello", 0, "h", false},
+		{"string-last", "hello", 4, "o", false},
+		{"string-out-of-range", "hello", 5, nil, true},
+		{"pointer-to-string", stringPtr("hello"), 1, "e", false},
+		{"map-not-indexable", map[string]int{"a": 1}, 0, nil, true},
+		{"int-not-indexable", 42, 0, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewValue(tt.value).Index(tt.index)
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewValue(%v).Index(%d) error = nil, want error", tt.value, tt.index)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("NewValue(%v).Index(%d) unexpected error: %v", tt.value, tt.index, err)
+				return
+			}
+			if got.Interface() != tt.want {
+				t.Errorf("NewValue(%v).Index(%d) = %v, want %v", tt.value, tt.index, got.Interface(), tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Key(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     any
+		key       any
+		want      any
+		wantError bool
+	}{
+		{"nil", nil, "key", nil, true},
+		{"string-key-found", map[string]int{"a": 1, "b": 2}, "a", 1, false},
+		{"string-key-not-found", map[string]int{"a": 1, "b": 2}, "c", nil, false},
+		{"pointer-to-map", func() *map[string]int { m := map[string]int{"a": 1}; return &m }(), "a", 1, false},
+		{"int-key-found", map[int]string{1: "one", 2: "two"}, 1, "one", false},
+		{"int-key-not-found", map[int]string{1: "one", 2: "two"}, 3, nil, false},
+		{"slice-not-map", []int{1, 2, 3}, 0, nil, true},
+		{"string-not-map", "hello", 0, nil, true},
+		{"int-not-map", 42, 0, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewValue(tt.value).Key(tt.key)
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewValue(%v).Key(%v) error = nil, want error", tt.value, tt.key)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("NewValue(%v).Key(%v) unexpected error: %v", tt.value, tt.key, err)
+				return
+			}
+			if got.Interface() != tt.want {
+				t.Errorf("NewValue(%v).Key(%v) = %v, want %v", tt.value, tt.key, got.Interface(), tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Field(t *testing.T) {
+	type testStruct struct {
+		Name  string
+		Age   int
+		Email string
+	}
+
+	tests := []struct {
+		name      string
+		value     any
+		field     string
+		want      any
+		wantError bool
+	}{
+		{"nil", nil, "Name", nil, true},
+		{"struct-field-exists", testStruct{Name: "Alice", Age: 30, Email: "alice@example.com"}, "Name", "Alice", false},
+		{"struct-field-not-exists", testStruct{Name: "Alice", Age: 30, Email: "alice@example.com"}, "Phone", nil, true},
+		{"pointer-to-struct", &testStruct{Name: "Bob", Age: 25, Email: "bob@example.com"}, "Age", 25, false},
+		{"map-key-exists", map[string]any{"Name": "Charlie", "Age": 35}, "Name", "Charlie", false},
+		{"map-key-not-exists", map[string]any{"Name": "Charlie", "Age": 35}, "Email", nil, false},
+		{"pointer-to-map", func() *map[string]string { m := map[string]string{"Name": "David"}; return &m }(), "Name", "David", false},
+		{"slice-no-field", []int{1, 2, 3}, "Name", nil, true},
+		{"int-no-field", 42, "Name", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewValue(tt.value).Field(tt.field)
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewValue(%v).Field(%q) error = nil, want error", tt.value, tt.field)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("NewValue(%v).Field(%q) unexpected error: %v", tt.value, tt.field, err)
+				return
+			}
+			if got.Interface() != tt.want {
+				t.Errorf("NewValue(%v).Field(%q) = %v, want %v", tt.value, tt.field, got.Interface(), tt.want)
+			}
 		})
 	}
 }
 
 func TestValue_Field_JSONTag(t *testing.T) {
-	type Tagged struct {
+	type tagged struct {
 		FullName string `json:"name"`
 		Age      int    `json:"age,omitempty"`
 		Hidden   string `json:"-"`
 		NoTag    string
 	}
 
-	val := Tagged{
+	val := tagged{
 		FullName: "Alice",
 		Age:      30,
 		Hidden:   "secret",
@@ -1737,110 +481,318 @@ func TestValue_Field_JSONTag(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		field       string
-		expected    interface{}
-		expectError bool
+		name      string
+		field     string
+		want      any
+		wantError bool
 	}{
-		{
-			name:     "json tag name",
-			field:    "name",
-			expected: "Alice",
-		},
-		{
-			name:     "json tag with omitempty",
-			field:    "age",
-			expected: 30,
-		},
-		{
-			name:        "hidden field via json tag dash",
-			field:       "-",
-			expectError: true,
-		},
-		{
-			name:     "field by exported name",
-			field:    "NoTag",
-			expected: "visible",
-		},
-		{
-			name:     "field by exported name FullName",
-			field:    "FullName",
-			expected: "Alice",
-		},
-		{
-			name:        "nonexistent field",
-			field:       "missing",
-			expectError: true,
-		},
+		{"json-tag-name", "name", "Alice", false},
+		{"json-tag-with-omitempty", "age", 30, false},
+		{"hidden-field-via-dash", "-", nil, true},
+		{"field-by-exported-name", "NoTag", "visible", false},
+		{"field-by-exported-name-FullName", "FullName", "Alice", false},
+		{"nonexistent-field", "missing", nil, true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(val)
-			result, err := v.Field(tt.field)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result.Interface())
+			got, err := NewValue(val).Field(tt.field)
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("Value.Field(%q) error = nil, want error", tt.field)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Value.Field(%q) unexpected error: %v", tt.field, err)
+				return
+			}
+			if got.Interface() != tt.want {
+				t.Errorf("Value.Field(%q) = %v, want %v", tt.field, got.Interface(), tt.want)
 			}
 		})
 	}
 }
 
-func TestValue_String_NestedSlice(t *testing.T) {
-	v := NewValue([][]int{{1, 2}, {3, 4}})
-	assert.Equal(t, "[[1,2],[3,4]]", v.String())
+func TestValue_Iterate(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     any
+		wantKeys  []any
+		wantVals  []any
+		wantCount int
+		wantError bool
+	}{
+		{"nil", nil, nil, nil, 0, false},
+		{"empty slice", []int{}, nil, nil, 0, false},
+		{
+			"slice with elements",
+			[]int{10, 20, 30},
+			[]any{0, 1, 2},
+			[]any{10, 20, 30},
+			3, false,
+		},
+		{
+			"pointer to slice",
+			func() *[]int { s := []int{10, 20}; return &s }(),
+			[]any{0, 1},
+			[]any{10, 20},
+			2, false,
+		},
+		{
+			"array",
+			[3]string{"a", "b", "c"},
+			[]any{0, 1, 2},
+			[]any{"a", "b", "c"},
+			3, false,
+		},
+		{
+			"map",
+			map[string]int{"a": 1, "b": 2},
+			[]any{"a", "b"},
+			[]any{1, 2},
+			2, false,
+		},
+		{
+			"pointer to map",
+			func() *map[string]int {
+				m := map[string]int{"x": 10}
+				return &m
+			}(),
+			[]any{"x"},
+			[]any{10},
+			1, false,
+		},
+		{"int-not-iterable", 42, nil, nil, 0, true},
+		{
+			"string-iterable",
+			"hello",
+			[]any{0, 1, 2, 3, 4},
+			[]any{"h", "e", "l", "l", "o"},
+			5, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValue(tt.value)
+			var keys, vals []any
+			var count int
+
+			err := v.Iterate(func(_ int, c int, key, val *Value) bool {
+				count = c
+				keys = append(keys, key.Interface())
+				vals = append(vals, val.Interface())
+				return true
+			})
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewValue(%v).Iterate() error = nil, want error", tt.value)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("NewValue(%v).Iterate() unexpected error: %v", tt.value, err)
+				return
+			}
+			if count != tt.wantCount {
+				t.Errorf("NewValue(%v).Iterate() count = %d, want %d", tt.value, count, tt.wantCount)
+			}
+			if tt.wantCount > 0 {
+				if !elementsMatch(keys, tt.wantKeys) {
+					t.Errorf("NewValue(%v).Iterate() keys = %v, want %v", tt.value, keys, tt.wantKeys)
+				}
+				if !elementsMatch(vals, tt.wantVals) {
+					t.Errorf("NewValue(%v).Iterate() vals = %v, want %v", tt.value, vals, tt.wantVals)
+				}
+			}
+		})
+	}
 }
 
-func TestValue_String_EmptySlice(t *testing.T) {
-	v := NewValue([]int{})
-	assert.Equal(t, "[]", v.String())
+// elementsMatch reports whether two slices contain the same elements
+// regardless of order.
+func elementsMatch(a, b []any) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	used := make([]bool, len(b))
+	for _, av := range a {
+		found := false
+		for j, bv := range b {
+			if !used[j] && reflect.DeepEqual(av, bv) {
+				used[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
-func TestValue_String_BoolSlice(t *testing.T) {
-	v := NewValue([]bool{true, false, true})
-	assert.Equal(t, "[true,false,true]", v.String())
+func TestValue_Iterate_EarlyExit(t *testing.T) {
+	v := NewValue([]int{1, 2, 3, 4, 5})
+	var got []int
+
+	err := v.Iterate(func(idx, _ int, _ *Value, val *Value) bool {
+		got = append(got, val.Interface().(int))
+		return idx < 2
+	})
+
+	if err != nil {
+		t.Fatalf("Iterate() unexpected error: %v", err)
+	}
+	want := []int{1, 2, 3}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Iterate() collected = %v, want %v", got, want)
+	}
+}
+
+func TestValue_Compare(t *testing.T) {
+	tests := []struct {
+		name string
+		a    any
+		b    any
+		want int
+	}{
+		{"both nil", nil, nil, 0},
+		{"first nil", nil, 42, -1},
+		{"second nil", 42, nil, 1},
+		{"int equal", 42, 42, 0},
+		{"int less", 10, 20, -1},
+		{"int greater", 20, 10, 1},
+		{"pointer-to-int less", intPtr(10), intPtr(20), -1},
+		{"float equal", 3.14, 3.14, 0},
+		{"float less", 3.14, 6.28, -1},
+		{"float greater", 6.28, 3.14, 1},
+		{"pointer-to-float less", float64Ptr(3.14), float64Ptr(6.28), -1},
+		{"mixed int-float equal", 42, 42.0, 0},
+		{"mixed int-float less", 10, 20.5, -1},
+		{"string equal", "hello", "hello", 0},
+		{"string less", "abc", "xyz", -1},
+		{"string greater", "xyz", "abc", 1},
+		{"pointer-to-string less", stringPtr("abc"), stringPtr("xyz"), -1},
+		{"negative numbers", -10, -5, -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewValue(tt.a).Compare(NewValue(tt.b))
+			if err != nil {
+				t.Fatalf("Compare(%v, %v) unexpected error: %v", tt.a, tt.b, err)
+			}
+			if got != tt.want {
+				t.Errorf("Compare(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Equals(t *testing.T) {
+	tests := []struct {
+		name string
+		a    any
+		b    any
+		want bool
+	}{
+		{"both nil", nil, nil, true},
+		{"first nil", nil, 42, false},
+		{"second nil", 42, nil, false},
+		{"int equal", 42, 42, true},
+		{"int not equal", 42, 43, false},
+		{"pointer-to-int equal", intPtr(42), intPtr(42), true},
+		{"pointer-to-int not equal", intPtr(42), intPtr(43), false},
+		{"float equal", 3.14, 3.14, true},
+		{"float not equal", 3.14, 6.28, false},
+		{"pointer-to-float equal", float64Ptr(3.14), float64Ptr(3.14), true},
+		{"string equal", "hello", "hello", true},
+		{"string not equal", "hello", "world", false},
+		{"pointer-to-string equal", stringPtr("hello"), stringPtr("hello"), true},
+		{"bool equal", true, true, true},
+		{"bool not equal", true, false, false},
+		{"pointer-to-bool equal", boolPtr(true), boolPtr(true), true},
+		{"slice equal", []int{1, 2, 3}, []int{1, 2, 3}, true},
+		{"slice not equal", []int{1, 2, 3}, []int{1, 2, 4}, false},
+		{"map equal", map[string]int{"a": 1, "b": 2}, map[string]int{"a": 1, "b": 2}, true},
+		{"map not equal", map[string]int{"a": 1, "b": 2}, map[string]int{"a": 1, "b": 3}, false},
+		{"different types", 42, "42", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewValue(tt.a).Equals(NewValue(tt.b)); got != tt.want {
+				t.Errorf("Equals(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestValue_Equals_CrossNumericTypes(t *testing.T) {
 	tests := []struct {
-		name     string
-		a        interface{}
-		b        interface{}
-		expected bool
+		name string
+		a    any
+		b    any
+		want bool
 	}{
-		{
-			name:     "int and float64 equal",
-			a:        42,
-			b:        float64(42),
-			expected: true,
-		},
-		{
-			name:     "int and float64 not equal",
-			a:        42,
-			b:        float64(42.5),
-			expected: false,
-		},
-		{
-			name:     "int64 and uint equal",
-			a:        int64(100),
-			b:        uint(100),
-			expected: true,
-		},
-		{
-			name:     "int32 and float32 equal",
-			a:        int32(7),
-			b:        float32(7),
-			expected: true,
-		},
+		{"int and float64 equal", 42, float64(42), true},
+		{"int and float64 not equal", 42, float64(42.5), false},
+		{"int64 and uint equal", int64(100), uint(100), true},
+		{"int32 and float32 equal", int32(7), float32(7), true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			va := NewValue(tt.a)
-			vb := NewValue(tt.b)
-			assert.Equal(t, tt.expected, va.Equals(vb))
+			if got := NewValue(tt.a).Equals(NewValue(tt.b)); got != tt.want {
+				t.Errorf("Equals(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_Interface(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  any
+	}{
+		{"nil", nil, nil},
+		{"int", 42, 42},
+		{"string", "hello", "hello"},
+		{"bool", true, true},
+		{"slice", []int{1, 2, 3}, []int{1, 2, 3}},
+		{"map", map[string]int{"a": 1}, map[string]int{"a": 1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewValue(tt.value).Interface()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewValue(%v).Interface() = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input any
+	}{
+		{"nil", nil},
+		{"int", 42},
+		{"string", "hello"},
+		{"bool", true},
+		{"slice", []int{1, 2, 3}},
+		{"map", map[string]int{"a": 1}},
+		{"pointer", intPtr(42)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValue(tt.input)
+			if v == nil {
+				t.Fatal("NewValue() returned nil")
+			}
+			if !reflect.DeepEqual(v.Interface(), tt.input) {
+				t.Errorf("NewValue(%v).Interface() = %v, want %v", tt.input, v.Interface(), tt.input)
+			}
 		})
 	}
 }

@@ -167,7 +167,7 @@ type ExecutionContext struct {
 }
 
 // NewExecutionContext creates a new execution context from user data.
-func NewExecutionContext(data map[string]interface{}) *ExecutionContext {
+func NewExecutionContext(data map[string]any) *ExecutionContext {
 	return &ExecutionContext{
 		Public:  Context(data),
 		Private: NewContext(),
@@ -175,30 +175,30 @@ func NewExecutionContext(data map[string]interface{}) *ExecutionContext {
 }
 
 // Get retrieves a variable, checking Private first, then Public.
-func (ctx *ExecutionContext) Get(name string) (interface{}, bool) {
-	if val, err := ctx.Private.Get(name); err == nil { // if NO error
+func (ec *ExecutionContext) Get(name string) (any, bool) {
+	if val, err := ec.Private.Get(name); err == nil {
 		return val, true
 	}
-	if val, err := ctx.Public.Get(name); err == nil { // if NO error
+	if val, err := ec.Public.Get(name); err == nil {
 		return val, true
 	}
 	return nil, false
 }
 
 // Set sets a variable in the private context.
-func (ctx *ExecutionContext) Set(name string, value interface{}) {
-	ctx.Private.Set(name, value)
+func (ec *ExecutionContext) Set(name string, value any) {
+	ec.Private.Set(name, value)
 }
 
 // NewChildContext creates a child execution context that shares the parent's
 // Public context but copies the Private context for isolated scope.
 func NewChildContext(parent *ExecutionContext) *ExecutionContext {
-	childPrivate := make(Context, len(parent.Private))
+	private := make(Context, len(parent.Private))
 	for k, v := range parent.Private {
-		childPrivate[k] = v
+		private[k] = v
 	}
 	return &ExecutionContext{
 		Public:  parent.Public,
-		Private: childPrivate,
+		Private: private,
 	}
 }

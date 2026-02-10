@@ -21,13 +21,13 @@ func NewTemplate(root []Statement) *Template {
 	}
 }
 
-// Execute writes the template output to writer using the given execution context.
+// Execute writes the template output to w using the given execution context.
 //
 // For most use cases, [Template.Render] is simpler. Use Execute when you need
 // control over the output destination or execution context.
-func (t *Template) Execute(ctx *ExecutionContext, writer io.Writer) error {
+func (t *Template) Execute(ctx *ExecutionContext, w io.Writer) error {
 	for _, stmt := range t.root {
-		if err := stmt.Execute(ctx, writer); err != nil {
+		if err := stmt.Execute(ctx, w); err != nil {
 			return err
 		}
 	}
@@ -38,7 +38,7 @@ func (t *Template) Execute(ctx *ExecutionContext, writer io.Writer) error {
 //
 // This is a convenience wrapper around [Template.Execute] for the common case
 // where a string result is needed.
-func (t *Template) Render(data map[string]interface{}) (string, error) {
+func (t *Template) Render(data map[string]any) (string, error) {
 	var buf bytes.Buffer
 	ctx := NewExecutionContext(data)
 

@@ -17,10 +17,16 @@ func (p *Parser) Advance() {
 	}
 }
 
+// notEOF reports whether the parser has more non-EOF tokens.
+func (p *Parser) notEOF() bool {
+	tok := p.Current()
+	return tok != nil && tok.Type != TokenEOF
+}
+
 // peek returns the token at a relative offset without advancing.
 func (p *Parser) peek(offset int) *Token {
 	pos := p.pos + offset
-	if pos >= len(p.tokens) {
+	if pos < 0 || pos >= len(p.tokens) {
 		return nil
 	}
 	return p.tokens[pos]
@@ -31,15 +37,15 @@ func (p *Parser) Remaining() int {
 	return len(p.tokens) - p.pos
 }
 
-// expect checks whether the current token matches tokenType.
+// expect checks whether the current token matches the given type.
 // If it matches, it consumes and returns the token; otherwise it returns an error.
-func (p *Parser) expect(tokenType TokenType) (*Token, error) {
+func (p *Parser) expect(typ TokenType) (*Token, error) {
 	tok := p.Current()
 	if tok == nil {
 		return nil, p.Error("unexpected end of input")
 	}
-	if tok.Type != tokenType {
-		return nil, p.Errorf("expected %s, got %s", tokenType, tok.Type)
+	if tok.Type != typ {
+		return nil, p.Errorf("expected %s, got %s", typ, tok.Type)
 	}
 	p.Advance()
 	return tok, nil
@@ -61,82 +67,101 @@ func (p *Parser) Match(tokenType TokenType, value string) *Token {
 	return nil
 }
 
-// collectUntil collects tokens until tokenType is reached (exclusive).
-func (p *Parser) collectUntil(tokenType TokenType) []*Token {
-	// Estimate remaining tokens for preallocation.
-	remaining := p.Remaining()
-	if remaining <= 0 {
+// collectUntil collects tokens until the given type is reached (exclusive).
+func (p *Parser) collectUntil(typ TokenType) []*Token {
+	if p.pos >= len(p.tokens) {
 		return nil
 	}
-	tokens := make([]*Token, 0, remaining)
-	for tok := p.Current(); tok != nil && tok.Type != tokenType; tok = p.Current() {
+	// Preallocate with a small estimate to reduce grow-copies.
+	tokens := make([]*Token, 0, 4)
+	for tok := p.Current(); tok != nil && tok.Type != typ; tok = p.Current() {
 		tokens = append(tokens, tok)
 		p.Advance()
+	}
+	if len(tokens) == 0 {
+		return nil
 	}
 	return tokens
 }
 
-// isEndTag reports whether the current position points to one of the given end tags.
-// End-tag format: {% tagname %}
-func (p *Parser) isEndTag(endTags ...string) bool {
-	tok := p.Current()
-	if tok == nil || tok.Type != TokenTagBegin {
+// isEndTag reports whether the current position is one of the given end tags.
+// End-tag format: {% tagname ... %}
+func (p *Parser) isEndTag(tags ...string) bool {
+	cur := p.Current()
+	if cur == nil || cur.Type != TokenTagBegin {
 		return false
 	}
-
-	// Check whether the next token is a tag name.
 	next := p.peek(1)
 	if next == nil || next.Type != TokenIdentifier {
 		return false
 	}
-
-	// Check whether it matches one of the requested end tags.
-	for _, endTag := range endTags {
-		if next.Value == endTag {
+	for _, tag := range tags {
+		if next.Value == tag {
 			return true
 		}
 	}
-
 	return false
 }
 
-// endTagName returns the current end-tag name.
-// It assumes the current token is {%.
+// endTagName returns the tag name at the current position.
+// It assumes the current token is {% (TokenTagBegin).
 func (p *Parser) endTagName() string {
-	next := p.peek(1)
-	if next != nil && next.Type == TokenIdentifier {
+	if next := p.peek(1); next != nil && next.Type == TokenIdentifier {
 		return next.Value
 	}
 	return ""
 }
 
+// consumeEndTag consumes an end tag ({% name ... %}) and returns
+// the tag name and a parser over any arguments.
+func (p *Parser) consumeEndTag() (string, *Parser, error) {
+	p.Advance() // Skip {%.
+
+	name := p.Current()
+	tag := name.Value
+	p.Advance() // Skip tag name.
+
+	args := p.collectUntil(TokenTagEnd)
+
+	if cur := p.Current(); cur == nil || cur.Type != TokenTagEnd {
+		return "", nil, newParseError("expected %}", name.Line, name.Col)
+	}
+	p.Advance() // Consume %}.
+
+	return tag, NewParser(args), nil
+}
+
 // Error creates a parse error at the current token position.
 func (p *Parser) Error(msg string) error {
-	tok := p.Current()
-	if tok != nil {
-		return &ParseError{
-			Message: msg,
-			Line:    tok.Line,
-			Col:     tok.Col,
-		}
+	if tok := p.Current(); tok != nil {
+		return newParseError(msg, tok.Line, tok.Col)
 	}
 	return &ParseError{Message: msg}
 }
 
-// Errorf creates a formatted parse error.
+// Errorf creates a formatted parse error at the current token position.
 func (p *Parser) Errorf(format string, args ...any) error {
 	return p.Error(fmt.Sprintf(format, args...))
 }
 
+// newParseError creates a ParseError with the given message and position.
+func newParseError(msg string, line, col int) *ParseError {
+	return &ParseError{Message: msg, Line: line, Col: col}
+}
+
+// convertStatementsToNodes converts statements to nodes, filtering nil entries.
 func convertStatementsToNodes(stmts []Statement) []Node {
 	if len(stmts) == 0 {
 		return nil
 	}
 	nodes := make([]Node, 0, len(stmts))
-	for _, stmt := range stmts {
-		if stmt != nil {
-			nodes = append(nodes, stmt)
+	for _, s := range stmts {
+		if s != nil {
+			nodes = append(nodes, s)
 		}
+	}
+	if len(nodes) == 0 {
+		return nil
 	}
 	return nodes
 }

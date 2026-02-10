@@ -1,15 +1,15 @@
 package template
 
 import (
-	"fmt"
 	"strconv"
+	"strings"
 )
 
 // comparisonOps is the set of comparison operators for fast lookup.
-var comparisonOps = map[string]bool{
-	"==": true, "!=": true,
-	"<": true, ">": true,
-	"<=": true, ">=": true,
+var comparisonOps = map[string]struct{}{
+	"==": {}, "!=": {},
+	"<": {}, ">": {},
+	"<=": {}, ">=": {},
 }
 
 // ExprParser parses expressions from a token stream.
@@ -99,7 +99,7 @@ func (p *ExprParser) parseComparison() (Expression, error) {
 	}
 
 	for tok := p.current(); tok != nil && tok.Type == TokenSymbol; tok = p.current() {
-		if !comparisonOps[tok.Value] {
+		if _, ok := comparisonOps[tok.Value]; !ok {
 			break
 		}
 		op := tok.Value
@@ -363,6 +363,7 @@ func (p *ExprParser) parseFilterArg() (Expression, error) {
 		return nil, p.errAtTok(tok, "expected literal or variable as filter argument")
 	}
 
+	// unreachable: all TokenType cases handled above
 	return nil, p.errAtTok(tok, "expected literal or variable as filter argument")
 }
 
@@ -423,6 +424,7 @@ func (p *ExprParser) parsePrimary() (Expression, error) {
 		return nil, p.errAtTok(tok, "unexpected token: "+tok.Value)
 	}
 
+	// unreachable: all TokenType cases handled above
 	return nil, p.errAtTok(tok, "unexpected token: "+tok.Value)
 }
 
@@ -441,15 +443,6 @@ func (p *ExprParser) advance() {
 	if p.pos < len(p.tokens) {
 		p.pos++
 	}
-}
-
-// peek returns the token at the given offset without consuming it.
-func (p *ExprParser) peek(offset int) *Token {
-	pos := p.pos + offset
-	if pos >= len(p.tokens) {
-		return nil
-	}
-	return p.tokens[pos]
 }
 
 // isOr reports whether tok represents an "or" operator.
@@ -494,5 +487,12 @@ type ParseError struct {
 }
 
 func (e *ParseError) Error() string {
-	return fmt.Sprintf("parse error at line %d, col %d: %s", e.Line, e.Col, e.Message)
+	var b strings.Builder
+	b.WriteString("parse error at line ")
+	b.WriteString(strconv.Itoa(e.Line))
+	b.WriteString(", col ")
+	b.WriteString(strconv.Itoa(e.Col))
+	b.WriteString(": ")
+	b.WriteString(e.Message)
+	return b.String()
 }

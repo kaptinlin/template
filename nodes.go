@@ -39,31 +39,31 @@ type TextNode struct {
 func (n *TextNode) Position() (int, int) { return n.Line, n.Col }
 func (n *TextNode) String() string       { return fmt.Sprintf("Text(%q)", n.Text) }
 
-// Execute writes the raw text into the output stream.
-func (n *TextNode) Execute(_ *ExecutionContext, writer io.Writer) error {
-	_, err := writer.Write([]byte(n.Text))
+// Execute writes the raw text to the output.
+func (n *TextNode) Execute(_ *ExecutionContext, w io.Writer) error {
+	_, err := w.Write([]byte(n.Text))
 	return err
 }
 
 // OutputNode represents a variable output {{ ... }}.
 // Example: {{ name }}, {{ user.email|upper }}
 type OutputNode struct {
-	Expression Expression // The expression to evaluate and output
-	Line       int
-	Col        int
+	Expr Expression // The expression to evaluate and output
+	Line int
+	Col  int
 }
 
 // Position implements Node.
 func (n *OutputNode) Position() (int, int) { return n.Line, n.Col }
-func (n *OutputNode) String() string       { return fmt.Sprintf("Output(%s)", n.Expression) }
+func (n *OutputNode) String() string       { return fmt.Sprintf("Output(%s)", n.Expr) }
 
 // Execute evaluates the expression and writes its string value.
-func (n *OutputNode) Execute(ctx *ExecutionContext, writer io.Writer) error {
-	val, err := n.Expression.Evaluate(ctx)
+func (n *OutputNode) Execute(ctx *ExecutionContext, w io.Writer) error {
+	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = writer.Write([]byte(val.String()))
+	_, err = w.Write([]byte(val.String()))
 	return err
 }
 
@@ -87,18 +87,18 @@ func (n *IfNode) Position() (int, int) { return n.Line, n.Col }
 func (n *IfNode) String() string       { return fmt.Sprintf("If(%d branches)", len(n.Branches)) }
 
 // Execute runs the first truthy branch, or the else block if no branch matches.
-func (n *IfNode) Execute(ctx *ExecutionContext, writer io.Writer) error {
+func (n *IfNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	for _, branch := range n.Branches {
 		val, err := branch.Condition.Evaluate(ctx)
 		if err != nil {
 			return err
 		}
 		if val.IsTrue() {
-			return executeBody(branch.Body, ctx, writer)
+			return executeBody(branch.Body, ctx, w)
 		}
 	}
 	if n.ElseBody != nil {
-		return executeBody(n.ElseBody, ctx, writer)
+		return executeBody(n.ElseBody, ctx, w)
 	}
 	return nil
 }
@@ -113,14 +113,14 @@ type LoopContext struct {
 	First      bool         // True on first iteration.
 	Last       bool         // True on last iteration.
 	Length     int          // Total collection length.
-	Parentloop *LoopContext // Parent loop context for nested loops.
+	Parent     *LoopContext // Parent loop context for nested loops.
 }
 
 // ForNode represents a for loop.
 // Example: {% for item in items %} ... {% endfor %}
 // Example: {% for key, value in dict %} ... {% endfor %}
 type ForNode struct {
-	LoopVars   []string   // Variable names (e.g., ["item"] or ["key", "value"])
+	Vars       []string   // Variable names (e.g., ["item"] or ["key", "value"])
 	Collection Expression // Expression that evaluates to an iterable
 	Body       []Node     // Statements inside the loop
 	Line       int
@@ -130,42 +130,42 @@ type ForNode struct {
 // Position implements Node.
 func (n *ForNode) Position() (int, int) { return n.Line, n.Col }
 func (n *ForNode) String() string {
-	return fmt.Sprintf("For(%v in %s)", n.LoopVars, n.Collection)
+	return fmt.Sprintf("For(%v in %s)", n.Vars, n.Collection)
 }
 
 // Execute evaluates the iterable and executes the loop body for each element.
-func (n *ForNode) Execute(ctx *ExecutionContext, writer io.Writer) error {
-	collection, err := n.Collection.Evaluate(ctx)
+func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
+	col, err := n.Collection.Evaluate(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Django behavior: {% for item in map %} binds to the map key.
-	bindSingleVarToKey := false
-	rv := collection.getResolvedValue()
+	bindToKey := false
+	rv := col.resolved()
 	if rv.IsValid() && rv.Kind() == reflect.Map {
-		bindSingleVarToKey = true
+		bindToKey = true
 	}
 
-	var parentLoop *LoopContext
-	if parentLoopValue, ok := ctx.Get("loop"); ok {
-		if pl, ok := parentLoopValue.(*LoopContext); ok {
-			parentLoop = pl
+	var parent *LoopContext
+	if v, ok := ctx.Get("loop"); ok {
+		if lc, ok := v.(*LoopContext); ok {
+			parent = lc
 		}
 	}
 
-	var executionErr error
+	var execErr error
 
-	iterErr := collection.Iterate(func(idx, count int, key, value *Value) bool {
-		if len(n.LoopVars) == 1 {
-			if bindSingleVarToKey {
-				ctx.Set(n.LoopVars[0], key.Interface())
+	iterErr := col.Iterate(func(idx, count int, key, value *Value) bool {
+		if len(n.Vars) == 1 {
+			if bindToKey {
+				ctx.Set(n.Vars[0], key.Interface())
 			} else {
-				ctx.Set(n.LoopVars[0], value.Interface())
+				ctx.Set(n.Vars[0], value.Interface())
 			}
-		} else if len(n.LoopVars) == 2 {
-			ctx.Set(n.LoopVars[0], key.Interface())
-			ctx.Set(n.LoopVars[1], value.Interface())
+		} else if len(n.Vars) == 2 {
+			ctx.Set(n.Vars[0], key.Interface())
+			ctx.Set(n.Vars[1], value.Interface())
 		}
 
 		ctx.Set("loop", &LoopContext{
@@ -176,7 +176,7 @@ func (n *ForNode) Execute(ctx *ExecutionContext, writer io.Writer) error {
 			First:      idx == 0,
 			Last:       idx == count-1,
 			Length:     count,
-			Parentloop: parentLoop,
+			Parent:     parent,
 		})
 
 		for _, stmt := range n.Body {
@@ -184,16 +184,16 @@ func (n *ForNode) Execute(ctx *ExecutionContext, writer io.Writer) error {
 			if !ok {
 				continue
 			}
-			if err := s.Execute(ctx, writer); err != nil {
-				var breakErr *BreakError
-				if errors.As(err, &breakErr) {
+			if err := s.Execute(ctx, w); err != nil {
+				var brk *BreakError
+				if errors.As(err, &brk) {
 					return false
 				}
-				var continueErr *ContinueError
-				if errors.As(err, &continueErr) {
+				var cont *ContinueError
+				if errors.As(err, &cont) {
 					return true
 				}
-				executionErr = err
+				execErr = err
 				return false
 			}
 		}
@@ -201,12 +201,12 @@ func (n *ForNode) Execute(ctx *ExecutionContext, writer io.Writer) error {
 	})
 
 	// Restore parent loop context.
-	if parentLoop != nil {
-		ctx.Set("loop", parentLoop)
+	if parent != nil {
+		ctx.Set("loop", parent)
 	}
 
-	if executionErr != nil {
-		return executionErr
+	if execErr != nil {
+		return execErr
 	}
 	return iterErr
 }
@@ -532,46 +532,46 @@ func (n *SubscriptNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 // FilterNode represents a filter application.
 // Examples: name|upper, price|add:10, text|slice:0:10
 type FilterNode struct {
-	Expression Expression   // The expression to filter
-	FilterName string       // The filter name
-	Args       []Expression // Filter arguments (can be empty)
-	Line       int
-	Col        int
+	Expr Expression   // The expression to filter
+	Name string       // The filter name
+	Args []Expression // Filter arguments (can be empty)
+	Line int
+	Col  int
 }
 
 // Position implements Node.
 func (n *FilterNode) Position() (int, int) { return n.Line, n.Col }
 func (n *FilterNode) String() string {
 	if len(n.Args) > 0 {
-		return fmt.Sprintf("Filter(%s|%s:%v)", n.Expression, n.FilterName, n.Args)
+		return fmt.Sprintf("Filter(%s|%s:%v)", n.Expr, n.Name, n.Args)
 	}
-	return fmt.Sprintf("Filter(%s|%s)", n.Expression, n.FilterName)
+	return fmt.Sprintf("Filter(%s|%s)", n.Expr, n.Name)
 }
 
 // Evaluate applies the named filter to the expression value.
 func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
-	value, err := n.Expression.Evaluate(ctx)
+	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	filterFunc, ok := GetFilter(n.FilterName)
+	fn, ok := GetFilter(n.Name)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrFilterNotFound, n.FilterName)
+		return nil, fmt.Errorf("%w: %s", ErrFilterNotFound, n.Name)
 	}
 
 	args := make([]string, 0, len(n.Args))
-	for _, argExpr := range n.Args {
-		argVal, err := argExpr.Evaluate(ctx)
+	for _, arg := range n.Args {
+		v, err := arg.Evaluate(ctx)
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, argVal.String())
+		args = append(args, v.String())
 	}
 
-	result, err := filterFunc(value.Interface(), args...)
+	result, err := fn(val.Interface(), args...)
 	if err != nil {
-		return nil, fmt.Errorf("filter %s: %w", n.FilterName, err)
+		return nil, fmt.Errorf("filter %s: %w", n.Name, err)
 	}
 	return NewValue(result), nil
 }
@@ -581,10 +581,10 @@ func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 // =============================================================================
 
 // executeBody executes a list of nodes as statements, returning the first error.
-func executeBody(body []Node, ctx *ExecutionContext, writer io.Writer) error {
+func executeBody(body []Node, ctx *ExecutionContext, w io.Writer) error {
 	for _, node := range body {
 		if s, ok := node.(Statement); ok {
-			if err := s.Execute(ctx, writer); err != nil {
+			if err := s.Execute(ctx, w); err != nil {
 				return err
 			}
 		}
@@ -599,7 +599,7 @@ func NewTextNode(text string, line, col int) *TextNode {
 
 // NewOutputNode returns a new OutputNode.
 func NewOutputNode(expr Expression, line, col int) *OutputNode {
-	return &OutputNode{Expression: expr, Line: line, Col: col}
+	return &OutputNode{Expr: expr, Line: line, Col: col}
 }
 
 // NewLiteralNode returns a new LiteralNode.
@@ -613,8 +613,8 @@ func NewVariableNode(name string, line, col int) *VariableNode {
 }
 
 // NewFilterNode returns a new FilterNode.
-func NewFilterNode(expr Expression, filterName string, args []Expression, line, col int) *FilterNode {
-	return &FilterNode{Expression: expr, FilterName: filterName, Args: args, Line: line, Col: col}
+func NewFilterNode(expr Expression, name string, args []Expression, line, col int) *FilterNode {
+	return &FilterNode{Expr: expr, Name: name, Args: args, Line: line, Col: col}
 }
 
 // NewPropertyAccessNode returns a new PropertyAccessNode.

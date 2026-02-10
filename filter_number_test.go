@@ -12,31 +12,31 @@ func TestNumberFilters(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]interface{}
+		context  map[string]any
 		expected string
 	}{
 		{
 			name:     "NumberFilterWithFormat",
 			template: "{{ value | number:'#,###.##' }}",
-			context:  map[string]interface{}{"value": 1234567.89},
+			context:  map[string]any{"value": 1234567.89},
 			expected: "1,234,567.89",
 		},
 		{
 			name:     "BytesFilterForKilobytes",
 			template: "{{ value | bytes }}",
-			context:  map[string]interface{}{"value": 1024},
+			context:  map[string]any{"value": 1024},
 			expected: "1.0 kB",
 		},
 		{
 			name:     "BytesFilterForMegabytes",
 			template: "{{ value | bytes }}",
-			context:  map[string]interface{}{"value": 1048576},
+			context:  map[string]any{"value": 1048576},
 			expected: "1.0 MB",
 		},
 		{
 			name:     "BytesFilterForGigabytes",
 			template: "{{ value | bytes }}",
-			context:  map[string]interface{}{"value": 1073741824},
+			context:  map[string]any{"value": 1073741824},
 			expected: "1.1 GB",
 		},
 	}
@@ -46,14 +46,14 @@ func TestNumberFilters(t *testing.T) {
 			tpl, err := Compile(tc.template)
 			require.NoError(t, err)
 
-			context := NewContext()
+			ctx := NewContext()
 			for k, v := range tc.context {
-				context.Set(k, v)
+				ctx.Set(k, v)
 			}
 
-			output, err := tpl.Render(map[string]interface{}(context))
+			got, err := tpl.Render(map[string]any(ctx))
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, output)
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }

@@ -12,6 +12,7 @@ type Lexer struct {
 	line   int // 1-based
 	col    int // 1-based
 	tokens []*Token
+	len    int // cached len(input)
 }
 
 // NewLexer creates a new Lexer for the given input.
@@ -21,31 +22,32 @@ func NewLexer(input string) *Lexer {
 		line:   1,
 		col:    1,
 		tokens: make([]*Token, 0, 100),
+		len:    len(input),
 	}
 }
 
 // Tokenize performs lexical analysis and returns all tokens.
 func (l *Lexer) Tokenize() ([]*Token, error) {
-	for l.pos < len(l.input) {
-		if l.peek("{#") {
-			if err := l.scanComment(); err != nil {
-				return nil, err
+	for l.pos < l.len {
+		// Check for tag openers: all start with '{'.
+		if l.input[l.pos] == '{' && l.pos+1 < l.len {
+			switch l.input[l.pos+1] {
+			case '#':
+				if err := l.scanComment(); err != nil {
+					return nil, err
+				}
+				continue
+			case '{':
+				if err := l.scanVarTag(); err != nil {
+					return nil, err
+				}
+				continue
+			case '%':
+				if err := l.scanBlockTag(); err != nil {
+					return nil, err
+				}
+				continue
 			}
-			continue
-		}
-
-		if l.peek("{{") {
-			if err := l.scanVarTag(); err != nil {
-				return nil, err
-			}
-			continue
-		}
-
-		if l.peek("{%") {
-			if err := l.scanBlockTag(); err != nil {
-				return nil, err
-			}
-			continue
 		}
 
 		if err := l.scanText(); err != nil {
@@ -62,30 +64,27 @@ func (l *Lexer) scanText() error {
 	start := l.pos
 	startLine, startCol := l.line, l.col
 
-	for l.pos < len(l.input) {
+	for l.pos < l.len {
 		ch := l.input[l.pos]
-
-		if ch == '{' && l.pos+1 < len(l.input) {
-			next := l.input[l.pos+1]
-			if next == '{' || next == '%' || next == '#' {
-				break
+		if ch == '{' && l.pos+1 < l.len {
+			switch l.input[l.pos+1] {
+			case '{', '%', '#':
+				goto done
 			}
 		}
-
 		if ch == '\n' {
 			l.line++
 			l.col = 1
 		} else {
 			l.col++
 		}
-
 		l.pos++
 	}
 
+done:
 	if l.pos > start {
 		l.emitAt(TokenText, l.input[start:l.pos], startLine, startCol)
 	}
-
 	return nil
 }
 
@@ -94,8 +93,8 @@ func (l *Lexer) scanComment() error {
 	startLine, startCol := l.line, l.col
 	l.advance(2) // skip {#
 
-	for !l.peek("#}") {
-		if l.pos >= len(l.input) {
+	for !l.peek2('#', '}') {
+		if l.pos >= l.len {
 			return l.errorAt(startLine, startCol, "unclosed comment, expected '#}'")
 		}
 		if l.input[l.pos] == '\n' {
@@ -116,14 +115,14 @@ func (l *Lexer) scanVarTag() error {
 	l.emit(TokenVarBegin, "{{")
 	l.advance(2)
 
-	for !l.peek("}}") {
-		if l.pos >= len(l.input) {
+	for !l.peek2('}', '}') {
+		if l.pos >= l.len {
 			return l.errorAt(startLine, startCol, "unclosed variable tag, expected '}}'")
 		}
 
 		l.skipWhitespace()
 
-		if l.peek("}}") {
+		if l.peek2('}', '}') {
 			break
 		}
 
@@ -145,14 +144,14 @@ func (l *Lexer) scanBlockTag() error {
 	l.emit(TokenTagBegin, "{%")
 	l.advance(2)
 
-	for !l.peek("%}") {
-		if l.pos >= len(l.input) {
+	for !l.peek2('%', '}') {
+		if l.pos >= l.len {
 			return l.errorAt(startLine, startCol, "unclosed block tag, expected '%}'")
 		}
 
 		l.skipWhitespace()
 
-		if l.peek("%}") {
+		if l.peek2('%', '}') {
 			break
 		}
 
@@ -171,7 +170,7 @@ func (l *Lexer) scanBlockTag() error {
 func (l *Lexer) scanInsideTag() error {
 	l.skipWhitespace()
 
-	if l.pos >= len(l.input) {
+	if l.pos >= l.len {
 		return nil
 	}
 
@@ -197,7 +196,7 @@ func (l *Lexer) scanIdentifier() error {
 	l.pos++
 	l.col++
 
-	for l.pos < len(l.input) {
+	for l.pos < l.len {
 		ch := l.input[l.pos]
 		if !isLetter(ch) && !isDigit(ch) && ch != '_' {
 			break
@@ -218,18 +217,18 @@ func (l *Lexer) scanNumber() error {
 	// If preceded by '.', treat as array index — don't consume decimal point.
 	propAccess := start > 0 && l.input[start-1] == '.'
 
-	for l.pos < len(l.input) && isDigit(l.input[l.pos]) {
+	for l.pos < l.len && isDigit(l.input[l.pos]) {
 		l.pos++
 		l.col++
 	}
 
 	// Consume decimal point only if not in a property access chain
 	// and the '.' is followed by a digit.
-	if !propAccess && l.pos < len(l.input) && l.input[l.pos] == '.' {
-		if l.pos+1 < len(l.input) && isDigit(l.input[l.pos+1]) {
+	if !propAccess && l.pos < l.len && l.input[l.pos] == '.' {
+		if l.pos+1 < l.len && isDigit(l.input[l.pos+1]) {
 			l.pos++
 			l.col++
-			for l.pos < len(l.input) && isDigit(l.input[l.pos]) {
+			for l.pos < l.len && isDigit(l.input[l.pos]) {
 				l.pos++
 				l.col++
 			}
@@ -252,7 +251,7 @@ func (l *Lexer) scanString() error {
 	buf.Grow(16)
 	escaped := false
 
-	for l.pos < len(l.input) {
+	for l.pos < l.len {
 		ch := l.input[l.pos]
 
 		if escaped {
@@ -306,10 +305,13 @@ func (l *Lexer) scanString() error {
 
 // scanSymbol scans an operator or punctuation symbol.
 func (l *Lexer) scanSymbol() error {
+	ch := l.input[l.pos]
+
 	// Try two-character symbols first.
-	if l.pos+1 < len(l.input) {
-		two := l.input[l.pos : l.pos+2]
-		if IsSymbol(two) {
+	if l.pos+1 < l.len {
+		next := l.input[l.pos+1]
+		if isTwoCharSymbol(ch, next) {
+			two := l.input[l.pos : l.pos+2]
 			l.emit(TokenSymbol, two)
 			l.pos += 2
 			l.col += 2
@@ -317,15 +319,14 @@ func (l *Lexer) scanSymbol() error {
 		}
 	}
 
-	one := l.input[l.pos : l.pos+1]
-	if IsSymbol(one) {
-		l.emit(TokenSymbol, one)
+	if isOneCharSymbol(ch) {
+		l.emit(TokenSymbol, l.input[l.pos:l.pos+1])
 		l.pos++
 		l.col++
 		return nil
 	}
 
-	return l.errorAt(l.line, l.col, "unexpected character: "+one)
+	return l.errorAt(l.line, l.col, "unexpected character: "+string(ch))
 }
 
 // emit appends a token at the current position.
@@ -348,14 +349,19 @@ func (l *Lexer) emitAt(typ TokenType, value string, line, col int) {
 	})
 }
 
-// peek reports whether the input at the current position starts with s.
-func (l *Lexer) peek(s string) bool {
-	return l.pos+len(s) <= len(l.input) && l.input[l.pos:l.pos+len(s)] == s
+// peek2 reports whether the next two bytes match a and b.
+func (l *Lexer) peek2(a, b byte) bool {
+	return l.pos+2 <= l.len && l.input[l.pos] == a && l.input[l.pos+1] == b
 }
 
-// advance moves the position forward by n characters, tracking lines.
+// advance moves the position forward by n bytes, tracking line and column.
+// For tag delimiters like {{ }}, {# #}, {% %}, which never span newlines.
 func (l *Lexer) advance(n int) {
-	for i := 0; i < n && l.pos < len(l.input); i++ {
+	end := l.pos + n
+	if end > l.len {
+		end = l.len
+	}
+	for l.pos < end {
 		if l.input[l.pos] == '\n' {
 			l.line++
 			l.col = 1
@@ -368,16 +374,15 @@ func (l *Lexer) advance(n int) {
 
 // skipWhitespace advances past any whitespace characters.
 func (l *Lexer) skipWhitespace() {
-	for l.pos < len(l.input) {
-		ch := l.input[l.pos]
-		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
-			break
-		}
-		if ch == '\n' {
+	for l.pos < l.len {
+		switch l.input[l.pos] {
+		case '\n':
 			l.line++
 			l.col = 1
-		} else {
+		case ' ', '\t', '\r':
 			l.col++
+		default:
+			return
 		}
 		l.pos++
 	}
@@ -401,7 +406,15 @@ type LexerError struct {
 
 // Error implements the error interface.
 func (e *LexerError) Error() string {
-	return "lexer error at line " + strconv.Itoa(e.Line) + ", col " + strconv.Itoa(e.Col) + ": " + e.Message
+	var b strings.Builder
+	b.Grow(48)
+	b.WriteString("lexer error at line ")
+	b.WriteString(strconv.Itoa(e.Line))
+	b.WriteString(", col ")
+	b.WriteString(strconv.Itoa(e.Col))
+	b.WriteString(": ")
+	b.WriteString(e.Message)
+	return b.String()
 }
 
 // isLetter reports whether the byte is an ASCII letter.
@@ -412,4 +425,29 @@ func isLetter(ch byte) bool {
 // isDigit reports whether the byte is an ASCII digit.
 func isDigit(ch byte) bool {
 	return ch >= '0' && ch <= '9'
+}
+
+// isOneCharSymbol reports whether ch is a valid single-character symbol.
+func isOneCharSymbol(ch byte) bool {
+	switch ch {
+	case '+', '-', '*', '/', '%',
+		'<', '>', '!', '=',
+		'|', ':', ',', '.',
+		'(', ')', '[', ']':
+		return true
+	}
+	return false
+}
+
+// isTwoCharSymbol reports whether a, b form a valid two-character symbol.
+func isTwoCharSymbol(a, b byte) bool {
+	switch a {
+	case '=', '!', '<', '>':
+		return b == '='
+	case '&':
+		return b == '&'
+	case '|':
+		return b == '|'
+	}
+	return false
 }

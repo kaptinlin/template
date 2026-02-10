@@ -12,85 +12,70 @@ import (
 	"github.com/go-json-experiment/json"
 )
 
-// Value wraps any Go value for template execution.
-// It provides methods for type checking, conversion, and operations.
+// Value wraps a Go value for template execution, providing
+// type checking, conversion, and comparison operations.
 type Value struct {
-	val interface{}
+	val any
 }
 
-// NewValue creates a new Value wrapper.
-func NewValue(v interface{}) *Value {
+// NewValue creates a Value wrapping v.
+func NewValue(v any) *Value {
 	return &Value{val: v}
 }
 
 // Interface returns the underlying Go value.
-func (v *Value) Interface() interface{} {
+func (v *Value) Interface() any {
 	return v.val
 }
 
-// IsNil checks if the value is nil.
+// IsNil reports whether the value is nil.
 func (v *Value) IsNil() bool {
-	return !v.getResolvedValue().IsValid()
+	return !v.resolved().IsValid()
 }
 
-// getResolvedValue recursively dereferences pointers and interfaces to get the underlying value.
-// This method is called by all Value methods to handle pointer types correctly.
-func (v *Value) getResolvedValue() reflect.Value {
+// resolved dereferences pointers and interfaces to get the underlying value.
+func (v *Value) resolved() reflect.Value {
 	if v.val == nil {
 		return reflect.Value{}
 	}
-
 	rv := reflect.ValueOf(v.val)
-	// Unwrap pointers and interfaces to get to the underlying value
 	for rv.IsValid() && (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) {
 		rv = rv.Elem()
 	}
 	return rv
 }
 
-// IsTrue checks if the value is considered true in template context.
-// False values: nil, false, 0, "", empty slice/map
+// IsTrue reports whether the value is truthy in a template context.
+// False values: nil, false, 0, "", empty slice/map/array.
 func (v *Value) IsTrue() bool {
-	rv := v.getResolvedValue()
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return false
 	}
-
 	switch rv.Kind() {
 	case reflect.Bool:
 		return rv.Bool()
-
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return rv.Int() != 0
-
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return rv.Uint() != 0
-
 	case reflect.Float32, reflect.Float64:
 		return rv.Float() != 0
-
 	case reflect.String:
 		return rv.String() != ""
-
 	case reflect.Slice, reflect.Map, reflect.Array:
 		return rv.Len() > 0
-
 	case reflect.Invalid:
 		return false
-
-	case reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.Interface,
-		reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
-		// Other non-nil values are considered truthy.
-		return true
-
-	default:
-		// Other types (struct, etc.) are considered true if not nil
+	case reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
+		reflect.Interface, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
 		return true
 	}
+	return true
 }
 
 // formatFloat renders a float as a string.
-// Whole-number floats are rendered without a fractional part (e.g. "3");
+// Whole-number floats omit the fractional part (e.g. "3");
 // other values use the shortest decimal representation.
 func formatFloat(f float64) string {
 	if f == float64(int64(f)) {
@@ -101,23 +86,19 @@ func formatFloat(f float64) string {
 
 // String returns the string representation of the value.
 func (v *Value) String() string {
-	rv := v.getResolvedValue()
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return ""
 	}
 
-	// Handle special types before kind-based switch
-	// Check for time.Time first
+	// Handle special types before kind-based switch.
 	if t, ok := rv.Interface().(time.Time); ok {
 		return t.Format("2006-01-02 15:04:05")
 	}
-
-	// Check for fmt.Stringer interface
 	if s, ok := rv.Interface().(fmt.Stringer); ok {
 		return s.String()
 	}
 
-	// Handle string conversion based on type
 	switch rv.Kind() {
 	case reflect.String:
 		return rv.String()
@@ -130,300 +111,248 @@ func (v *Value) String() string {
 	case reflect.Bool:
 		return strconv.FormatBool(rv.Bool())
 	case reflect.Slice, reflect.Array:
-		return v.formatSlice(rv)
-	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
-		// For complex types (map, struct, etc.), use JSON serialization
-		// This ensures consistent output format matching the old implementation
-		jsonBytes, err := json.Marshal(rv.Interface(), json.Deterministic(true))
+		return formatSlice(rv)
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan,
+		reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct,
+		reflect.UnsafePointer:
+		b, err := json.Marshal(rv.Interface(), json.Deterministic(true))
 		if err != nil {
-			// Fallback to fmt.Sprint if JSON marshaling fails
 			return fmt.Sprint(rv.Interface())
 		}
-		return string(jsonBytes)
+		return string(b)
 	}
-
 	return ""
 }
 
-// formatSlice formats an array/slice as [item1,item2,item3] with comma separation.
-func (v *Value) formatSlice(rv reflect.Value) string {
-	length := rv.Len()
-	if length == 0 {
+// formatSlice formats a slice or array as [item1,item2,item3].
+func formatSlice(rv reflect.Value) string {
+	n := rv.Len()
+	if n == 0 {
 		return "[]"
 	}
 
-	var builder strings.Builder
-	builder.Grow(length * 20) // Estimate ~20 chars per item
-	builder.WriteByte('[')
-
-	for i := 0; i < length; i++ {
+	var b strings.Builder
+	b.Grow(n * 20)
+	b.WriteByte('[')
+	for i := range n {
 		if i > 0 {
-			builder.WriteByte(',')
+			b.WriteByte(',')
 		}
-		item := rv.Index(i).Interface()
-
-		// Format the item based on its type
-		itemRv := reflect.ValueOf(item)
-		if !itemRv.IsValid() {
-			builder.WriteString("null")
-			continue
-		}
-
-		var str string
-		switch itemRv.Kind() {
-		case reflect.String:
-			str = itemRv.String()
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			str = strconv.FormatInt(itemRv.Int(), 10)
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			str = strconv.FormatUint(itemRv.Uint(), 10)
-		case reflect.Float32, reflect.Float64:
-			str = formatFloat(itemRv.Float())
-		case reflect.Bool:
-			str = strconv.FormatBool(itemRv.Bool())
-		case reflect.Slice, reflect.Array:
-			// Recursively format nested arrays
-			itemValue := NewValue(item)
-			str = itemValue.formatSlice(itemRv)
-		case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
-			reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
-			// For complex types (map, struct, etc.), use JSON serialization
-			jsonBytes, err := json.Marshal(item, json.Deterministic(true))
-			if err != nil {
-				str = fmt.Sprint(item)
-			} else {
-				str = string(jsonBytes)
-			}
-		}
-		builder.WriteString(str)
+		b.WriteString(formatSliceItem(rv.Index(i)))
 	}
-
-	builder.WriteByte(']')
-	return builder.String()
+	b.WriteByte(']')
+	return b.String()
 }
 
-// Int returns the integer value, with conversion if possible.
+// formatSliceItem formats a single slice/array element.
+// Primitive types are rendered directly; pointers and complex types
+// use JSON serialization to preserve quoting and null semantics.
+func formatSliceItem(rv reflect.Value) string {
+	if !rv.IsValid() {
+		return "null"
+	}
+	switch rv.Kind() {
+	case reflect.String:
+		return rv.String()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(rv.Int(), 10)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(rv.Uint(), 10)
+	case reflect.Float32, reflect.Float64:
+		return formatFloat(rv.Float())
+	case reflect.Bool:
+		return strconv.FormatBool(rv.Bool())
+	case reflect.Slice, reflect.Array:
+		return formatSlice(rv)
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan,
+		reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct,
+		reflect.UnsafePointer:
+		data, err := json.Marshal(rv.Interface(), json.Deterministic(true))
+		if err != nil {
+			return fmt.Sprint(rv.Interface())
+		}
+		return string(data)
+	}
+	return ""
+}
+
+// Int returns the value as int64, converting if possible.
 func (v *Value) Int() (int64, error) {
-	rv := v.getResolvedValue()
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToInt
 	}
-
 	switch rv.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return rv.Int(), nil
-
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		u := rv.Uint()
 		if u > math.MaxInt64 {
 			return 0, ErrIntegerOverflow
 		}
 		return int64(u), nil
-
 	case reflect.Float32, reflect.Float64:
 		return int64(rv.Float()), nil
-
 	case reflect.Bool:
 		if rv.Bool() {
 			return 1, nil
 		}
 		return 0, nil
-
-	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice, reflect.String, reflect.Struct,
-		reflect.UnsafePointer:
+	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
+		reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice,
+		reflect.String, reflect.Struct, reflect.UnsafePointer:
 		return 0, fmt.Errorf("%w: %T", ErrCannotConvertToInt, v.val)
 	}
-
 	return 0, fmt.Errorf("%w: %T", ErrCannotConvertToInt, v.val)
 }
 
-// Float returns the float value, with conversion if possible.
+// Float returns the value as float64, converting if possible.
 func (v *Value) Float() (float64, error) {
-	rv := v.getResolvedValue()
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToFloat
 	}
-
 	switch rv.Kind() {
 	case reflect.Float32, reflect.Float64:
 		return rv.Float(), nil
-
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return float64(rv.Int()), nil
-
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return float64(rv.Uint()), nil
-
-	case reflect.Invalid, reflect.Bool, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
-		reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice, reflect.String,
-		reflect.Struct, reflect.UnsafePointer:
+	case reflect.Invalid, reflect.Bool, reflect.Complex64, reflect.Complex128, reflect.Array,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr,
+		reflect.Slice, reflect.String, reflect.Struct, reflect.UnsafePointer:
 		return 0, fmt.Errorf("%w: %T", ErrCannotConvertToFloat, v.val)
 	}
-
 	return 0, fmt.Errorf("%w: %T", ErrCannotConvertToFloat, v.val)
 }
 
-// Bool returns the boolean value.
+// Bool reports whether the value is truthy.
 func (v *Value) Bool() bool {
 	return v.IsTrue()
 }
 
-// Len returns the length of the value (for strings, slices, maps, arrays).
+// Len returns the length of the value (string, slice, map, or array).
 func (v *Value) Len() (int, error) {
-	rv := v.getResolvedValue()
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return 0, nil
 	}
-
 	switch rv.Kind() {
 	case reflect.String, reflect.Slice, reflect.Map, reflect.Array:
 		return rv.Len(), nil
-
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.Ptr, reflect.Struct,
+		reflect.UnsafePointer:
 		return 0, fmt.Errorf("%w: %T", ErrTypeHasNoLength, v.val)
 	}
-
 	return 0, fmt.Errorf("%w: %T", ErrTypeHasNoLength, v.val)
 }
 
-// Index returns the value at the given index (for slices, arrays, strings).
+// Index returns the element at index i (for slices, arrays, strings).
 func (v *Value) Index(i int) (*Value, error) {
-	rv := v.getResolvedValue()
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return nil, ErrCannotIndexNil
 	}
-
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		if i < 0 || i >= rv.Len() {
 			return nil, fmt.Errorf("%w: %d", ErrIndexOutOfRange, i)
 		}
 		return NewValue(rv.Index(i).Interface()), nil
-
 	case reflect.String:
 		s := rv.String()
 		if i < 0 || i >= len(s) {
 			return nil, fmt.Errorf("%w: %d", ErrIndexOutOfRange, i)
 		}
 		return NewValue(string(s[i])), nil
-
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct,
+		reflect.UnsafePointer:
 		return nil, fmt.Errorf("%w: %T", ErrTypeNotIndexable, v.val)
 	}
-
 	return nil, fmt.Errorf("%w: %T", ErrTypeNotIndexable, v.val)
 }
 
-// Key returns the value for the given key (for maps).
-func (v *Value) Key(key interface{}) (*Value, error) {
-	rv := v.getResolvedValue()
+// Key returns the map value for the given key.
+func (v *Value) Key(key any) (*Value, error) {
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return nil, ErrCannotGetKeyFromNil
 	}
-
 	if rv.Kind() != reflect.Map {
 		return nil, fmt.Errorf("%w: %T", ErrTypeNotMap, v.val)
 	}
-
-	keyVal := reflect.ValueOf(key)
-	result := rv.MapIndex(keyVal)
-
+	result := rv.MapIndex(reflect.ValueOf(key))
 	if !result.IsValid() {
 		return NewValue(nil), nil
 	}
-
 	return NewValue(result.Interface()), nil
 }
 
 // Field returns the value of a struct field or map key by name.
+// For structs, it searches by JSON tag first, then by exported field name.
 func (v *Value) Field(name string) (*Value, error) {
-	rv := v.getResolvedValue()
+	rv := v.resolved()
 	if !rv.IsValid() {
 		return nil, ErrCannotGetFieldFromNil
 	}
-
 	switch rv.Kind() {
 	case reflect.Struct:
-		// Try to find field by JSON tag first, then by field name
 		field, found := findStructField(rv, name)
 		if !found {
 			return nil, fmt.Errorf("%w: %q", ErrStructHasNoField, name)
 		}
 		return NewValue(field.Interface()), nil
-
 	case reflect.Map:
-		// For map, treat field name as string key
-		keyVal := reflect.ValueOf(name)
-		result := rv.MapIndex(keyVal)
+		result := rv.MapIndex(reflect.ValueOf(name))
 		if !result.IsValid() {
 			return NewValue(nil), nil
 		}
 		return NewValue(result.Interface()), nil
-
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
-		reflect.Func, reflect.Interface, reflect.Ptr, reflect.Slice, reflect.String, reflect.UnsafePointer:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Ptr, reflect.Slice,
+		reflect.String, reflect.UnsafePointer:
 		return nil, fmt.Errorf("%w: %T %q", ErrTypeHasNoField, v.val, name)
 	}
-
 	return nil, fmt.Errorf("%w: %T %q", ErrTypeHasNoField, v.val, name)
 }
 
-// findStructField finds a struct field by JSON tag or field name.
-// It searches in the following order:
-//  1. Field with matching JSON tag (supports json:"name" or json:"name,omitempty")
-//  2. Field with matching exported name (case-sensitive)
-//
-// This allows templates to use lowercase names (matching JSON tags) while
-// maintaining compatibility with direct field access.
+// findStructField finds a struct field by JSON tag or exported name.
+// Search order: (1) matching JSON tag, (2) matching exported field name.
 func findStructField(rv reflect.Value, name string) (reflect.Value, bool) {
 	if rv.Kind() != reflect.Struct {
 		return reflect.Value{}, false
 	}
 
 	typ := rv.Type()
-	numFields := rv.NumField()
+	n := rv.NumField()
 
-	// First pass: try to find by JSON tag
-	for i := 0; i < numFields; i++ {
-		field := typ.Field(i)
-
-		// Check JSON tag
-		if jsonTag := field.Tag.Get("json"); jsonTag != "" {
-			// Extract tag name (before comma if any)
-			// e.g., "name,omitempty" -> "name"
-			tagName := jsonTag
-			for j, ch := range jsonTag {
-				if ch == ',' {
-					tagName = jsonTag[:j]
-					break
-				}
-			}
-
-			// Skip if tag is "-" (explicitly ignored)
-			if tagName == "-" {
-				continue
-			}
-
-			if tagName == name {
-				return rv.Field(i), true
-			}
+	// First pass: match by JSON tag.
+	for i := range n {
+		tag := typ.Field(i).Tag.Get("json")
+		if tag == "" {
+			continue
+		}
+		tagName, _, _ := strings.Cut(tag, ",")
+		if tagName == "-" {
+			continue
+		}
+		if tagName == name {
+			return rv.Field(i), true
 		}
 	}
 
-	// Second pass: try to find by exact field name
-	for i := 0; i < numFields; i++ {
-		field := typ.Field(i)
-		if field.Name == name {
+	// Second pass: match by exported field name.
+	for i := range n {
+		if typ.Field(i).Name == name {
 			return rv.Field(i), true
 		}
 	}
@@ -431,68 +360,55 @@ func findStructField(rv reflect.Value, name string) (reflect.Value, bool) {
 	return reflect.Value{}, false
 }
 
-// Iterate iterates over a collection (slice, array, map).
-// The callback receives the index/key and value for each element.
-// Returns an error if the value is not iterable.
-func (v *Value) Iterate(fn func(idx, count int, key, value *Value) bool) error {
-	rv := v.getResolvedValue()
+// Iterate calls fn for each element in a collection (slice, array, map, string).
+// fn receives the iteration index, total count, key, and value.
+// Returning false from fn stops iteration early.
+func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
+	rv := v.resolved()
 	if !rv.IsValid() {
-		return nil // Empty iteration for nil
+		return nil
 	}
-
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		count := rv.Len()
-		for i := 0; i < count; i++ {
-			key := NewValue(i)
-			val := NewValue(rv.Index(i).Interface())
-			if !fn(i, count, key, val) {
+		for i := range count {
+			if !fn(i, count, NewValue(i), NewValue(rv.Index(i).Interface())) {
 				break
 			}
 		}
 		return nil
-
 	case reflect.Map:
 		keys := sortedKeys(rv.MapKeys())
-		// Sort keys to ensure consistent iteration order
 		sort.Sort(keys)
 		count := len(keys)
 		for i, k := range keys {
-			key := NewValue(k.Interface())
-			val := NewValue(rv.MapIndex(k).Interface())
-			if !fn(i, count, key, val) {
+			if !fn(i, count, NewValue(k.Interface()), NewValue(rv.MapIndex(k).Interface())) {
 				break
 			}
 		}
 		return nil
-
 	case reflect.String:
-		// Convert string to rune slice for proper Unicode character iteration
 		rs := []rune(rv.String())
 		count := len(rs)
-		for i := 0; i < count; i++ {
-			key := NewValue(i)
-			val := NewValue(string(rs[i]))
-			if !fn(i, count, key, val) {
+		for i, r := range rs {
+			if !fn(i, count, NewValue(i), NewValue(string(r))) {
 				break
 			}
 		}
 		return nil
-
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.Ptr, reflect.Struct,
+		reflect.UnsafePointer:
 		return fmt.Errorf("%w: %T", ErrTypeNotIterable, v.val)
 	}
-
 	return fmt.Errorf("%w: %T", ErrTypeNotIterable, v.val)
 }
 
-// Compare compares this value with another value.
-// Returns: -1 if v < other, 0 if v == other, 1 if v > other
+// Compare compares v with other.
+// It returns -1 if v < other, 0 if v == other, 1 if v > other.
 func (v *Value) Compare(other *Value) (int, error) {
-	// Handle nil cases
 	if v.IsNil() && other.IsNil() {
 		return 0, nil
 	}
@@ -503,30 +419,33 @@ func (v *Value) Compare(other *Value) (int, error) {
 		return 1, nil
 	}
 
-	// Try numeric comparison - Float() will use getResolvedValue() internally
+	// Try numeric comparison first.
 	vf, vErr := v.Float()
 	of, oErr := other.Float()
 	if vErr == nil && oErr == nil {
-		if vf < of {
+		switch {
+		case vf < of:
 			return -1, nil
-		} else if vf > of {
+		case vf > of:
 			return 1, nil
+		default:
+			return 0, nil
 		}
+	}
+
+	// Fall back to string comparison.
+	vs, os := v.String(), other.String()
+	switch {
+	case vs < os:
+		return -1, nil
+	case vs > os:
+		return 1, nil
+	default:
 		return 0, nil
 	}
-
-	// Try string comparison
-	vs := v.String()
-	otherStr := other.String()
-	if vs < otherStr {
-		return -1, nil
-	} else if vs > otherStr {
-		return 1, nil
-	}
-	return 0, nil
 }
 
-// Equals checks if this value equals another value.
+// Equals reports whether v and other represent the same value.
 func (v *Value) Equals(other *Value) bool {
 	if v.IsNil() && other.IsNil() {
 		return true
@@ -535,49 +454,35 @@ func (v *Value) Equals(other *Value) bool {
 		return false
 	}
 
-	// Try numeric comparison first - this handles int vs float64 comparisons
+	// Try numeric comparison first to handle int vs float64.
 	vf, vErr := v.Float()
 	of, oErr := other.Float()
 	if vErr == nil && oErr == nil {
-		// Both are numeric, compare as floats
 		return vf == of
 	}
 
-	// Handle string comparison (including string alias types)
-	// For example, type Department string should equal to "Engineering"
-	vRv := v.getResolvedValue()
-	oRv := other.getResolvedValue()
-
+	// Handle string comparison including alias types.
+	vRv := v.resolved()
+	oRv := other.resolved()
 	if vRv.Kind() == reflect.String && oRv.Kind() == reflect.String {
 		return vRv.String() == oRv.String()
 	}
 
-	// Fall back to reflect.DeepEqual for non-numeric types
 	return reflect.DeepEqual(v.val, other.val)
 }
 
-// sortedKeys is a helper type for sorting map keys
+// sortedKeys implements sort.Interface for a slice of reflect.Value.
 type sortedKeys []reflect.Value
 
-func (sk sortedKeys) Len() int {
-	return len(sk)
-}
+func (sk sortedKeys) Len() int      { return len(sk) }
+func (sk sortedKeys) Swap(i, j int) { sk[i], sk[j] = sk[j], sk[i] }
 
 func (sk sortedKeys) Less(i, j int) bool {
-	vi := NewValue(sk[i].Interface())
-	vj := NewValue(sk[j].Interface())
-
-	// Try numeric comparison first
-	if fi, erri := vi.Float(); erri == nil {
-		if fj, errj := vj.Float(); errj == nil {
+	vi, vj := NewValue(sk[i].Interface()), NewValue(sk[j].Interface())
+	if fi, err := vi.Float(); err == nil {
+		if fj, err := vj.Float(); err == nil {
 			return fi < fj
 		}
 	}
-
-	// Fall back to string comparison
 	return vi.String() < vj.String()
-}
-
-func (sk sortedKeys) Swap(i, j int) {
-	sk[i], sk[j] = sk[j], sk[i]
 }

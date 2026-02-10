@@ -10,12 +10,12 @@ import (
 func TestJsonFilter(t *testing.T) {
 	cases := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{
 			name:     "SimpleMap",
-			input:    map[string]interface{}{"name": "John", "age": 30},
+			input:    map[string]any{"name": "John", "age": 30},
 			expected: `{"age":30,"name":"John"}`,
 		},
 		{
@@ -25,21 +25,21 @@ func TestJsonFilter(t *testing.T) {
 		},
 		{
 			name:     "EmptyMap",
-			input:    map[string]interface{}{},
+			input:    map[string]any{},
 			expected: `{}`,
 		},
 		{
 			name:     "NestedMap",
-			input:    map[string]interface{}{"a": map[string]interface{}{"b": 1}},
+			input:    map[string]any{"a": map[string]any{"b": 1}},
 			expected: `{"a":{"b":1}}`,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			output, err := jsonFilter(tc.input)
+			got, err := jsonFilter(tc.input)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, output)
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
@@ -49,9 +49,9 @@ func TestJsonFilterViaTemplate(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := NewContext()
-	ctx.Set("data", map[string]interface{}{"key": "value"})
+	ctx.Set("data", map[string]any{"key": "value"})
 
-	output, err := tpl.Render(map[string]interface{}(ctx))
+	got, err := tpl.Render(map[string]any(ctx))
 	require.NoError(t, err)
-	assert.Equal(t, `{"key":"value"}`, output)
+	assert.Equal(t, `{"key":"value"}`, got)
 }

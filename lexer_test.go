@@ -729,3 +729,177 @@ func TestLexerKeywords(t *testing.T) {
 		})
 	}
 }
+
+func TestIsOneCharSymbol(t *testing.T) {
+	valid := []byte{'+', '-', '*', '/', '%', '<', '>', '!', '=', '|', ':', ',', '.', '(', ')', '[', ']'}
+	for _, ch := range valid {
+		if !isOneCharSymbol(ch) {
+			t.Errorf("isOneCharSymbol(%q) = false, want true", ch)
+		}
+	}
+
+	invalid := []byte{'{', '}', '@', '#', '$', '^', '~', 'a', '0', ' '}
+	for _, ch := range invalid {
+		if isOneCharSymbol(ch) {
+			t.Errorf("isOneCharSymbol(%q) = true, want false", ch)
+		}
+	}
+}
+
+func TestIsTwoCharSymbol(t *testing.T) {
+	tests := []struct {
+		a, b byte
+		want bool
+	}{
+		{'=', '=', true},
+		{'!', '=', true},
+		{'<', '=', true},
+		{'>', '=', true},
+		{'&', '&', true},
+		{'|', '|', true},
+		{'+', '+', false},
+		{'-', '>', false},
+		{'*', '*', false},
+		{'=', '!', false},
+		{'&', '|', false},
+	}
+
+	for _, tt := range tests {
+		got := isTwoCharSymbol(tt.a, tt.b)
+		if got != tt.want {
+			t.Errorf("isTwoCharSymbol(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
+		}
+	}
+}
+
+func TestLexerErrorFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{
+			name:    "error includes line and col",
+			input:   "{{ @ }}",
+			wantErr: "lexer error at line 1, col 4: unexpected character: @",
+		},
+		{
+			name:    "unclosed string error position",
+			input:   `{{ "hello`,
+			wantErr: "lexer error at line 1, col 4: unclosed string, expected \"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewLexer(tt.input).Tokenize()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if got := err.Error(); got != tt.wantErr {
+				t.Errorf("error = %q, want %q", got, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLexerMultilineTemplate(t *testing.T) {
+	input := "line1\n{% if x %}\nHello\n{% endif %}\nline5"
+	got, err := NewLexer(input).Tokenize()
+	if err != nil {
+		t.Fatalf("Tokenize returned unexpected error: %v", err)
+	}
+
+	want := []*Token{
+		{Type: TokenText, Value: "line1\n", Line: 1, Col: 1},
+		{Type: TokenTagBegin, Value: "{%", Line: 2, Col: 1},
+		{Type: TokenIdentifier, Value: "if", Line: 2, Col: 4},
+		{Type: TokenIdentifier, Value: "x", Line: 2, Col: 7},
+		{Type: TokenTagEnd, Value: "%}", Line: 2, Col: 9},
+		{Type: TokenText, Value: "\nHello\n", Line: 2, Col: 11},
+		{Type: TokenTagBegin, Value: "{%", Line: 4, Col: 1},
+		{Type: TokenIdentifier, Value: "endif", Line: 4, Col: 4},
+		{Type: TokenTagEnd, Value: "%}", Line: 4, Col: 10},
+		{Type: TokenText, Value: "\nline5", Line: 4, Col: 12},
+		{Type: TokenEOF, Value: "", Line: 5, Col: 6},
+	}
+	compareTokens(t, "multiline template", got, want)
+}
+
+func TestLexerEdgeCases(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []*Token
+	}{
+		{
+			name:  "lone open brace is text",
+			input: "{ not a tag }",
+			want: []*Token{
+				{Type: TokenText, Value: "{ not a tag }", Line: 1, Col: 1},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 14},
+			},
+		},
+		{
+			name:  "brace at end of input",
+			input: "text{",
+			want: []*Token{
+				{Type: TokenText, Value: "text{", Line: 1, Col: 1},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 6},
+			},
+		},
+		{
+			name:  "identifier with underscore",
+			input: "{{ _private }}",
+			want: []*Token{
+				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
+				{Type: TokenIdentifier, Value: "_private", Line: 1, Col: 4},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 13},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 15},
+			},
+		},
+		{
+			name:  "identifier with digits",
+			input: "{{ item2 }}",
+			want: []*Token{
+				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
+				{Type: TokenIdentifier, Value: "item2", Line: 1, Col: 4},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 10},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 12},
+			},
+		},
+		{
+			name:  "no whitespace in variable tag",
+			input: "{{x}}",
+			want: []*Token{
+				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
+				{Type: TokenIdentifier, Value: "x", Line: 1, Col: 3},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 4},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 6},
+			},
+		},
+		{
+			name:  "set tag with assignment",
+			input: "{% set x = 1 %}",
+			want: []*Token{
+				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
+				{Type: TokenIdentifier, Value: "set", Line: 1, Col: 4},
+				{Type: TokenIdentifier, Value: "x", Line: 1, Col: 8},
+				{Type: TokenSymbol, Value: "=", Line: 1, Col: 10},
+				{Type: TokenNumber, Value: "1", Line: 1, Col: 12},
+				{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 14},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 16},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
+		})
+	}
+}

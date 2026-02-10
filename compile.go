@@ -14,16 +14,16 @@ import (
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	output, _ := tmpl.Render(map[string]interface{}{"name": "World"})
+//	output, _ := tmpl.Render(map[string]any{"name": "World"})
 func Compile(source string) (*Template, error) {
-	lexer := NewLexer(source)
-	tokens, err := lexer.Tokenize()
+	l := NewLexer(source)
+	tokens, err := l.Tokenize()
 	if err != nil {
 		return nil, fmt.Errorf("tokenize: %w", err)
 	}
 
-	parser := NewParser(tokens)
-	ast, err := parser.Parse()
+	p := NewParser(tokens)
+	ast, err := p.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("parse: %w", err)
 	}

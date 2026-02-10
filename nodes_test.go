@@ -287,7 +287,7 @@ func TestIfNode(t *testing.T) {
 
 func TestForNode(t *testing.T) {
 	n := &ForNode{
-		LoopVars:   []string{"item"},
+		Vars:       []string{"item"},
 		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
 		Body: []Node{
 			NewOutputNode(NewVariableNode("item", 1, 1), 1, 1),
@@ -390,6 +390,149 @@ func TestFilterNodeNotFound(t *testing.T) {
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrFilterNotFound) {
 		t.Errorf("error = %v, want %v", err, ErrFilterNotFound)
+	}
+}
+
+func TestForNodeKeyValue(t *testing.T) {
+	n := &ForNode{
+		Vars:       []string{"k", "v"},
+		Collection: NewLiteralNode(map[string]any{"x": 1}, 1, 1),
+		Body: []Node{
+			NewOutputNode(NewVariableNode("k", 1, 1), 1, 1),
+		},
+		Line: 1, Col: 1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("ForNode.Execute() error: %v", err)
+	}
+	if got := buf.String(); got != "x" {
+		t.Errorf("ForNode.Execute() = %q, want %q", got, "x")
+	}
+}
+
+func TestForNodeLoopContext(t *testing.T) {
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: NewLiteralNode([]any{"a", "b"}, 1, 1),
+		Body:       []Node{NewTextNode(".", 1, 1)},
+		Line:       1, Col: 1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("ForNode.Execute() error: %v", err)
+	}
+	// After loop, loop context should still be accessible
+	if got := buf.String(); got != ".." {
+		t.Errorf("ForNode.Execute() = %q, want %q", got, "..")
+	}
+}
+
+func TestForNodeString(t *testing.T) {
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: NewVariableNode("items", 1, 1),
+		Line:       1, Col: 1,
+	}
+	want := "For([item] in Var(items))"
+	if got := n.String(); got != want {
+		t.Errorf("ForNode.String() = %q, want %q", got, want)
+	}
+}
+
+func TestOutputNodeString(t *testing.T) {
+	n := NewOutputNode(NewVariableNode("x", 1, 1), 1, 1)
+	want := "Output(Var(x))"
+	if got := n.String(); got != want {
+		t.Errorf("OutputNode.String() = %q, want %q", got, want)
+	}
+}
+
+func TestFilterNodeString(t *testing.T) {
+	t.Run("without args", func(t *testing.T) {
+		n := NewFilterNode(NewVariableNode("x", 1, 1), "upper", nil, 1, 1)
+		want := "Filter(Var(x)|upper)"
+		if got := n.String(); got != want {
+			t.Errorf("FilterNode.String() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("with args", func(t *testing.T) {
+		args := []Expression{NewLiteralNode(10.0, 1, 1)}
+		n := NewFilterNode(NewVariableNode("x", 1, 1), "add", args, 1, 1)
+		if got := n.String(); got == "" {
+			t.Error("FilterNode.String() returned empty string")
+		}
+	})
+}
+
+func TestUnaryOpNodePlus(t *testing.T) {
+	n := NewUnaryOpNode("+", NewLiteralNode(5.0, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	val, err := n.Evaluate(ctx)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+	f, _ := val.Float()
+	if f != 5.0 {
+		t.Errorf("Evaluate() = %v, want 5", f)
+	}
+}
+
+func TestBinaryOpNodeModulo(t *testing.T) {
+	n := NewBinaryOpNode("%",
+		NewLiteralNode(10, 1, 1),
+		NewLiteralNode(3, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	val, err := n.Evaluate(ctx)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+	i, _ := val.Int()
+	if i != 1 {
+		t.Errorf("Evaluate() = %v, want 1", i)
+	}
+}
+
+func TestSubscriptNodeStringKey(t *testing.T) {
+	n := NewSubscriptNode(
+		NewVariableNode("dict", 1, 1),
+		NewLiteralNode("key", 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{
+		"dict": map[string]any{"key": "val"},
+	})
+	val, err := n.Evaluate(ctx)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+	if got := val.String(); got != "val" {
+		t.Errorf("Evaluate() = %q, want %q", got, "val")
+	}
+}
+
+func TestIfNodeElif(t *testing.T) {
+	n := &IfNode{
+		Branches: []IfBranch{
+			{
+				Condition: NewLiteralNode(false, 1, 1),
+				Body:      []Node{NewTextNode("first", 1, 1)},
+			},
+			{
+				Condition: NewLiteralNode(true, 1, 1),
+				Body:      []Node{NewTextNode("second", 1, 1)},
+			},
+		},
+		Line: 1, Col: 1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if got := buf.String(); got != "second" {
+		t.Errorf("Execute() = %q, want %q", got, "second")
 	}
 }
 

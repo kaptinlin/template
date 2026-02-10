@@ -12,19 +12,19 @@ func TestStringFilters(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]interface{}
+		context  map[string]any
 		expected string
 	}{
 		{
 			name:     "DefaultFilter",
 			template: "{{ name | default:'Unknown' }}",
-			context:  map[string]interface{}{"name": ""},
+			context:  map[string]any{"name": ""},
 			expected: "Unknown",
 		},
 		{
 			name:     "DefaultFilterWithValue",
 			template: "{{ name | default:'Unknown' }}",
-			context:  map[string]interface{}{"name": "Alice"},
+			context:  map[string]any{"name": "Alice"},
 			expected: "Alice",
 		},
 		{
@@ -105,13 +105,13 @@ func TestStringFilters(t *testing.T) {
 		{
 			name:     "PluralizeFilterSingular",
 			template: "{{ count | pluralize:'apple','apples' }}",
-			context:  map[string]interface{}{"count": 1},
+			context:  map[string]any{"count": 1},
 			expected: "apple",
 		},
 		{
 			name:     "PluralizeFilterPlural",
 			template: "{{ count | pluralize:'apple','apples' }}",
-			context:  map[string]interface{}{"count": 2},
+			context:  map[string]any{"count": 2},
 			expected: "apples",
 		},
 		{
@@ -136,21 +136,21 @@ func TestStringFilters(t *testing.T) {
 			tpl, err := Compile(tc.template)
 			require.NoError(t, err)
 
-			context := NewContext()
+			ctx := NewContext()
 			for k, v := range tc.context {
-				context.Set(k, v)
+				ctx.Set(k, v)
 			}
 
-			output, err := tpl.Render(map[string]interface{}(context))
+			got, err := tpl.Render(map[string]any(ctx))
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, output)
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
 
 func TestStringFilterErrors(t *testing.T) {
 	t.Run("SplitMissingDelimiter", func(t *testing.T) {
-		_, err := splitFilter("hello" /* no args */)
+		_, err := splitFilter("hello")
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrInsufficientArgs))
 	})
@@ -210,8 +210,8 @@ func TestStringFilterErrors(t *testing.T) {
 	})
 
 	t.Run("DefaultFilterNoArgs", func(t *testing.T) {
-		result, err := defaultFilter("")
+		got, err := defaultFilter("")
 		require.NoError(t, err)
-		assert.Equal(t, "", result)
+		assert.Equal(t, "", got)
 	})
 }

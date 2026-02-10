@@ -3,9 +3,8 @@ package template
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 // mustTokenize creates tokens from a string expression for testing.
@@ -64,9 +63,15 @@ func TestNewExprParser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			parser := NewExprParser(tt.tokens)
-			assert.NotNil(t, parser)
-			assert.Equal(t, tt.tokens, parser.tokens)
-			assert.Equal(t, 0, parser.pos)
+			if parser == nil {
+				t.Fatalf("NewExprParser(%v) = nil, want non-nil", tt.tokens)
+			}
+			if got, want := parser.tokens, tt.tokens; !reflect.DeepEqual(got, want) {
+				t.Errorf("NewExprParser(%v).tokens = %v, want %v", tt.tokens, got, want)
+			}
+			if got, want := parser.pos, 0; got != want {
+				t.Errorf("NewExprParser(%v).pos = %v, want %v", tt.tokens, got, want)
+			}
 		})
 	}
 }
@@ -121,18 +126,32 @@ func TestParseLiterals(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
+			if result == nil {
+				t.Fatalf("ParseExpression(%q) = nil, want non-nil", tt.expr)
+			}
 
 			switch tt.expectedType {
 			case "LiteralNode":
 				litNode, ok := result.(*LiteralNode)
-				assert.True(t, ok, "expected LiteralNode")
-				assert.Equal(t, tt.expectedValue, litNode.Value)
+				if !ok {
+					t.Errorf("ParseExpression(%q) type = %T, want *LiteralNode", tt.expr, result)
+					return
+				}
+				if got, want := litNode.Value, tt.expectedValue; got != want {
+					t.Errorf("ParseExpression(%q).Value = %v, want %v", tt.expr, got, want)
+				}
 			case "UnaryOpNode":
 				unaryNode, ok := result.(*UnaryOpNode)
-				assert.True(t, ok, "expected UnaryOpNode")
-				assert.Equal(t, "-", unaryNode.Operator)
+				if !ok {
+					t.Errorf("ParseExpression(%q) type = %T, want *UnaryOpNode", tt.expr, result)
+					return
+				}
+				if got, want := unaryNode.Operator, "-"; got != want {
+					t.Errorf("ParseExpression(%q).Operator = %v, want %v", tt.expr, got, want)
+				}
 			}
 		})
 	}
@@ -166,11 +185,18 @@ func TestParseVariables(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 
 			varNode, ok := result.(*VariableNode)
-			assert.True(t, ok, "expected VariableNode")
-			assert.Equal(t, tt.expectedName, varNode.Name)
+			if !ok {
+				t.Errorf("ParseExpression(%q) type = %T, want *VariableNode", tt.expr, result)
+				return
+			}
+			if got, want := varNode.Name, tt.expectedName; got != want {
+				t.Errorf("ParseExpression(%q).Name = %v, want %v", tt.expr, got, want)
+			}
 		})
 	}
 }
@@ -208,11 +234,18 @@ func TestParseUnaryOperators(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 
 			unaryNode, ok := result.(*UnaryOpNode)
-			assert.True(t, ok, "expected UnaryOpNode")
-			assert.Equal(t, tt.expectedOperator, unaryNode.Operator)
+			if !ok {
+				t.Errorf("ParseExpression(%q) type = %T, want *UnaryOpNode", tt.expr, result)
+				return
+			}
+			if got, want := unaryNode.Operator, tt.expectedOperator; got != want {
+				t.Errorf("ParseExpression(%q).Operator = %v, want %v", tt.expr, got, want)
+			}
 		})
 	}
 }
@@ -298,11 +331,18 @@ func TestParseBinaryOperators(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 
 			binNode, ok := result.(*BinaryOpNode)
-			assert.True(t, ok, "expected BinaryOpNode")
-			assert.Equal(t, tt.expectedOperator, binNode.Operator)
+			if !ok {
+				t.Errorf("ParseExpression(%q) type = %T, want *BinaryOpNode", tt.expr, result)
+				return
+			}
+			if got, want := binNode.Operator, tt.expectedOperator; got != want {
+				t.Errorf("ParseExpression(%q).Operator = %v, want %v", tt.expr, got, want)
+			}
 		})
 	}
 }
@@ -319,12 +359,19 @@ func TestParseOperatorPrecedence(t *testing.T) {
 			validateResult: func(t *testing.T, result Expression) {
 				// Should parse as: a + (b * c)
 				binNode := result.(*BinaryOpNode)
-				assert.Equal(t, "+", binNode.Operator)
+				if got, want := binNode.Operator, "+"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
 
 				// Right side should be multiplication
 				rightBin, ok := binNode.Right.(*BinaryOpNode)
-				assert.True(t, ok)
-				assert.Equal(t, "*", rightBin.Operator)
+				if !ok {
+					t.Errorf("Right type = %T, want *BinaryOpNode", binNode.Right)
+					return
+				}
+				if got, want := rightBin.Operator, "*"; got != want {
+					t.Errorf("Right.Operator = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -333,12 +380,19 @@ func TestParseOperatorPrecedence(t *testing.T) {
 			validateResult: func(t *testing.T, result Expression) {
 				// Should parse as: (a + b) > c
 				binNode := result.(*BinaryOpNode)
-				assert.Equal(t, ">", binNode.Operator)
+				if got, want := binNode.Operator, ">"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
 
 				// Left side should be addition
 				leftBin, ok := binNode.Left.(*BinaryOpNode)
-				assert.True(t, ok)
-				assert.Equal(t, "+", leftBin.Operator)
+				if !ok {
+					t.Errorf("Left type = %T, want *BinaryOpNode", binNode.Left)
+					return
+				}
+				if got, want := leftBin.Operator, "+"; got != want {
+					t.Errorf("Left.Operator = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -347,16 +401,28 @@ func TestParseOperatorPrecedence(t *testing.T) {
 			validateResult: func(t *testing.T, result Expression) {
 				// Should parse as: (a > b) and (c < d)
 				binNode := result.(*BinaryOpNode)
-				assert.Equal(t, "and", binNode.Operator)
+				if got, want := binNode.Operator, "and"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
 
 				// Both sides should be comparisons
 				leftBin, ok := binNode.Left.(*BinaryOpNode)
-				assert.True(t, ok)
-				assert.Equal(t, ">", leftBin.Operator)
+				if !ok {
+					t.Errorf("Left type = %T, want *BinaryOpNode", binNode.Left)
+					return
+				}
+				if got, want := leftBin.Operator, ">"; got != want {
+					t.Errorf("Left.Operator = %v, want %v", got, want)
+				}
 
 				rightBin, ok := binNode.Right.(*BinaryOpNode)
-				assert.True(t, ok)
-				assert.Equal(t, "<", rightBin.Operator)
+				if !ok {
+					t.Errorf("Right type = %T, want *BinaryOpNode", binNode.Right)
+					return
+				}
+				if got, want := rightBin.Operator, "<"; got != want {
+					t.Errorf("Right.Operator = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -365,12 +431,19 @@ func TestParseOperatorPrecedence(t *testing.T) {
 			validateResult: func(t *testing.T, result Expression) {
 				// Should parse as: a or (b and c)
 				binNode := result.(*BinaryOpNode)
-				assert.Equal(t, "or", binNode.Operator)
+				if got, want := binNode.Operator, "or"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
 
 				// Right side should be and
 				rightBin, ok := binNode.Right.(*BinaryOpNode)
-				assert.True(t, ok)
-				assert.Equal(t, "and", rightBin.Operator)
+				if !ok {
+					t.Errorf("Right type = %T, want *BinaryOpNode", binNode.Right)
+					return
+				}
+				if got, want := rightBin.Operator, "and"; got != want {
+					t.Errorf("Right.Operator = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -379,7 +452,9 @@ func TestParseOperatorPrecedence(t *testing.T) {
 			validateResult: func(t *testing.T, result Expression) {
 				// Should parse as: ((a + (b * c)) > d and e) or f
 				binNode := result.(*BinaryOpNode)
-				assert.Equal(t, "or", binNode.Operator)
+				if got, want := binNode.Operator, "or"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
 			},
 		},
 	}
@@ -389,7 +464,9 @@ func TestParseOperatorPrecedence(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 			tt.validateResult(t, result)
 		})
 	}
@@ -423,13 +500,20 @@ func TestParsePropertyAccess(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 
 			// For chained properties like "user.profile.email",
 			// the result is PropertyAccessNode with property="email"
 			propNode, ok := result.(*PropertyAccessNode)
-			assert.True(t, ok, "expected PropertyAccessNode")
-			assert.Equal(t, tt.expectedProperty, propNode.Property)
+			if !ok {
+				t.Errorf("ParseExpression(%q) type = %T, want *PropertyAccessNode", tt.expr, result)
+				return
+			}
+			if got, want := propNode.Property, tt.expectedProperty; got != want {
+				t.Errorf("ParseExpression(%q).Property = %v, want %v", tt.expr, got, want)
+			}
 		})
 	}
 }
@@ -445,12 +529,20 @@ func TestParseSubscript(t *testing.T) {
 			expr: "items[0]",
 			validateResult: func(t *testing.T, result Expression) {
 				subNode, ok := result.(*SubscriptNode)
-				assert.True(t, ok)
+				if !ok {
+					t.Errorf("type = %T, want *SubscriptNode", result)
+					return
+				}
 
 				// Check index is a literal number
 				litNode, ok := subNode.Index.(*LiteralNode)
-				assert.True(t, ok)
-				assert.Equal(t, 0.0, litNode.Value)
+				if !ok {
+					t.Errorf("Index type = %T, want *LiteralNode", subNode.Index)
+					return
+				}
+				if got, want := litNode.Value, 0.0; got != want {
+					t.Errorf("Index.Value = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -458,12 +550,20 @@ func TestParseSubscript(t *testing.T) {
 			expr: `dict["key"]`,
 			validateResult: func(t *testing.T, result Expression) {
 				subNode, ok := result.(*SubscriptNode)
-				assert.True(t, ok)
+				if !ok {
+					t.Errorf("type = %T, want *SubscriptNode", result)
+					return
+				}
 
 				// Check index is a literal string
 				litNode, ok := subNode.Index.(*LiteralNode)
-				assert.True(t, ok)
-				assert.Equal(t, "key", litNode.Value)
+				if !ok {
+					t.Errorf("Index type = %T, want *LiteralNode", subNode.Index)
+					return
+				}
+				if got, want := litNode.Value, "key"; got != want {
+					t.Errorf("Index.Value = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -471,12 +571,20 @@ func TestParseSubscript(t *testing.T) {
 			expr: "items[i]",
 			validateResult: func(t *testing.T, result Expression) {
 				subNode, ok := result.(*SubscriptNode)
-				assert.True(t, ok)
+				if !ok {
+					t.Errorf("type = %T, want *SubscriptNode", result)
+					return
+				}
 
 				// Check index is a variable
 				varNode, ok := subNode.Index.(*VariableNode)
-				assert.True(t, ok)
-				assert.Equal(t, "i", varNode.Name)
+				if !ok {
+					t.Errorf("Index type = %T, want *VariableNode", subNode.Index)
+					return
+				}
+				if got, want := varNode.Name, "i"; got != want {
+					t.Errorf("Index.Name = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -485,12 +593,20 @@ func TestParseSubscript(t *testing.T) {
 			validateResult: func(t *testing.T, result Expression) {
 				// Outer subscript
 				outerSub, ok := result.(*SubscriptNode)
-				assert.True(t, ok)
+				if !ok {
+					t.Errorf("type = %T, want *SubscriptNode", result)
+					return
+				}
 
 				// Inner subscript
 				innerSub, ok := outerSub.Object.(*SubscriptNode)
-				assert.True(t, ok)
-				assert.NotNil(t, innerSub)
+				if !ok {
+					t.Errorf("Object type = %T, want *SubscriptNode", outerSub.Object)
+					return
+				}
+				if innerSub == nil {
+					t.Errorf("Object = nil, want non-nil")
+				}
 			},
 		},
 	}
@@ -500,7 +616,9 @@ func TestParseSubscript(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 			tt.validateResult(t, result)
 		})
 	}
@@ -544,13 +662,22 @@ func TestParseFilter(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 
 			// Find the outermost filter
 			filterNode, ok := result.(*FilterNode)
-			assert.True(t, ok, "expected FilterNode")
-			assert.Equal(t, tt.expectedFilter, filterNode.FilterName)
-			assert.Equal(t, tt.expectedArgs, len(filterNode.Args))
+			if !ok {
+				t.Errorf("ParseExpression(%q) type = %T, want *FilterNode", tt.expr, result)
+				return
+			}
+			if got, want := filterNode.Name, tt.expectedFilter; got != want {
+				t.Errorf("ParseExpression(%q).Name = %v, want %v", tt.expr, got, want)
+			}
+			if got, want := len(filterNode.Args), tt.expectedArgs; got != want {
+				t.Errorf("ParseExpression(%q) args count = %v, want %v", tt.expr, got, want)
+			}
 		})
 	}
 }
@@ -566,8 +693,13 @@ func TestParseParentheses(t *testing.T) {
 			expr: "(x)",
 			validateResult: func(t *testing.T, result Expression) {
 				varNode, ok := result.(*VariableNode)
-				assert.True(t, ok)
-				assert.Equal(t, "x", varNode.Name)
+				if !ok {
+					t.Errorf("type = %T, want *VariableNode", result)
+					return
+				}
+				if got, want := varNode.Name, "x"; got != want {
+					t.Errorf("Name = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -576,12 +708,19 @@ func TestParseParentheses(t *testing.T) {
 			validateResult: func(t *testing.T, result Expression) {
 				// Should parse as: (a + b) * c
 				binNode := result.(*BinaryOpNode)
-				assert.Equal(t, "*", binNode.Operator)
+				if got, want := binNode.Operator, "*"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
 
 				// Left side should be addition
 				leftBin, ok := binNode.Left.(*BinaryOpNode)
-				assert.True(t, ok)
-				assert.Equal(t, "+", leftBin.Operator)
+				if !ok {
+					t.Errorf("Left type = %T, want *BinaryOpNode", binNode.Left)
+					return
+				}
+				if got, want := leftBin.Operator, "+"; got != want {
+					t.Errorf("Left.Operator = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -589,8 +728,13 @@ func TestParseParentheses(t *testing.T) {
 			expr: "((x + y) * z)",
 			validateResult: func(t *testing.T, result Expression) {
 				binNode, ok := result.(*BinaryOpNode)
-				assert.True(t, ok)
-				assert.Equal(t, "*", binNode.Operator)
+				if !ok {
+					t.Errorf("type = %T, want *BinaryOpNode", result)
+					return
+				}
+				if got, want := binNode.Operator, "*"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
 			},
 		},
 	}
@@ -600,7 +744,9 @@ func TestParseParentheses(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 			tt.validateResult(t, result)
 		})
 	}
@@ -650,8 +796,12 @@ func TestParseComplexExpressions(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
+			if result == nil {
+				t.Fatalf("ParseExpression(%q) = nil, want non-nil", tt.expr)
+			}
 		})
 	}
 }
@@ -694,8 +844,13 @@ func TestParseErrors(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			_, err := parser.ParseExpression()
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), tt.errorContains)
+			if err == nil {
+				t.Errorf("ParseExpression(%q) error = nil, want error containing %q", tt.expr, tt.errorContains)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.errorContains) {
+				t.Errorf("ParseExpression(%q) error = %q, want error containing %q", tt.expr, err.Error(), tt.errorContains)
+			}
 		})
 	}
 }
@@ -743,11 +898,18 @@ func TestParseFilterArguments(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 
 			filterNode, ok := result.(*FilterNode)
-			assert.True(t, ok)
-			assert.Equal(t, len(tt.expectedArgs), len(filterNode.Args))
+			if !ok {
+				t.Errorf("ParseExpression(%q) type = %T, want *FilterNode", tt.expr, result)
+				return
+			}
+			if got, want := len(filterNode.Args), len(tt.expectedArgs); got != want {
+				t.Errorf("ParseExpression(%q) args count = %v, want %v", tt.expr, got, want)
+			}
 
 			for i, expectedArg := range tt.expectedArgs {
 				arg := filterNode.Args[i]
@@ -755,20 +917,34 @@ func TestParseFilterArguments(t *testing.T) {
 				case string:
 					// Could be either LiteralNode or VariableNode
 					if litNode, ok := arg.(*LiteralNode); ok {
-						assert.Equal(t, expected, litNode.Value)
+						if got, want := litNode.Value, expected; got != want {
+							t.Errorf("Args[%d].Value = %v, want %v", i, got, want)
+						}
 					} else if varNode, ok := arg.(*VariableNode); ok {
-						assert.Equal(t, expected, varNode.Name)
+						if got, want := varNode.Name, expected; got != want {
+							t.Errorf("Args[%d].Name = %v, want %v", i, got, want)
+						}
 					} else {
-						t.Errorf("expected LiteralNode or VariableNode, got %T", arg)
+						t.Errorf("Args[%d] type = %T, want *LiteralNode or *VariableNode", i, arg)
 					}
 				case float64:
 					litNode, ok := arg.(*LiteralNode)
-					assert.True(t, ok)
-					assert.Equal(t, expected, litNode.Value)
+					if !ok {
+						t.Errorf("Args[%d] type = %T, want *LiteralNode", i, arg)
+						continue
+					}
+					if got, want := litNode.Value, expected; got != want {
+						t.Errorf("Args[%d].Value = %v, want %v", i, got, want)
+					}
 				case bool:
 					litNode, ok := arg.(*LiteralNode)
-					assert.True(t, ok)
-					assert.Equal(t, expected, litNode.Value)
+					if !ok {
+						t.Errorf("Args[%d] type = %T, want *LiteralNode", i, arg)
+						continue
+					}
+					if got, want := litNode.Value, expected; got != want {
+						t.Errorf("Args[%d].Value = %v, want %v", i, got, want)
+					}
 				}
 			}
 		})
@@ -788,7 +964,9 @@ func TestExprParserHelperMethods(t *testing.T) {
 					{Type: TokenNumber, Value: "2", Line: 1, Col: 2},
 				}
 				parser := NewExprParser(tokens)
-				assert.Equal(t, tokens[0], parser.current())
+				if got, want := parser.current(), tokens[0]; got != want {
+					t.Errorf("current() = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -796,7 +974,9 @@ func TestExprParserHelperMethods(t *testing.T) {
 			test: func(t *testing.T) {
 				tokens := []*Token{}
 				parser := NewExprParser(tokens)
-				assert.Nil(t, parser.current())
+				if got := parser.current(); got != nil {
+					t.Errorf("current() = %v, want nil", got)
+				}
 			},
 		},
 		{
@@ -808,22 +988,12 @@ func TestExprParserHelperMethods(t *testing.T) {
 				}
 				parser := NewExprParser(tokens)
 				parser.advance()
-				assert.Equal(t, tokens[1], parser.current())
-				assert.Equal(t, 1, parser.pos)
-			},
-		},
-		{
-			name: "peek returns token at offset",
-			test: func(t *testing.T) {
-				tokens := []*Token{
-					{Type: TokenNumber, Value: "1", Line: 1, Col: 1},
-					{Type: TokenNumber, Value: "2", Line: 1, Col: 2},
-					{Type: TokenNumber, Value: "3", Line: 1, Col: 3},
+				if got, want := parser.current(), tokens[1]; got != want {
+					t.Errorf("current() after advance() = %v, want %v", got, want)
 				}
-				parser := NewExprParser(tokens)
-				assert.Equal(t, tokens[1], parser.peek(1))
-				assert.Equal(t, tokens[2], parser.peek(2))
-				assert.Nil(t, parser.peek(10))
+				if got, want := parser.pos, 1; got != want {
+					t.Errorf("pos after advance() = %v, want %v", got, want)
+				}
 			},
 		},
 	}
@@ -864,7 +1034,9 @@ func TestParseError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.err.Error()
-			assert.Equal(t, tt.expected, result)
+			if got, want := result, tt.expected; got != want {
+				t.Errorf("Error() = %v, want %v", got, want)
+			}
 		})
 	}
 }
@@ -883,11 +1055,19 @@ func TestExprParserErrorMethods(t *testing.T) {
 				parser := NewExprParser(tokens)
 				err := parser.parseErr("test error")
 				var parseErr *ParseError
-				ok := errors.As(err, &parseErr)
-				assert.True(t, ok)
-				assert.Equal(t, "test error", parseErr.Message)
-				assert.Equal(t, 5, parseErr.Line)
-				assert.Equal(t, 10, parseErr.Col)
+				if !errors.As(err, &parseErr) {
+					t.Errorf("parseErr() error type = %T, want *ParseError", err)
+					return
+				}
+				if got, want := parseErr.Message, "test error"; got != want {
+					t.Errorf("parseErr().Message = %v, want %v", got, want)
+				}
+				if got, want := parseErr.Line, 5; got != want {
+					t.Errorf("parseErr().Line = %v, want %v", got, want)
+				}
+				if got, want := parseErr.Col, 10; got != want {
+					t.Errorf("parseErr().Col = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -897,11 +1077,19 @@ func TestExprParserErrorMethods(t *testing.T) {
 				parser := NewExprParser(tokens)
 				err := parser.parseErr("test error")
 				var parseErr *ParseError
-				ok := errors.As(err, &parseErr)
-				assert.True(t, ok)
-				assert.Equal(t, "test error", parseErr.Message)
-				assert.Equal(t, 0, parseErr.Line)
-				assert.Equal(t, 0, parseErr.Col)
+				if !errors.As(err, &parseErr) {
+					t.Errorf("parseErr() error type = %T, want *ParseError", err)
+					return
+				}
+				if got, want := parseErr.Message, "test error"; got != want {
+					t.Errorf("parseErr().Message = %v, want %v", got, want)
+				}
+				if got, want := parseErr.Line, 0; got != want {
+					t.Errorf("parseErr().Line = %v, want %v", got, want)
+				}
+				if got, want := parseErr.Col, 0; got != want {
+					t.Errorf("parseErr().Col = %v, want %v", got, want)
+				}
 			},
 		},
 		{
@@ -911,11 +1099,19 @@ func TestExprParserErrorMethods(t *testing.T) {
 				parser := NewExprParser([]*Token{})
 				err := parser.errAtTok(token, "custom error")
 				var parseErr *ParseError
-				ok := errors.As(err, &parseErr)
-				assert.True(t, ok)
-				assert.Equal(t, "custom error", parseErr.Message)
-				assert.Equal(t, 3, parseErr.Line)
-				assert.Equal(t, 7, parseErr.Col)
+				if !errors.As(err, &parseErr) {
+					t.Errorf("errAtTok() error type = %T, want *ParseError", err)
+					return
+				}
+				if got, want := parseErr.Message, "custom error"; got != want {
+					t.Errorf("errAtTok().Message = %v, want %v", got, want)
+				}
+				if got, want := parseErr.Line, 3; got != want {
+					t.Errorf("errAtTok().Line = %v, want %v", got, want)
+				}
+				if got, want := parseErr.Col, 7; got != want {
+					t.Errorf("errAtTok().Col = %v, want %v", got, want)
+				}
 			},
 		},
 	}
@@ -940,10 +1136,16 @@ func TestExpressionNodeTypes(t *testing.T) {
 			expectedType: "*template.LiteralNode",
 			validateStruct: func(t *testing.T, expr Expression) {
 				node := expr.(*LiteralNode)
-				assert.Equal(t, 42.0, node.Value)
+				if got, want := node.Value, 42.0; got != want {
+					t.Errorf("Value = %v, want %v", got, want)
+				}
 				line, col := node.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if line <= 0 {
+					t.Errorf("Position() line = %v, want > 0", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %v, want > 0", col)
+				}
 			},
 		},
 		{
@@ -952,10 +1154,16 @@ func TestExpressionNodeTypes(t *testing.T) {
 			expectedType: "*template.VariableNode",
 			validateStruct: func(t *testing.T, expr Expression) {
 				node := expr.(*VariableNode)
-				assert.Equal(t, "username", node.Name)
+				if got, want := node.Name, "username"; got != want {
+					t.Errorf("Name = %v, want %v", got, want)
+				}
 				line, col := node.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if line <= 0 {
+					t.Errorf("Position() line = %v, want > 0", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %v, want > 0", col)
+				}
 			},
 		},
 		{
@@ -964,12 +1172,22 @@ func TestExpressionNodeTypes(t *testing.T) {
 			expectedType: "*template.BinaryOpNode",
 			validateStruct: func(t *testing.T, expr Expression) {
 				node := expr.(*BinaryOpNode)
-				assert.Equal(t, "+", node.Operator)
-				assert.NotNil(t, node.Left)
-				assert.NotNil(t, node.Right)
+				if got, want := node.Operator, "+"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
+				if node.Left == nil {
+					t.Errorf("Left = nil, want non-nil")
+				}
+				if node.Right == nil {
+					t.Errorf("Right = nil, want non-nil")
+				}
 				line, col := node.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if line <= 0 {
+					t.Errorf("Position() line = %v, want > 0", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %v, want > 0", col)
+				}
 			},
 		},
 		{
@@ -978,11 +1196,19 @@ func TestExpressionNodeTypes(t *testing.T) {
 			expectedType: "*template.UnaryOpNode",
 			validateStruct: func(t *testing.T, expr Expression) {
 				node := expr.(*UnaryOpNode)
-				assert.Equal(t, "not", node.Operator)
-				assert.NotNil(t, node.Operand)
+				if got, want := node.Operator, "not"; got != want {
+					t.Errorf("Operator = %v, want %v", got, want)
+				}
+				if node.Operand == nil {
+					t.Errorf("Operand = nil, want non-nil")
+				}
 				line, col := node.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if line <= 0 {
+					t.Errorf("Position() line = %v, want > 0", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %v, want > 0", col)
+				}
 			},
 		},
 		{
@@ -991,11 +1217,19 @@ func TestExpressionNodeTypes(t *testing.T) {
 			expectedType: "*template.PropertyAccessNode",
 			validateStruct: func(t *testing.T, expr Expression) {
 				node := expr.(*PropertyAccessNode)
-				assert.Equal(t, "name", node.Property)
-				assert.NotNil(t, node.Object)
+				if got, want := node.Property, "name"; got != want {
+					t.Errorf("Property = %v, want %v", got, want)
+				}
+				if node.Object == nil {
+					t.Errorf("Object = nil, want non-nil")
+				}
 				line, col := node.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if line <= 0 {
+					t.Errorf("Position() line = %v, want > 0", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %v, want > 0", col)
+				}
 			},
 		},
 		{
@@ -1004,11 +1238,19 @@ func TestExpressionNodeTypes(t *testing.T) {
 			expectedType: "*template.SubscriptNode",
 			validateStruct: func(t *testing.T, expr Expression) {
 				node := expr.(*SubscriptNode)
-				assert.NotNil(t, node.Object)
-				assert.NotNil(t, node.Index)
+				if node.Object == nil {
+					t.Errorf("Object = nil, want non-nil")
+				}
+				if node.Index == nil {
+					t.Errorf("Index = nil, want non-nil")
+				}
 				line, col := node.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if line <= 0 {
+					t.Errorf("Position() line = %v, want > 0", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %v, want > 0", col)
+				}
 			},
 		},
 		{
@@ -1017,11 +1259,19 @@ func TestExpressionNodeTypes(t *testing.T) {
 			expectedType: "*template.FilterNode",
 			validateStruct: func(t *testing.T, expr Expression) {
 				node := expr.(*FilterNode)
-				assert.Equal(t, "upper", node.FilterName)
-				assert.NotNil(t, node.Expression)
+				if got, want := node.Name, "upper"; got != want {
+					t.Errorf("Name = %v, want %v", got, want)
+				}
+				if node.Expr == nil {
+					t.Errorf("Expression = nil, want non-nil")
+				}
 				line, col := node.Position()
-				assert.Greater(t, line, 0)
-				assert.Greater(t, col, 0)
+				if line <= 0 {
+					t.Errorf("Position() line = %v, want > 0", line)
+				}
+				if col <= 0 {
+					t.Errorf("Position() col = %v, want > 0", col)
+				}
 			},
 		},
 	}
@@ -1031,11 +1281,15 @@ func TestExpressionNodeTypes(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+			}
 
 			// Check type using reflection
 			typeName := reflect.TypeOf(result).String()
-			assert.Equal(t, tt.expectedType, typeName)
+			if got, want := typeName, tt.expectedType; got != want {
+				t.Errorf("ParseExpression(%q) type = %v, want %v", tt.expr, got, want)
+			}
 
 			// Validate structure
 			if tt.validateStruct != nil {
@@ -1093,13 +1347,21 @@ func TestParseExpressionEdgeCases(t *testing.T) {
 			result, err := parser.ParseExpression()
 
 			if tt.expectError {
-				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+				if err == nil {
+					t.Errorf("ParseExpression(%q) error = nil, want error", tt.expr)
+					return
+				}
+				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("ParseExpression(%q) error = %q, want error containing %q", tt.expr, err.Error(), tt.errorContains)
 				}
 			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
+				if err != nil {
+					t.Errorf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+					return
+				}
+				if result == nil {
+					t.Errorf("ParseExpression(%q) = nil, want non-nil", tt.expr)
+				}
 			}
 		})
 	}
@@ -1282,24 +1544,40 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 			expr, err := parser.ParseExpression()
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				if err == nil {
+					t.Errorf("ParseExpression(%q) error = nil, want error", tt.expr)
+				}
 				return
 			}
 
-			assert.NoError(t, err)
-			assert.NotNil(t, expr)
+			if err != nil {
+				t.Errorf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
+				return
+			}
+			if expr == nil {
+				t.Fatalf("ParseExpression(%q) = nil, want non-nil", tt.expr)
+			}
 
 			// Evaluate the expression
 			ctx := NewExecutionContext(tt.context)
 			result, err := expr.Evaluate(ctx)
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			if err != nil {
+				t.Errorf("Evaluate(%q) error = %v, want nil", tt.expr, err)
+				return
+			}
+			if result == nil {
+				t.Fatalf("Evaluate(%q) = nil, want non-nil", tt.expr)
+			}
 
 			// Check the result
 			if b, ok := tt.expected.(bool); ok {
-				assert.Equal(t, b, result.IsTrue())
+				if got, want := result.IsTrue(), b; got != want {
+					t.Errorf("Evaluate(%q).IsTrue() = %v, want %v", tt.expr, got, want)
+				}
 			} else {
-				assert.Equal(t, tt.expected, result.Interface())
+				if got, want := result.Interface(), tt.expected; got != want {
+					t.Errorf("Evaluate(%q).Interface() = %v, want %v", tt.expr, got, want)
+				}
 			}
 		})
 	}
@@ -1345,25 +1623,34 @@ func TestKeywordAndSymbolEquivalence(t *testing.T) {
 			tokensKeyword := mustTokenize(t, tt.exprKeyword)
 			parserKeyword := NewExprParser(tokensKeyword)
 			exprKeyword, err := parserKeyword.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.exprKeyword, err)
+			}
 
 			ctx := NewExecutionContext(tt.context)
 			resultKeyword, err := exprKeyword.Evaluate(ctx)
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("Evaluate(%q) error = %v, want nil", tt.exprKeyword, err)
+			}
 
 			// Parse and evaluate symbol version
 			tokensSymbol := mustTokenize(t, tt.exprSymbol)
 			parserSymbol := NewExprParser(tokensSymbol)
 			exprSymbol, err := parserSymbol.ParseExpression()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.exprSymbol, err)
+			}
 
 			resultSymbol, err := exprSymbol.Evaluate(ctx)
-			assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("Evaluate(%q) error = %v, want nil", tt.exprSymbol, err)
+			}
 
 			// Results should be identical
-			assert.Equal(t, resultKeyword.IsTrue(), resultSymbol.IsTrue(),
-				"Keyword '%s' and symbol '%s' should produce same result",
-				tt.exprKeyword, tt.exprSymbol)
+			if got, want := resultSymbol.IsTrue(), resultKeyword.IsTrue(); got != want {
+				t.Errorf("Keyword %q and symbol %q should produce same result: got %v, want %v",
+					tt.exprKeyword, tt.exprSymbol, got, want)
+			}
 		})
 	}
 }

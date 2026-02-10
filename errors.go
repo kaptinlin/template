@@ -1,8 +1,6 @@
 package template
 
-import (
-	"errors"
-)
+import "errors"
 
 // Context navigation errors.
 var (
@@ -116,7 +114,7 @@ var (
 	ErrTagAlreadyRegistered = errors.New("tag already registered")
 
 	// If/elif/else tag errors.
-	ErrMultipleElseStatements         = errors.New("multiple 'else' statements found in if block. Use 'elif' for additional conditions")
+	ErrMultipleElseStatements         = errors.New("multiple 'else' statements found in if block, use 'elif' for additional conditions")
 	ErrUnexpectedTokensAfterCondition = errors.New("unexpected tokens after condition")
 	ErrElseNoArgs                     = errors.New("else does not take arguments")
 	ErrEndifNoArgs                    = errors.New("endif does not take arguments")

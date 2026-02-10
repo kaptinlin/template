@@ -1,44 +1,47 @@
 package template
 
 import (
+	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestNewContextBuilder(t *testing.T) {
-	builder := NewContextBuilder()
-	ctx, err := builder.Build()
-
-	assert.NoError(t, err)
-	assert.Equal(t, Context{}, ctx)
+	got, err := NewContextBuilder().Build()
+	if err != nil {
+		t.Fatalf("Build() = _, %v, want nil error", err)
+	}
+	if want := (Context{}); !cmp.Equal(got, want) {
+		t.Errorf("Build() = %v, want %v", got, want)
+	}
 }
 
 func TestContextBuilderKeyValue(t *testing.T) {
 	tests := []struct {
-		name     string
-		keys     []string
-		values   []interface{}
-		expected Context
+		name   string
+		keys   []string
+		values []any
+		want   Context
 	}{
 		{
-			name:     "single string key-value",
-			keys:     []string{"name"},
-			values:   []interface{}{"John"},
-			expected: Context{"name": "John"},
+			name:   "single string key-value",
+			keys:   []string{"name"},
+			values: []any{"John"},
+			want:   Context{"name": "John"},
 		},
 		{
-			name:     "multiple key-values of different types",
-			keys:     []string{"name", "age", "active"},
-			values:   []interface{}{"John", 30, true},
-			expected: Context{"name": "John", "age": 30, "active": true},
+			name:   "multiple key-values of different types",
+			keys:   []string{"name", "age", "active"},
+			values: []any{"John", 30, true},
+			want:   Context{"name": "John", "age": 30, "active": true},
 		},
 		{
 			name:   "nested key via dot notation",
 			keys:   []string{"user.name"},
-			values: []interface{}{"John"},
-			expected: Context{
-				"user": map[string]interface{}{
+			values: []any{"John"},
+			want: Context{
+				"user": map[string]any{
 					"name": "John",
 				},
 			},
@@ -46,44 +49,48 @@ func TestContextBuilderKeyValue(t *testing.T) {
 		{
 			name:   "deeply nested key",
 			keys:   []string{"a.b.c"},
-			values: []interface{}{"deep"},
-			expected: Context{
-				"a": map[string]interface{}{
-					"b": map[string]interface{}{
+			values: []any{"deep"},
+			want: Context{
+				"a": map[string]any{
+					"b": map[string]any{
 						"c": "deep",
 					},
 				},
 			},
 		},
 		{
-			name:     "overwrite same key keeps last value",
-			keys:     []string{"key", "key"},
-			values:   []interface{}{"first", "second"},
-			expected: Context{"key": "second"},
+			name:   "overwrite same key keeps last value",
+			keys:   []string{"key", "key"},
+			values: []any{"first", "second"},
+			want:   Context{"key": "second"},
 		},
 		{
-			name:     "nil value stored correctly",
-			keys:     []string{"empty"},
-			values:   []interface{}{nil},
-			expected: Context{"empty": nil},
+			name:   "nil value stored correctly",
+			keys:   []string{"empty"},
+			values: []any{nil},
+			want:   Context{"empty": nil},
 		},
 		{
-			name:     "slice value stored correctly",
-			keys:     []string{"items"},
-			values:   []interface{}{[]int{1, 2, 3}},
-			expected: Context{"items": []int{1, 2, 3}},
+			name:   "slice value stored correctly",
+			keys:   []string{"items"},
+			values: []any{[]int{1, 2, 3}},
+			want:   Context{"items": []int{1, 2, 3}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			builder := NewContextBuilder()
+			b := NewContextBuilder()
 			for i, key := range tt.keys {
-				builder.KeyValue(key, tt.values[i])
+				b.KeyValue(key, tt.values[i])
 			}
-			ctx, err := builder.Build()
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, ctx)
+			got, err := b.Build()
+			if err != nil {
+				t.Fatalf("Build() = _, %v, want nil error", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Build() mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -104,14 +111,14 @@ func TestContextBuilderStruct(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		input    interface{}
-		expected Context
+		name  string
+		input any
+		want  Context
 	}{
 		{
 			name:  "simple struct with string and bool fields",
 			input: SimpleUser{Name: "John", Email: "john@test.com", Active: true},
-			expected: Context{
+			want: Context{
 				"name":   "John",
 				"email":  "john@test.com",
 				"active": true,
@@ -120,7 +127,7 @@ func TestContextBuilderStruct(t *testing.T) {
 		{
 			name:  "struct with zero values",
 			input: SimpleUser{},
-			expected: Context{
+			want: Context{
 				"name":   "",
 				"email":  "",
 				"active": false,
@@ -135,9 +142,9 @@ func TestContextBuilderStruct(t *testing.T) {
 					Website string `json:"website"`
 				}{Bio: "Engineer", Website: "https://example.com"},
 			},
-			expected: Context{
+			want: Context{
 				"name": "Jane",
-				"profile": map[string]interface{}{
+				"profile": map[string]any{
 					"bio":     "Engineer",
 					"website": "https://example.com",
 				},
@@ -147,21 +154,25 @@ func TestContextBuilderStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			builder := NewContextBuilder().Struct(tt.input)
-			ctx, err := builder.Build()
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, ctx)
+			got, err := NewContextBuilder().Struct(tt.input).Build()
+			if err != nil {
+				t.Fatalf("Build() = _, %v, want nil error", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Build() mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
 
 func TestContextBuilderStructWithMarshalError(t *testing.T) {
-	builder := NewContextBuilder().Struct(make(chan int))
-	ctx, err := builder.Build()
-
-	assert.Error(t, err)
-	// Context is still returned (empty) even when errors occur
-	assert.NotNil(t, ctx)
+	got, err := NewContextBuilder().Struct(make(chan int)).Build()
+	if err == nil {
+		t.Error("Build() = _, nil, want error for chan type")
+	}
+	if got == nil {
+		t.Error("Build() returned nil context, want non-nil even on error")
+	}
 }
 
 func TestContextBuilderChaining(t *testing.T) {
@@ -170,9 +181,9 @@ func TestContextBuilderChaining(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		build    func() *ContextBuilder
-		expected Context
+		name  string
+		build func() *ContextBuilder
+		want  Context
 	}{
 		{
 			name: "KeyValue then Struct merges both",
@@ -181,7 +192,7 @@ func TestContextBuilderChaining(t *testing.T) {
 					KeyValue("extra", "value").
 					Struct(User{Name: "Alice"})
 			},
-			expected: Context{
+			want: Context{
 				"extra": "value",
 				"name":  "Alice",
 			},
@@ -193,9 +204,7 @@ func TestContextBuilderChaining(t *testing.T) {
 					Struct(User{Name: "Alice"}).
 					KeyValue("name", "Bob")
 			},
-			expected: Context{
-				"name": "Bob",
-			},
+			want: Context{"name": "Bob"},
 		},
 		{
 			name: "multiple KeyValue calls",
@@ -205,43 +214,41 @@ func TestContextBuilderChaining(t *testing.T) {
 					KeyValue("b", 2).
 					KeyValue("c", 3)
 			},
-			expected: Context{
-				"a": 1,
-				"b": 2,
-				"c": 3,
-			},
+			want: Context{"a": 1, "b": 2, "c": 3},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			builder := tt.build()
-			ctx, err := builder.Build()
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, ctx)
+			got, err := tt.build().Build()
+			if err != nil {
+				t.Fatalf("Build() = _, %v, want nil error", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Build() mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
 
 func TestContextBuilderBuildErrorCollection(t *testing.T) {
 	tests := []struct {
-		name        string
-		build       func() *ContextBuilder
-		expectError bool
+		name      string
+		build     func() *ContextBuilder
+		wantError bool
 	}{
 		{
 			name: "no errors returns nil error",
 			build: func() *ContextBuilder {
 				return NewContextBuilder().KeyValue("key", "value")
 			},
-			expectError: false,
 		},
 		{
 			name: "single Struct error collected",
 			build: func() *ContextBuilder {
 				return NewContextBuilder().Struct(make(chan int))
 			},
-			expectError: true,
+			wantError: true,
 		},
 		{
 			name: "multiple Struct errors collected",
@@ -250,7 +257,7 @@ func TestContextBuilderBuildErrorCollection(t *testing.T) {
 					Struct(make(chan int)).
 					Struct(make(chan string))
 			},
-			expectError: true,
+			wantError: true,
 		},
 		{
 			name: "mixed valid and invalid still reports error",
@@ -263,174 +270,170 @@ func TestContextBuilderBuildErrorCollection(t *testing.T) {
 					Struct(Valid{X: "ok"}).
 					Struct(make(chan int))
 			},
-			expectError: true,
+			wantError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			builder := tt.build()
-			ctx, err := builder.Build()
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			got, err := tt.build().Build()
+			if tt.wantError && err == nil {
+				t.Error("Build() = _, nil, want error")
 			}
-			assert.NotNil(t, ctx)
+			if !tt.wantError && err != nil {
+				t.Errorf("Build() = _, %v, want nil error", err)
+			}
+			if got == nil {
+				t.Error("Build() returned nil context, want non-nil")
+			}
 		})
 	}
 }
 
 func TestNewChildContext(t *testing.T) {
 	tests := []struct {
-		name                   string
-		publicData             map[string]interface{}
-		parentPrivateSetup     map[string]interface{}
-		childPrivateSetup      map[string]interface{}
-		expectChildGet         map[string]interface{}
-		expectParentPrivateGet map[string]interface{}
+		name              string
+		publicData        map[string]any
+		parentPrivate     map[string]any
+		childPrivate      map[string]any
+		wantChildGet      map[string]any
+		wantParentPrivate map[string]any
 	}{
 		{
-			name:               "child inherits public variables",
-			publicData:         map[string]interface{}{"name": "Alice", "age": 30},
-			parentPrivateSetup: map[string]interface{}{},
-			childPrivateSetup:  map[string]interface{}{},
-			expectChildGet: map[string]interface{}{
-				"name": "Alice",
-				"age":  30,
-			},
-			expectParentPrivateGet: map[string]interface{}{},
+			name:              "child inherits public variables",
+			publicData:        map[string]any{"name": "Alice", "age": 30},
+			parentPrivate:     map[string]any{},
+			childPrivate:      map[string]any{},
+			wantChildGet:      map[string]any{"name": "Alice", "age": 30},
+			wantParentPrivate: map[string]any{},
 		},
 		{
-			name:               "child inherits parent private variables",
-			publicData:         map[string]interface{}{},
-			parentPrivateSetup: map[string]interface{}{"counter": 1, "flag": true},
-			childPrivateSetup:  map[string]interface{}{},
-			expectChildGet: map[string]interface{}{
-				"counter": 1,
-				"flag":    true,
-			},
-			expectParentPrivateGet: map[string]interface{}{
-				"counter": 1,
-				"flag":    true,
-			},
+			name:              "child inherits parent private variables",
+			publicData:        map[string]any{},
+			parentPrivate:     map[string]any{"counter": 1, "flag": true},
+			childPrivate:      map[string]any{},
+			wantChildGet:      map[string]any{"counter": 1, "flag": true},
+			wantParentPrivate: map[string]any{"counter": 1, "flag": true},
 		},
 		{
-			name:               "child private modification does not affect parent",
-			publicData:         map[string]interface{}{},
-			parentPrivateSetup: map[string]interface{}{"x": 10},
-			childPrivateSetup:  map[string]interface{}{"x": 99, "y": 20},
-			expectChildGet: map[string]interface{}{
-				"x": 99,
-				"y": 20,
-			},
-			expectParentPrivateGet: map[string]interface{}{
-				"x": 10,
-			},
+			name:              "child private modification does not affect parent",
+			publicData:        map[string]any{},
+			parentPrivate:     map[string]any{"x": 10},
+			childPrivate:      map[string]any{"x": 99, "y": 20},
+			wantChildGet:      map[string]any{"x": 99, "y": 20},
+			wantParentPrivate: map[string]any{"x": 10},
 		},
 		{
-			name:               "child private does not leak to parent",
-			publicData:         map[string]interface{}{},
-			parentPrivateSetup: map[string]interface{}{},
-			childPrivateSetup:  map[string]interface{}{"new_var": "child_only"},
-			expectChildGet: map[string]interface{}{
-				"new_var": "child_only",
-			},
-			expectParentPrivateGet: map[string]interface{}{},
+			name:              "child private does not leak to parent",
+			publicData:        map[string]any{},
+			parentPrivate:     map[string]any{},
+			childPrivate:      map[string]any{"new_var": "child_only"},
+			wantChildGet:      map[string]any{"new_var": "child_only"},
+			wantParentPrivate: map[string]any{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			parent := NewExecutionContext(tt.publicData)
-			for k, v := range tt.parentPrivateSetup {
+			for k, v := range tt.parentPrivate {
 				parent.Set(k, v)
 			}
 
 			child := NewChildContext(parent)
-			for k, v := range tt.childPrivateSetup {
+			for k, v := range tt.childPrivate {
 				child.Set(k, v)
 			}
 
-			// Verify child can access expected variables
-			for key, expectedVal := range tt.expectChildGet {
-				val, ok := child.Get(key)
-				assert.Equal(t, true, ok, "child should find key %q", key)
-				assert.Equal(t, expectedVal, val, "child value mismatch for key %q", key)
+			for key, want := range tt.wantChildGet {
+				got, ok := child.Get(key)
+				if !ok {
+					t.Errorf("child.Get(%q) = _, false, want true", key)
+				}
+				if got != want {
+					t.Errorf("child.Get(%q) = %v, want %v", key, got, want)
+				}
 			}
 
-			// Verify parent private is unchanged
-			assert.Equal(t, tt.expectParentPrivateGet, map[string]interface{}(parent.Private))
+			if !reflect.DeepEqual(map[string]any(parent.Private), tt.wantParentPrivate) {
+				t.Errorf("parent.Private = %v, want %v", parent.Private, tt.wantParentPrivate)
+			}
 		})
 	}
 }
 
 func TestNewChildContextSharesPublic(t *testing.T) {
-	parent := NewExecutionContext(map[string]interface{}{"shared": "original"})
+	parent := NewExecutionContext(map[string]any{"shared": "original"})
 	child := NewChildContext(parent)
 
-	// Modify public through child
 	child.Public.Set("shared", "modified")
 
-	// Parent should see the modification since Public is shared
-	val, ok := parent.Get("shared")
-	assert.Equal(t, true, ok)
-	assert.Equal(t, "modified", val)
+	got, ok := parent.Get("shared")
+	if !ok {
+		t.Fatal("parent.Get(\"shared\") = _, false, want true")
+	}
+	if got != "modified" {
+		t.Errorf("parent.Get(\"shared\") = %v, want %q", got, "modified")
+	}
 }
 
 func TestExecutionContextGetPriority(t *testing.T) {
 	tests := []struct {
-		name          string
-		publicData    map[string]interface{}
-		privateData   map[string]interface{}
-		queryKey      string
-		expectedVal   interface{}
-		expectedFound bool
+		name      string
+		public    map[string]any
+		private   map[string]any
+		key       string
+		wantVal   any
+		wantFound bool
 	}{
 		{
-			name:          "private takes precedence over public",
-			publicData:    map[string]interface{}{"key": "public_value"},
-			privateData:   map[string]interface{}{"key": "private_value"},
-			queryKey:      "key",
-			expectedVal:   "private_value",
-			expectedFound: true,
+			name:      "private takes precedence over public",
+			public:    map[string]any{"key": "public_value"},
+			private:   map[string]any{"key": "private_value"},
+			key:       "key",
+			wantVal:   "private_value",
+			wantFound: true,
 		},
 		{
-			name:          "falls back to public when not in private",
-			publicData:    map[string]interface{}{"public_only": "found"},
-			privateData:   map[string]interface{}{},
-			queryKey:      "public_only",
-			expectedVal:   "found",
-			expectedFound: true,
+			name:      "falls back to public when not in private",
+			public:    map[string]any{"public_only": "found"},
+			private:   map[string]any{},
+			key:       "public_only",
+			wantVal:   "found",
+			wantFound: true,
 		},
 		{
-			name:          "not found in either returns false",
-			publicData:    map[string]interface{}{"a": 1},
-			privateData:   map[string]interface{}{"b": 2},
-			queryKey:      "missing",
-			expectedVal:   nil,
-			expectedFound: false,
+			name:      "not found in either returns false",
+			public:    map[string]any{"a": 1},
+			private:   map[string]any{"b": 2},
+			key:       "missing",
+			wantVal:   nil,
+			wantFound: false,
 		},
 		{
-			name:          "private only key found",
-			publicData:    map[string]interface{}{},
-			privateData:   map[string]interface{}{"private_only": 42},
-			queryKey:      "private_only",
-			expectedVal:   42,
-			expectedFound: true,
+			name:      "private only key found",
+			public:    map[string]any{},
+			private:   map[string]any{"private_only": 42},
+			key:       "private_only",
+			wantVal:   42,
+			wantFound: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewExecutionContext(tt.publicData)
-			for k, v := range tt.privateData {
-				ctx.Set(k, v)
+			ec := NewExecutionContext(tt.public)
+			for k, v := range tt.private {
+				ec.Set(k, v)
 			}
 
-			val, ok := ctx.Get(tt.queryKey)
-			assert.Equal(t, tt.expectedFound, ok)
-			assert.Equal(t, tt.expectedVal, val)
+			got, ok := ec.Get(tt.key)
+			if ok != tt.wantFound {
+				t.Errorf("Get(%q) = _, %v, want _, %v", tt.key, ok, tt.wantFound)
+			}
+			if got != tt.wantVal {
+				t.Errorf("Get(%q) = %v, want %v", tt.key, got, tt.wantVal)
+			}
 		})
 	}
 }

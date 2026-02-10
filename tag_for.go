@@ -1,60 +1,60 @@
 package template
 
-// parseForTag parses the for tag.
-// {% for item in items %}...{% endfor %}
-// {% for key, value in dict %}...{% endfor %}
-func parseForTag(doc *Parser, start *Token, arguments *Parser) (Statement, error) {
-	// 1. Parse loop variable names.
-	var loopVars []string
+// parseForTag parses a for-endfor loop block into a ForNode.
+//
+// Syntax:
+//
+//	{% for item in items %}...{% endfor %}
+//	{% for key, value in dict %}...{% endfor %}
+func parseForTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
+	// Parse loop variable names.
+	var vars []string
 
-	firstVar, err := arguments.ExpectIdentifier()
+	first, err := args.ExpectIdentifier()
 	if err != nil {
-		return nil, arguments.Error(ErrExpectedVariable.Error())
+		return nil, args.Error(ErrExpectedVariable.Error())
 	}
-	loopVars = append(loopVars, firstVar.Value)
+	vars = append(vars, first.Value)
 
 	// Optional second variable (key, value).
-	if arguments.Match(TokenSymbol, ",") != nil {
-		secondVar, err := arguments.ExpectIdentifier()
+	if args.Match(TokenSymbol, ",") != nil {
+		second, err := args.ExpectIdentifier()
 		if err != nil {
-			return nil, arguments.Error(ErrExpectedSecondVariable.Error())
+			return nil, args.Error(ErrExpectedSecondVariable.Error())
 		}
-		loopVars = append(loopVars, secondVar.Value)
+		vars = append(vars, second.Value)
 	}
 
-	// 2. Expect the "in" keyword.
-	cur := arguments.Current()
+	// Expect the "in" keyword.
+	cur := args.Current()
 	if cur == nil || cur.Type != TokenIdentifier || cur.Value != "in" {
-		return nil, arguments.Error(ErrExpectedInKeyword.Error())
+		return nil, args.Error(ErrExpectedInKeyword.Error())
 	}
-	arguments.Advance()
+	args.Advance()
 
-	// 3. Parse the iterable expression.
-	collection, err := arguments.ParseExpression()
+	// Parse the iterable expression.
+	collection, err := args.ParseExpression()
 	if err != nil {
 		return nil, err
 	}
-
-	if arguments.Remaining() > 0 {
-		return nil, arguments.Error(ErrUnexpectedTokensAfterCollection.Error())
+	if args.Remaining() > 0 {
+		return nil, args.Error(ErrUnexpectedTokensAfterCollection.Error())
 	}
 
-	// 4. Parse the for body until endfor.
-	body, endTag, argParser, err := doc.ParseUntilWithArgs("endfor")
+	// Parse the loop body until endfor.
+	body, tag, ap, err := doc.ParseUntilWithArgs("endfor")
 	if err != nil {
 		return nil, err
 	}
-
-	if endTag != "endfor" {
-		return nil, doc.Errorf("expected endfor, got %s", endTag)
+	if tag != "endfor" {
+		return nil, doc.Errorf("expected endfor, got %s", tag)
 	}
-
-	if argParser.Remaining() > 0 {
-		return nil, argParser.Error(ErrEndforNoArgs.Error())
+	if ap.Remaining() > 0 {
+		return nil, ap.Error(ErrEndforNoArgs.Error())
 	}
 
 	return &ForNode{
-		LoopVars:   loopVars,
+		Vars:       vars,
 		Collection: collection,
 		Body:       convertStatementsToNodes(body),
 		Line:       start.Line,

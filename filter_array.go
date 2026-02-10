@@ -24,73 +24,73 @@ func registerArrayFilters() {
 }
 
 // uniqueFilter removes duplicate elements from a slice.
-func uniqueFilter(value interface{}, _ ...string) (interface{}, error) {
+func uniqueFilter(value any, _ ...string) (any, error) {
 	return filter.Unique(value)
 }
 
 // joinFilter joins the elements of a slice into a single string with a specified separator.
-func joinFilter(value interface{}, args ...string) (interface{}, error) {
+func joinFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("join requires a separator: %w", ErrInsufficientArgs)
+		return nil, fmt.Errorf("%w: join filter requires a separator argument", ErrInsufficientArgs)
 	}
-	separator := args[0]
-	return filter.Join(value, separator)
+	sep := args[0]
+	return filter.Join(value, sep)
 }
 
 // firstFilter returns the first element of a slice.
-func firstFilter(value interface{}, _ ...string) (interface{}, error) {
+func firstFilter(value any, _ ...string) (any, error) {
 	return filter.First(value)
 }
 
 // lastFilter returns the last element of a slice.
-func lastFilter(value interface{}, _ ...string) (interface{}, error) {
+func lastFilter(value any, _ ...string) (any, error) {
 	return filter.Last(value)
 }
 
 // randomFilter selects a random element from a slice.
-func randomFilter(value interface{}, _ ...string) (interface{}, error) {
+func randomFilter(value any, _ ...string) (any, error) {
 	return filter.Random(value)
 }
 
 // reverseFilter reverses the order of elements in a slice.
-func reverseFilter(value interface{}, _ ...string) (interface{}, error) {
+func reverseFilter(value any, _ ...string) (any, error) {
 	return filter.Reverse(value)
 }
 
 // shuffleFilter randomly rearranges the elements within the slice.
-func shuffleFilter(value interface{}, _ ...string) (interface{}, error) {
+func shuffleFilter(value any, _ ...string) (any, error) {
 	return filter.Shuffle(value)
 }
 
 // sizeFilter returns the size (length) of a slice.
-func sizeFilter(value interface{}, _ ...string) (interface{}, error) {
+func sizeFilter(value any, _ ...string) (any, error) {
 	return filter.Size(value)
 }
 
 // maxFilter finds and returns the maximum value from a slice of numbers.
-func maxFilter(value interface{}, _ ...string) (interface{}, error) {
+func maxFilter(value any, _ ...string) (any, error) {
 	return filter.Max(value)
 }
 
 // minFilter finds and returns the minimum value from a slice of numbers.
-func minFilter(value interface{}, _ ...string) (interface{}, error) {
+func minFilter(value any, _ ...string) (any, error) {
 	return filter.Min(value)
 }
 
 // sumFilter calculates the sum of all elements in a numerical slice.
-func sumFilter(value interface{}, _ ...string) (interface{}, error) {
+func sumFilter(value any, _ ...string) (any, error) {
 	return filter.Sum(value)
 }
 
 // averageFilter computes the average value of a numerical slice.
-func averageFilter(value interface{}, _ ...string) (interface{}, error) {
+func averageFilter(value any, _ ...string) (any, error) {
 	return filter.Average(value)
 }
 
 // mapFilter extracts a slice of values for a specified key from each map in the input slice.
-func mapFilter(value interface{}, args ...string) (interface{}, error) {
+func mapFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("map requires a key: %w", ErrInsufficientArgs)
+		return nil, fmt.Errorf("%w: map filter requires a key argument", ErrInsufficientArgs)
 	}
 	key := args[0]
 	return filter.Map(value, key)

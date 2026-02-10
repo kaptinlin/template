@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 )
@@ -56,13 +57,7 @@ func ListTags() []string {
 	tagMu.RLock()
 	defer tagMu.RUnlock()
 
-	names := make([]string, 0, len(tagRegistry))
-	for name := range tagRegistry {
-		names = append(names, name)
-	}
-
-	slices.Sort(names)
-	return names
+	return slices.Sorted(maps.Keys(tagRegistry))
 }
 
 // HasTag checks if a tag with the given name is registered.
