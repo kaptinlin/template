@@ -21,8 +21,8 @@ func TestAddingAndRetrievingDiverseTypesWithRefactoring(t *testing.T) {
 	testCases := []struct {
 		description string
 		key         string
-		value       any
-		expected    any
+		value       interface{}
+		expected    interface{}
 	}{
 		{"Retrieve string value", "stringValue", "hello world", "hello world"},
 		{"Retrieve integer value", "intValue", 28, 28},
@@ -34,7 +34,7 @@ func TestAddingAndRetrievingDiverseTypesWithRefactoring(t *testing.T) {
 		{"Retrieve nil value", "nilValue", nil, nil},
 		{"Retrieve empty string value", "emptyStringValue", "", ""},
 		{"Retrieve zero integer value", "intValueZero", 0, 0},
-		{"Retrieve map value", "mapValue", map[string]any{"name": "John", "age": 30}, map[string]any{"name": "John", "age": 30}},
+		{"Retrieve map value", "mapValue", map[string]interface{}{"name": "John", "age": 30}, map[string]interface{}{"name": "John", "age": 30}},
 		{"Retrieve boolean false value", "boolValueFalse", false, false},
 		{"Retrieve zero float value", "floatValueZero", 0.0, 0.0},
 	}
@@ -61,9 +61,9 @@ func TestRetrievingValuesWithNestedKeys(t *testing.T) {
 	testCases := []struct {
 		description   string
 		key           string
-		value         any
+		value         interface{}
 		retrieveKey   string
-		expectedValue any
+		expectedValue interface{}
 	}{
 		{
 			description:   "Retrieve nested string",
@@ -103,9 +103,9 @@ func TestRetrievingValuesWithNestedKeys(t *testing.T) {
 		{
 			description:   "Retrieve nested map",
 			key:           "user.address",
-			value:         map[string]any{"city": "Metropolis", "zip": "12345"},
+			value:         map[string]interface{}{"city": "Metropolis", "zip": "12345"},
 			retrieveKey:   "user.address",
-			expectedValue: map[string]any{"city": "Metropolis", "zip": "12345"},
+			expectedValue: map[string]interface{}{"city": "Metropolis", "zip": "12345"},
 		},
 	}
 
@@ -127,9 +127,9 @@ func TestRetrievingValuesWithDeepNestedKeys(t *testing.T) {
 	testCases := []struct {
 		description   string
 		addKey        string
-		addValue      any
+		addValue      interface{}
 		retrieveKey   string
-		expectedValue any
+		expectedValue interface{}
 	}{
 		{
 			description:   "Retrieve deep nested string",
@@ -186,9 +186,9 @@ func TestRetrievingSliceElementsWithIndices(t *testing.T) {
 	testCases := []struct {
 		description   string
 		sliceKey      string
-		sliceValue    any
+		sliceValue    interface{}
 		retrieveKey   string
-		expectedValue any
+		expectedValue interface{}
 		expectedError bool
 	}{
 		{
@@ -257,33 +257,33 @@ func TestRetrievingSliceElementsWithIndices(t *testing.T) {
 func TestRetrievingValuesForNonExistentNestedKeys(t *testing.T) {
 	testCases := []struct {
 		description     string
-		setupKeysValues map[string]any // Key-value pairs to set up context
-		nonExistentKey  string         // Key to test for non-existence
+		setupKeysValues map[string]interface{} // Key-value pairs to set up context
+		nonExistentKey  string                 // Key to test for non-existence
 	}{
 		{
 			description: "Non-existent top-level key",
-			setupKeysValues: map[string]any{
+			setupKeysValues: map[string]interface{}{
 				"user.name": "John Doe",
 			},
 			nonExistentKey: "user.age",
 		},
 		{
 			description: "Non-existent second-level key",
-			setupKeysValues: map[string]any{
+			setupKeysValues: map[string]interface{}{
 				"user.details.location": "City",
 			},
 			nonExistentKey: "user.details.age",
 		},
 		{
 			description: "Non-existent key in deeply nested structure",
-			setupKeysValues: map[string]any{
+			setupKeysValues: map[string]interface{}{
 				"user.profile.education.primary": "School Name",
 			},
 			nonExistentKey: "user.profile.education.highSchool",
 		},
 		{
 			description: "Completely non-existent nested key",
-			setupKeysValues: map[string]any{
+			setupKeysValues: map[string]interface{}{
 				"existing.key": "value",
 			},
 			nonExistentKey: "completely.non.existent.key",
@@ -312,22 +312,22 @@ func TestRetrievingValuesForNonExistentNestedKeys(t *testing.T) {
 func TestRetrievingValuesForIndexOutOfRange(t *testing.T) {
 	testCases := []struct {
 		description        string
-		setupKeysValues    map[string]any // Key-value pairs to set up context
-		indexOutOfRangeKey string         // Key to test for index out of range
+		setupKeysValues    map[string]interface{} // Key-value pairs to set up context
+		indexOutOfRangeKey string                 // Key to test for index out of range
 	}{
 		{
 			description: "Index out of range in slice",
-			setupKeysValues: map[string]any{
+			setupKeysValues: map[string]interface{}{
 				"user.hobbies": []string{"reading", "swimming"},
 			},
 			indexOutOfRangeKey: "user.hobbies.2",
 		},
 		{
 			description: "Index out of range in nested array",
-			setupKeysValues: map[string]any{
-				"team.members": []any{
-					map[string]any{"name": "John", "skills": []string{"C++", "Go"}},
-					map[string]any{"name": "Jane", "skills": []string{"JavaScript", "Python"}},
+			setupKeysValues: map[string]interface{}{
+				"team.members": []interface{}{
+					map[string]interface{}{"name": "John", "skills": []string{"C++", "Go"}},
+					map[string]interface{}{"name": "Jane", "skills": []string{"JavaScript", "Python"}},
 				},
 			},
 			indexOutOfRangeKey: "team.members.1.skills.2",
@@ -359,8 +359,8 @@ func TestSimplifiedOverwritingValuesInContext(t *testing.T) {
 	testCases := []struct {
 		description    string
 		key            string
-		initialValue   any
-		overwriteValue any
+		initialValue   interface{}
+		overwriteValue interface{}
 	}{
 		{
 			description:    "Overwrite string value",
@@ -434,9 +434,9 @@ func TestStructConversion(t *testing.T) {
 	testCases := []struct {
 		description string
 		key         string
-		value       any
+		value       interface{}
 		checkPath   string
-		expected    any
+		expected    interface{}
 	}{
 		{
 			description: "Basic struct conversion",
@@ -528,8 +528,8 @@ func TestStructConversion(t *testing.T) {
 	}
 }
 
-// dereference 会自动解引用指针类型
-func dereference(v any) any {
+// dereference automatically dereferences pointer values.
+func dereference(v interface{}) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -578,14 +578,14 @@ func TestComplexStructConversion(t *testing.T) {
 	testCases := []struct {
 		description string
 		checkPath   string
-		expected    any
-		compareFunc func(any, any) bool
+		expected    interface{}
+		compareFunc func(interface{}, interface{}) bool
 	}{
 		{
 			description: "Access embedded struct field",
 			checkPath:   "project.metadata.tags.0",
 			expected:    "important",
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 			},
 		},
@@ -593,8 +593,8 @@ func TestComplexStructConversion(t *testing.T) {
 			description: "Access pointer value",
 			checkPath:   "project.owner",
 			expected:    "Project Owner",
-			compareFunc: func(a, b any) bool {
-				// 对于指针类型，尝试解引用后比较
+			compareFunc: func(a, b interface{}) bool {
+				// For pointers, compare after dereferencing.
 				a = dereference(a)
 				b = dereference(b)
 				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
@@ -604,14 +604,14 @@ func TestComplexStructConversion(t *testing.T) {
 			description: "Preserve time.Time",
 			checkPath:   "project.created",
 			expected:    creationTime.Format(time.RFC3339),
-			compareFunc: func(a, b any) bool {
-				// 对于时间类型，使用字符串表示进行比较
+			compareFunc: func(a, b interface{}) bool {
+				// For time values, compare via RFC3339 string representation.
 				aTime, aOk := a.(time.Time)
 				if aOk {
 					return aTime.Format(time.RFC3339) == b
 				}
 
-				// 如果直接是字符串，也尝试比较
+				// If already a string, compare directly.
 				aStr, aOk := a.(string)
 				if aOk {
 					return aStr == b
@@ -624,7 +624,7 @@ func TestComplexStructConversion(t *testing.T) {
 			description: "Access ID directly",
 			checkPath:   "project.id",
 			expected:    "project-123",
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 			},
 		},
@@ -632,7 +632,7 @@ func TestComplexStructConversion(t *testing.T) {
 			description: "Access embedded field directly",
 			checkPath:   "project.metadata.priority",
 			expected:    1,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -675,7 +675,7 @@ func TestComplexStructConversion(t *testing.T) {
 }
 
 // toFloat64 attempts to convert any numeric type to float64
-func toFloat64(v any) (float64, bool) {
+func toFloat64(v interface{}) (float64, bool) {
 	switch val := v.(type) {
 	case float64:
 		return val, true
@@ -732,8 +732,8 @@ func TestSliceOfStructs(t *testing.T) {
 	testCases := []struct {
 		description string
 		checkPath   string
-		expected    any
-		compareFunc func(any, any) bool // Add custom comparison function
+		expected    interface{}
+		compareFunc func(interface{}, interface{}) bool // Add custom comparison function
 	}{
 		{
 			description: "Access first item name",
@@ -745,7 +745,7 @@ func TestSliceOfStructs(t *testing.T) {
 			description: "Access second item price",
 			checkPath:   "items.1.price",
 			expected:    24.99,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				// For floating point numbers, use approximate comparison
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
@@ -759,7 +759,7 @@ func TestSliceOfStructs(t *testing.T) {
 			description: "Access last item ID",
 			checkPath:   "items.2.id",
 			expected:    3,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				// For integers, convert then compare
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
@@ -829,8 +829,8 @@ func TestMapWithStructValues(t *testing.T) {
 	testCases := []struct {
 		description string
 		checkPath   string
-		expected    any
-		compareFunc func(any, any) bool
+		expected    interface{}
+		compareFunc func(interface{}, interface{}) bool
 	}{
 		{
 			description: "Access user1 username",
@@ -935,53 +935,53 @@ func TestComplexNestedStructures(t *testing.T) {
 	}
 
 	type Order struct {
-		ID            string            `json:"id"`
-		CustomerID    string            `json:"customerId"`
-		Items         []OrderItem       `json:"items"`
-		Total         float64           `json:"total"`
-		ShippingInfo  map[string]string `json:"shippingInfo"`
-		PaymentMethod map[string]any    `json:"paymentMethod"`
-		Status        string            `json:"status"`
-		CreatedAt     time.Time         `json:"createdAt"`
+		ID            string                 `json:"id"`
+		CustomerID    string                 `json:"customerId"`
+		Items         []OrderItem            `json:"items"`
+		Total         float64                `json:"total"`
+		ShippingInfo  map[string]string      `json:"shippingInfo"`
+		PaymentMethod map[string]interface{} `json:"paymentMethod"`
+		Status        string                 `json:"status"`
+		CreatedAt     time.Time              `json:"createdAt"`
 	}
 
 	type Customer struct {
-		ID             string         `json:"id"`
-		Name           string         `json:"name"`
-		Age            int            `json:"age"`
-		Email          string         `json:"email"`
-		Addresses      []Address      `json:"addresses"`
-		Contacts       []Contact      `json:"contacts"`
-		PreferredItems []string       `json:"preferredItems"`
-		Orders         []Order        `json:"orders"`
-		AccountBalance float64        `json:"accountBalance"`
-		Metadata       map[string]any `json:"metadata"`
-		IsVerified     bool           `json:"isVerified"`
-		JoinDate       time.Time      `json:"joinDate"`
-		LastLogin      time.Time      `json:"lastLogin"`
+		ID             string                 `json:"id"`
+		Name           string                 `json:"name"`
+		Age            int                    `json:"age"`
+		Email          string                 `json:"email"`
+		Addresses      []Address              `json:"addresses"`
+		Contacts       []Contact              `json:"contacts"`
+		PreferredItems []string               `json:"preferredItems"`
+		Orders         []Order                `json:"orders"`
+		AccountBalance float64                `json:"accountBalance"`
+		Metadata       map[string]interface{} `json:"metadata"`
+		IsVerified     bool                   `json:"isVerified"`
+		JoinDate       time.Time              `json:"joinDate"`
+		LastLogin      time.Time              `json:"lastLogin"`
 	}
 
 	type Department struct {
-		Name     string         `json:"name"`
-		Manager  string         `json:"manager"`
-		Budget   float64        `json:"budget"`
-		Projects []string       `json:"projects"`
-		Staff    map[string]any `json:"staff"`
+		Name     string                 `json:"name"`
+		Manager  string                 `json:"manager"`
+		Budget   float64                `json:"budget"`
+		Projects []string               `json:"projects"`
+		Staff    map[string]interface{} `json:"staff"`
 	}
 
 	type Company struct {
-		Name         string                `json:"name"`
-		Founded      time.Time             `json:"founded"`
-		Departments  map[string]Department `json:"departments"`
-		Customers    map[string]Customer   `json:"customers"`
-		Products     []Product             `json:"products"`
-		Reviews      map[string][]Review   `json:"reviews"`
-		Headquarters Address               `json:"headquarters"`
-		Branches     []Address             `json:"branches"`
-		Revenue      map[string]float64    `json:"revenue"`
-		Employees    int                   `json:"employees"`
-		Partners     []string              `json:"partners"`
-		Settings     map[string]any        `json:"settings"`
+		Name         string                 `json:"name"`
+		Founded      time.Time              `json:"founded"`
+		Departments  map[string]Department  `json:"departments"`
+		Customers    map[string]Customer    `json:"customers"`
+		Products     []Product              `json:"products"`
+		Reviews      map[string][]Review    `json:"reviews"`
+		Headquarters Address                `json:"headquarters"`
+		Branches     []Address              `json:"branches"`
+		Revenue      map[string]float64     `json:"revenue"`
+		Employees    int                    `json:"employees"`
+		Partners     []string               `json:"partners"`
+		Settings     map[string]interface{} `json:"settings"`
 	}
 
 	// Create a deeply nested test data structure
@@ -1004,7 +1004,7 @@ func TestComplexNestedStructures(t *testing.T) {
 					"Project Beta",
 					"Project Gamma",
 				},
-				Staff: map[string]any{
+				Staff: map[string]interface{}{
 					"senior": []string{"Alice", "Bob", "Charlie"},
 					"junior": []string{"Dave", "Eve", "Frank"},
 					"counts": map[string]int{
@@ -1022,7 +1022,7 @@ func TestComplexNestedStructures(t *testing.T) {
 					"North Region Campaign",
 					"South Region Campaign",
 				},
-				Staff: map[string]any{
+				Staff: map[string]interface{}{
 					"senior": []string{"Grace", "Heidi"},
 					"junior": []string{"Ivan", "Judy"},
 					"counts": map[string]int{
@@ -1073,7 +1073,7 @@ func TestComplexNestedStructures(t *testing.T) {
 							"carrier":  "FedEx",
 							"tracking": "FX123456789",
 						},
-						PaymentMethod: map[string]any{
+						PaymentMethod: map[string]interface{}{
 							"type":   "credit_card",
 							"last4":  "1234",
 							"expiry": "05/25",
@@ -1083,7 +1083,7 @@ func TestComplexNestedStructures(t *testing.T) {
 					},
 				},
 				AccountBalance: 5000.00,
-				Metadata: map[string]any{
+				Metadata: map[string]interface{}{
 					"sector":      "Technology",
 					"size":        "Medium",
 					"established": 2005,
@@ -1128,7 +1128,7 @@ func TestComplexNestedStructures(t *testing.T) {
 							"carrier":  "UPS",
 							"tracking": "UPS987654321",
 						},
-						PaymentMethod: map[string]any{
+						PaymentMethod: map[string]interface{}{
 							"type":  "paypal",
 							"email": "john@example.com",
 						},
@@ -1137,8 +1137,8 @@ func TestComplexNestedStructures(t *testing.T) {
 					},
 				},
 				AccountBalance: 150.50,
-				Metadata: map[string]any{
-					"preferences": map[string]any{
+				Metadata: map[string]interface{}{
+					"preferences": map[string]interface{}{
 						"notifications": true,
 						"theme":         "dark",
 					},
@@ -1254,15 +1254,15 @@ func TestComplexNestedStructures(t *testing.T) {
 		},
 		Employees: 250,
 		Partners:  []string{"Partner A", "Partner B", "Partner C"},
-		Settings: map[string]any{
+		Settings: map[string]interface{}{
 			"notifications": map[string]bool{
 				"email":   true,
 				"sms":     false,
 				"desktop": true,
 			},
-			"security": map[string]any{
+			"security": map[string]interface{}{
 				"mfa_required": true,
-				"password_policy": map[string]any{
+				"password_policy": map[string]interface{}{
 					"min_length":      12,
 					"require_special": true,
 					"expiry_days":     90,
@@ -1279,8 +1279,8 @@ func TestComplexNestedStructures(t *testing.T) {
 	testCases := []struct {
 		description string
 		checkPath   string
-		expected    any
-		compareFunc func(any, any) bool
+		expected    interface{}
+		compareFunc func(interface{}, interface{}) bool
 	}{
 		{
 			description: "Access company name",
@@ -1296,7 +1296,7 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access 2022 revenue",
 			checkPath:   "company.revenue.2022",
 			expected:    6250000.00,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -1314,7 +1314,7 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access engineering department budget",
 			checkPath:   "company.departments.engineering.budget",
 			expected:    1000000.50,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -1337,7 +1337,7 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access engineering testers count",
 			checkPath:   "company.departments.engineering.staff.counts.testers",
 			expected:    10,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -1365,7 +1365,7 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access first customer's first order's second item quantity",
 			checkPath:   "company.customers.cust1.orders.0.items.1.quantity",
 			expected:    2,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -1388,7 +1388,7 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access first product's price",
 			checkPath:   "company.products.0.price",
 			expected:    299.99,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -1411,7 +1411,7 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access P-101 first review helpful count",
 			checkPath:   "company.reviews.P-101.0.helpful",
 			expected:    12,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -1429,7 +1429,7 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access security settings password minimum length",
 			checkPath:   "company.settings.security.password_policy.min_length",
 			expected:    12,
-			compareFunc: func(a, b any) bool {
+			compareFunc: func(a, b interface{}) bool {
 				aVal, aOk := toFloat64(a)
 				bVal, bOk := toFloat64(b)
 				if !aOk || !bOk {
@@ -1499,9 +1499,9 @@ func TestSetPreservesOriginalTypes(t *testing.T) {
 	tests := []struct {
 		name     string
 		key      string
-		value    any
+		value    interface{}
 		getKey   string
-		expected any
+		expected interface{}
 	}{
 		{
 			name:     "Set struct directly",
@@ -1534,7 +1534,7 @@ func TestSetPreservesOriginalTypes(t *testing.T) {
 		{
 			name:     "Set map directly",
 			key:      "config",
-			value:    map[string]any{"debug": true, "port": 8080},
+			value:    map[string]interface{}{"debug": true, "port": 8080},
 			getKey:   "config.port",
 			expected: 8080,
 		},
@@ -1604,7 +1604,7 @@ func TestRenderingStability(t *testing.T) {
 	}{
 		{
 			name:     "Map string iteration stability",
-			template: `{% for key in data %}{{ key.key }}:{{ key.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]string{
@@ -1622,22 +1622,22 @@ func TestRenderingStability(t *testing.T) {
 		},
 		{
 			name:     "Map interface iteration stability",
-			template: `{% for item in users %}{{ item.key }}:{{ item.value.name }},{% endfor %}`,
+			template: `{% for key, user in users %}{{ key }}:{{ user.name }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
-				ctx.Set("users", map[string]any{
-					"user3": map[string]any{"name": "Charlie", "age": 35},
-					"user1": map[string]any{"name": "Alice", "age": 25},
-					"user4": map[string]any{"name": "David", "age": 40},
-					"user2": map[string]any{"name": "Bob", "age": 30},
+				ctx.Set("users", map[string]interface{}{
+					"user3": map[string]interface{}{"name": "Charlie", "age": 35},
+					"user1": map[string]interface{}{"name": "Alice", "age": 25},
+					"user4": map[string]interface{}{"name": "David", "age": 40},
+					"user2": map[string]interface{}{"name": "Bob", "age": 30},
 				})
 				return ctx
 			},
-			description: "Map with any values should maintain consistent iteration order",
+			description: "Map with interface{} values should maintain consistent iteration order",
 		},
 		{
 			name:     "Nested map iteration stability",
-			template: `{% for dept in company %}{{ dept.key }}:{% for emp in dept.value %}{{ emp.key }}-{{ emp.value }},{% endfor %};{% endfor %}`,
+			template: `{% for deptKey, dept in company %}{{ deptKey }}:{% for empKey, emp in dept %}{{ empKey }}-{{ emp }},{% endfor %};{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("company", map[string]map[string]string{
@@ -1691,7 +1691,7 @@ func TestRenderingStability(t *testing.T) {
 			template: `{{ data }}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
-				ctx.Set("data", map[string]any{
+				ctx.Set("data", map[string]interface{}{
 					"zebra": "value1",
 					"alpha": "value2",
 					"beta":  "value3",
@@ -1706,12 +1706,12 @@ func TestRenderingStability(t *testing.T) {
 			template: `{{ complex }}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
-				ctx.Set("complex", map[string]any{
-					"users": map[string]any{
+				ctx.Set("complex", map[string]interface{}{
+					"users": map[string]interface{}{
 						"user2": []string{"read", "write"},
 						"user1": []string{"admin", "read", "write"},
 					},
-					"settings": map[string]any{
+					"settings": map[string]interface{}{
 						"theme": "dark",
 						"lang":  "en",
 					},
@@ -1729,7 +1729,7 @@ func TestRenderingStability(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Parse template once
-			template, err := Parse(tc.template)
+			template, err := Compile(tc.template)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
@@ -1739,7 +1739,7 @@ func TestRenderingStability(t *testing.T) {
 			// Run multiple iterations to detect inconsistencies
 			for i := 0; i < iterations; i++ {
 				ctx := tc.setupFunc()
-				result, err := template.Execute(ctx)
+				result, err := template.Render(map[string]interface{}(ctx))
 				if err != nil {
 					t.Fatalf("Iteration %d failed: %v", i, err)
 				}
@@ -1771,11 +1771,11 @@ func TestMapKeyOrderStability(t *testing.T) {
 
 	testCases := []struct {
 		name string
-		data map[string]any
+		data map[string]interface{}
 	}{
 		{
 			name: "String keys",
-			data: map[string]any{
+			data: map[string]interface{}{
 				"zebra": "last",
 				"alpha": "first",
 				"beta":  "second",
@@ -1785,7 +1785,7 @@ func TestMapKeyOrderStability(t *testing.T) {
 		},
 		{
 			name: "Numeric-like string keys",
-			data: map[string]any{
+			data: map[string]interface{}{
 				"10": "ten",
 				"1":  "one",
 				"5":  "five",
@@ -1795,7 +1795,7 @@ func TestMapKeyOrderStability(t *testing.T) {
 		},
 		{
 			name: "Mixed case keys",
-			data: map[string]any{
+			data: map[string]interface{}{
 				"Apple":  "fruit1",
 				"banana": "fruit2",
 				"Cherry": "fruit3",
@@ -1851,19 +1851,19 @@ func TestContextValueStability(t *testing.T) {
 	testCases := []struct {
 		name     string
 		key      string
-		value    any
+		value    interface{}
 		checkKey string
 	}{
 		{
 			name:     "Map value stability",
 			key:      "config",
-			value:    map[string]any{"a": 1, "z": 2, "m": 3, "b": 4},
+			value:    map[string]interface{}{"a": 1, "z": 2, "m": 3, "b": 4},
 			checkKey: "config",
 		},
 		{
 			name:     "Slice value stability",
 			key:      "items",
-			value:    []any{"third", "first", "second"},
+			value:    []interface{}{"third", "first", "second"},
 			checkKey: "items",
 		},
 		{
@@ -1886,7 +1886,7 @@ func TestContextValueStability(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var results []any
+			var results []interface{}
 
 			for i := 0; i < iterations; i++ {
 				ctx := NewContext()
@@ -1933,9 +1933,9 @@ func TestTemplateRenderingConsistency(t *testing.T) {
 
 	template := `Company: {{ company.name }}
 Users:
-{% for user in company.users %}  - {{ user.key }}: {{ user.value.name }} ({{ user.value.age }})
-    Roles: {% for role in user.value.roles %}{{ role }}, {% endfor %}
-    Settings: {% for setting in user.value.settings %}{{ setting.key }}={{ setting.value }}, {% endfor %}
+{% for userKey, user in company.users %}  - {{ userKey }}: {{ user.name }} ({{ user.age }})
+    Roles: {% for role in user.roles %}{{ role }}, {% endfor %}
+    Settings: {% for settingKey, settingValue in user.settings %}{{ settingKey }}={{ settingValue }}, {% endfor %}
 {% endfor %}
 Tags: {% for tag in company.tags %}{{ tag }}, {% endfor %}`
 
@@ -1969,7 +1969,7 @@ Tags: {% for tag in company.tags %}{{ tag }}, {% endfor %}`
 		return ctx
 	}
 
-	tmpl, err := Parse(template)
+	tmpl, err := Compile(template)
 	if err != nil {
 		t.Fatalf("Failed to parse template: %v", err)
 	}
@@ -1977,7 +1977,7 @@ Tags: {% for tag in company.tags %}{{ tag }}, {% endfor %}`
 	var results []string
 	for i := 0; i < iterations; i++ {
 		ctx := setupData()
-		result, err := tmpl.Execute(ctx)
+		result, err := tmpl.Render(map[string]interface{}(ctx))
 		if err != nil {
 			t.Fatalf("Template execution failed at iteration %d: %v", i, err)
 		}
@@ -2015,7 +2015,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 	}{
 		{
 			name:     "Empty map iteration",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]string{})
@@ -2025,7 +2025,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Single item map iteration",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]string{"onlykey": "onlyvalue"})
@@ -2045,10 +2045,10 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Nil values in map",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
-				ctx.Set("data", map[string]any{
+				ctx.Set("data", map[string]interface{}{
 					"nil_value": nil,
 					"empty_str": "",
 					"zero_int":  0,
@@ -2060,7 +2060,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Special characters in keys",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]string{
@@ -2076,7 +2076,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Unicode keys and values",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]string{
@@ -2093,7 +2093,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Numeric string keys",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]string{
@@ -2113,7 +2113,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Large map iteration",
-			template: `{% for item in data %}{{ item.key }},{% endfor %}`,
+			template: `{% for key in data %}{{ key }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				largeMap := make(map[string]string)
@@ -2128,7 +2128,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Deeply nested map structures",
-			template: `{% for l1 in data %}{{ l1.key }}:{% for l2 in l1.value %}{{ l2.key }}:{% for l3 in l2.value %}{{ l3.key }}-{{ l3.value }},{% endfor %};{% endfor %};{% endfor %}`,
+			template: `{% for l1k, l1v in data %}{{ l1k }}:{% for l2k, l2v in l1v %}{{ l2k }}:{% for l3k, l3v in l2v %}{{ l3k }}-{{ l3v }},{% endfor %};{% endfor %};{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]map[string]map[string]string{
@@ -2147,10 +2147,10 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Mixed types in map values",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
-				ctx.Set("data", map[string]any{
+				ctx.Set("data", map[string]interface{}{
 					"string_val": "text",
 					"int_val":    123,
 					"float_val":  45.67,
@@ -2164,7 +2164,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Very long keys and values",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				longKey := strings.Repeat("a", 1000) + "_key"
@@ -2180,7 +2180,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Case sensitive key ordering",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				ctx.Set("data", map[string]string{
@@ -2199,7 +2199,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			template, err := Parse(tc.template)
+			template, err := Compile(tc.template)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
@@ -2207,7 +2207,7 @@ func TestRenderingStabilityEdgeCases(t *testing.T) {
 			var results []string
 			for i := 0; i < iterations; i++ {
 				ctx := tc.setupFunc()
-				result, err := template.Execute(ctx)
+				result, err := template.Render(map[string]interface{}(ctx))
 				if err != nil {
 					t.Fatalf("Iteration %d failed: %v", i, err)
 				}
@@ -2263,10 +2263,10 @@ func TestRenderingStabilityPerformance(t *testing.T) {
 			setupFunc: func() Context {
 				ctx := NewContext()
 				// Create deeply nested structure
-				current := make(map[string]any)
+				current := make(map[string]interface{})
 				root := current
 				for i := 0; i < 10; i++ {
-					next := make(map[string]any)
+					next := make(map[string]interface{})
 					current[fmt.Sprintf("level_%d_key_z", i)] = fmt.Sprintf("value_%d", i)
 					current[fmt.Sprintf("level_%d_key_a", i)] = fmt.Sprintf("value_%d", i)
 					current["nested"] = next
@@ -2280,7 +2280,7 @@ func TestRenderingStabilityPerformance(t *testing.T) {
 		},
 		{
 			name:     "Wide map (many keys at same level)",
-			template: `{% for item in data %}{{ item.key }},{% endfor %}`,
+			template: `{% for key in data %}{{ key }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				wideMap := make(map[string]string)
@@ -2301,7 +2301,7 @@ func TestRenderingStabilityPerformance(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			template, err := Parse(tc.template)
+			template, err := Compile(tc.template)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
@@ -2311,7 +2311,7 @@ func TestRenderingStabilityPerformance(t *testing.T) {
 
 			for i := 0; i < iterations; i++ {
 				ctx := tc.setupFunc()
-				result, err := template.Execute(ctx)
+				result, err := template.Render(map[string]interface{}(ctx))
 				if err != nil {
 					t.Fatalf("Iteration %d failed: %v", i, err)
 				}
@@ -2353,10 +2353,10 @@ func TestContextStabilityWithStructs(t *testing.T) {
 	}
 
 	type NestedStruct struct {
-		ID       string         `json:"id"`
-		Simple   SimpleStruct   `json:"simple"`
-		Settings map[string]any `json:"settings"`
-		Items    []string       `json:"items"`
+		ID       string                 `json:"id"`
+		Simple   SimpleStruct           `json:"simple"`
+		Settings map[string]interface{} `json:"settings"`
+		Items    []string               `json:"items"`
 	}
 
 	type StructWithPointers struct {
@@ -2399,14 +2399,14 @@ func TestContextStabilityWithStructs(t *testing.T) {
 		},
 		{
 			name:     "Nested struct iteration",
-			template: `{% for item in data %}{{ item.key }}:{{ item.value }},{% endfor %}`,
+			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				data := map[string]NestedStruct{
 					"item_b": {
 						ID:     "id_b",
 						Simple: SimpleStruct{Name: "Bob", Age: 25},
-						Settings: map[string]any{
+						Settings: map[string]interface{}{
 							"theme": "dark",
 							"lang":  "en",
 						},
@@ -2415,7 +2415,7 @@ func TestContextStabilityWithStructs(t *testing.T) {
 					"item_a": {
 						ID:     "id_a",
 						Simple: SimpleStruct{Name: "Alice", Age: 30},
-						Settings: map[string]any{
+						Settings: map[string]interface{}{
 							"theme":         "light",
 							"notifications": true,
 						},
@@ -2449,7 +2449,7 @@ func TestContextStabilityWithStructs(t *testing.T) {
 		},
 		{
 			name:     "Slice of structs with map fields",
-			template: `{% for person in people %}{{ person.name }}:{% for setting in person.settings %}{{ setting.key }}={{ setting.value }},{% endfor %};{% endfor %}`,
+			template: `{% for person in people %}{{ person.name }}:{% for settingKey, settingValue in person.settings %}{{ settingKey }}={{ settingValue }},{% endfor %};{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
 				type PersonWithSettings struct {
@@ -2483,7 +2483,7 @@ func TestContextStabilityWithStructs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			template, err := Parse(tc.template)
+			template, err := Compile(tc.template)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
@@ -2491,7 +2491,7 @@ func TestContextStabilityWithStructs(t *testing.T) {
 			var results []string
 			for i := 0; i < iterations; i++ {
 				ctx := tc.setupFunc()
-				result, err := template.Execute(ctx)
+				result, err := template.Render(map[string]interface{}(ctx))
 				if err != nil {
 					t.Fatalf("Iteration %d failed: %v", i, err)
 				}
@@ -2546,10 +2546,10 @@ func TestRenderingStabilityErrorCases(t *testing.T) {
 		},
 		{
 			name:     "Accessing non-existent nested properties",
-			template: `{% for item in data %}{{ item.nonexistent.property }},{% endfor %}`,
+			template: `{% for key, item in data %}{{ item.nonexistent.property }},{% endfor %}`,
 			setupFunc: func() Context {
 				ctx := NewContext()
-				ctx.Set("data", map[string]any{
+				ctx.Set("data", map[string]interface{}{
 					"item1": map[string]string{"name": "value1"},
 					"item2": map[string]string{"name": "value2"},
 				})
@@ -2562,7 +2562,7 @@ func TestRenderingStabilityErrorCases(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			template, err := Parse(tc.template)
+			template, err := Compile(tc.template)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
@@ -2572,7 +2572,7 @@ func TestRenderingStabilityErrorCases(t *testing.T) {
 
 			for i := 0; i < iterations; i++ {
 				ctx := tc.setupFunc()
-				result, err := template.Execute(ctx)
+				result, err := template.Render(map[string]interface{}(ctx))
 				results = append(results, result)
 				errors = append(errors, err)
 			}

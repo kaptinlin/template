@@ -1,287 +1,462 @@
-// Package template provides a simple and efficient template engine for Go.
 package template
 
 import (
 	"fmt"
+	"strings"
+	"unicode"
 )
 
-// TokenType represents the type of a token in the template language.
-type TokenType int
-
-const (
-	// TokenIdentifier represents a variable identifier (e.g., user.age)
-	TokenIdentifier TokenType = iota
-	// TokenBool represents a boolean value (e.g., true, false)
-	TokenBool
-	// TokenNumber represents a number (e.g., 18)
-	TokenNumber
-	// TokenString represents a string constant
-	TokenString
-	// TokenOperator represents operators (e.g., ==, !=, <, >, &&, ||)
-	TokenOperator
-	// TokenArithOp represents arithmetic operators
-	TokenArithOp
-	// TokenNot represents the not operator (!)
-	TokenNot
-	// TokenLParen represents a left parenthesis (()
-	TokenLParen
-	// TokenRParen represents a right parenthesis ())
-	TokenRParen
-	// TokenPipe represents the pipe operator (|)
-	TokenPipe
-	// TokenFilter represents a filter (including name and args, e.g., upper, truncate:30)
-	TokenFilter
-	// TokenEOF represents the end of input marker
-	TokenEOF
-	// TokenDot represents the dot operator (.)
-	TokenDot
-)
-
-// Token is a token in the template language.
-// It represents a type and a value.
-type Token struct {
-	Typ TokenType // Token type
-	Val string    // Token value
-}
-
-// Lexer tokenizes template expressions into a sequence of tokens.
+// Lexer performs lexical analysis on template input.
 type Lexer struct {
-	input  string  // Input expression
-	pos    int     // Current scanning position
-	start  int     // Start position of current token
-	tokens []Token // Generated tokens
+	input  string   // Input template string
+	pos    int      // Current position in input
+	line   int      // Current line number (1-based)
+	col    int      // Current column number (1-based)
+	tokens []*Token // Collected tokens
 }
 
-// Lex tokenizes the input string into a list of tokens.
-func (l *Lexer) Lex() ([]Token, error) {
+// NewLexer creates a new lexer for the given input.
+func NewLexer(input string) *Lexer {
+	return &Lexer{
+		input:  input,
+		pos:    0,
+		line:   1,
+		col:    1,
+		tokens: make([]*Token, 0, 100),
+	}
+}
+
+// Tokenize performs lexical analysis and returns all tokens.
+func (l *Lexer) Tokenize() ([]*Token, error) {
 	for l.pos < len(l.input) {
-		ch := l.input[l.pos]
-		switch {
-		case ch == '.':
-			l.pos++
-			l.emit(TokenDot)
-			l.start = l.pos
-		case isSpace(ch):
-			l.ignore() // Ignore whitespace
-		case isDigit(ch):
-			l.lexNumber() // Parse number
-		case ch == '"' || ch == '\'':
-			if err := l.lexString(); err != nil { // Parse string
+		// Check for comment {# #}
+		if l.peek("{#") {
+			if err := l.scanComment(); err != nil {
 				return nil, err
 			}
-		case isLetter(ch) || ch == '_':
-			l.lexIdentifierOrKeyword() // Parse identifier or keyword
-		case ch == '(':
-			l.pos++
-			l.emit(TokenLParen) // Left parenthesis
-			l.start = l.pos
-		case ch == ')':
-			l.pos++
-			l.emit(TokenRParen) // Right parenthesis
-			l.start = l.pos
-		case isArithOperator(ch):
-			l.lexArithOperator() // Parse arithmetic operator
-		case isOperatorChar(ch, l.pos, l.input):
-			l.lexOperator() // Parse operator
-		case ch == '!':
-			l.lexNot() // Parse not operator
-		case ch == '|':
-			l.lexPipeOrFilter() // Parse pipe or filter
-		default:
-			return nil, fmt.Errorf("%w: %c", ErrUnexpectedCharacter, ch)
+			continue
+		}
+
+		// Check for variable tag {{ }}
+		if l.peek("{{") {
+			if err := l.scanVarTag(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		// Check for block tag {% %}
+		if l.peek("{%") {
+			if err := l.scanBlockTag(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		// Otherwise, scan plain text
+		if err := l.scanText(); err != nil {
+			return nil, err
 		}
 	}
-	l.emit(TokenEOF) // Add end marker
+
+	// Add EOF token
+	l.emit(TokenEOF, "")
+
 	return l.tokens, nil
 }
 
-func (l *Lexer) lexNumber() {
-	for l.pos < len(l.input) && (isDigit(l.input[l.pos]) || l.input[l.pos] == '.') {
-		l.pos++
-	}
-	l.emit(TokenNumber)
-}
+// scanText scans plain text until {{ or {% or {# is encountered.
+func (l *Lexer) scanText() error {
+	start := l.pos
+	startLine, startCol := l.line, l.col
 
-func (l *Lexer) lexIdentifierOrKeyword() {
-	for l.pos < len(l.input) && (isLetter(l.input[l.pos]) || isDigit(l.input[l.pos]) || l.input[l.pos] == '.' || l.input[l.pos] == '_') {
-		l.pos++
-	}
-	val := l.input[l.start:l.pos]
-
-	// Check for boolean literals (case-insensitive)
-	if val == "true" || val == "True" || val == "false" || val == "False" {
-		l.emit(TokenBool)
-		return
-	}
-
-	// Check for text operators
-	if val == "and" || val == "or" || val == "not" || val == "in" {
-		// Check for multi-word operators like "not in"
-		if val == "not" {
-			// Look ahead for "in"
-			savedPos := l.pos
-			// Skip whitespace
-			for l.pos < len(l.input) && isSpace(l.input[l.pos]) {
-				l.pos++
-			}
-			// Check if next word is "in"
-			nextStart := l.pos
-			for l.pos < len(l.input) && isLetter(l.input[l.pos]) {
-				l.pos++
-			}
-			if l.pos > nextStart && l.input[nextStart:l.pos] == "in" {
-				// Emit "not in" as single operator
-				l.tokens = append(l.tokens, Token{Typ: TokenOperator, Val: "not in"})
-				l.start = l.pos
-				return
-			}
-			// Restore position if not "not in"
-			l.pos = savedPos
-		}
-		l.emit(TokenOperator)
-		return
-	}
-
-	// Otherwise it's an identifier (including null/Null/none/None literals)
-	l.emit(TokenIdentifier)
-}
-
-func (l *Lexer) lexNot() {
-	l.pos++
-	l.emit(TokenNot)
-}
-
-func (l *Lexer) lexPipeOrFilter() {
-	l.pos++ // Skip '|'
-	l.emit(TokenPipe)
-
-	// Skip whitespace
-	for l.pos < len(l.input) && isSpace(l.input[l.pos]) {
-		l.pos++
-	}
-	l.start = l.pos
-
-	if l.pos < len(l.input) && isLetter(l.input[l.pos]) {
-		// Parse filter name and arguments (if any)
-		for l.pos < len(l.input) {
-			ch := l.input[l.pos]
-			// Allow letters, digits, colons, commas, quotes and spaces as part of filter
-			if isLetter(ch) || isDigit(ch) || ch == ':' || ch == ',' ||
-				ch == '"' || ch == '\'' || ch == ' ' || ch == '_' {
-				l.pos++
-				continue
-			}
-			// Stop at other characters
+	for l.pos < len(l.input) {
+		// Stop if we encounter a tag start or comment
+		if l.peek("{{") || l.peek("{%") || l.peek("{#") {
 			break
 		}
 
-		// Remove trailing spaces
-		end := l.pos
-		for end > l.start && isSpace(l.input[end-1]) {
-			end--
+		// Track line and column
+		if l.input[l.pos] == '\n' {
+			l.line++
+			l.col = 1
+		} else {
+			l.col++
 		}
 
-		// Emit filter token with complete filter expression
-		l.tokens = append(l.tokens, Token{
-			Typ: TokenFilter,
-			Val: l.input[l.start:end],
-		})
-		l.start = l.pos
+		l.pos++
 	}
+
+	// Only emit if we scanned some text
+	if l.pos > start {
+		text := l.input[start:l.pos]
+		l.emitAt(TokenText, text, startLine, startCol)
+	}
+
+	return nil
 }
 
-func (l *Lexer) lexOperator() {
-	// Support multi-character operators (e.g., ==, !=, &&, ||)
-	if l.pos+1 < len(l.input) {
-		doubleOp := l.input[l.pos : l.pos+2]
-		if isOperator(doubleOp) {
-			l.pos += 2
-			l.emit(TokenOperator)
-			return
+// scanComment scans a comment {# ... #}.
+// Comments are ignored and do not produce tokens.
+func (l *Lexer) scanComment() error {
+	startLine, startCol := l.line, l.col
+
+	l.advance(2) // Skip {#
+
+	for !l.peek("#}") {
+		if l.pos >= len(l.input) {
+			return l.errorAt(startLine, startCol, "unclosed comment, expected '#}'")
+		}
+
+		// Newlines are not allowed in comments (Django spec)
+		if l.input[l.pos] == '\n' {
+			return l.errorAt(l.line, l.col, "newline not permitted in comment")
+		}
+
+		l.pos++
+		l.col++
+	}
+
+	l.advance(2) // Skip #}
+
+	// Comments are ignored, no token is emitted
+	return nil
+}
+
+// scanVarTag scans a variable tag {{ ... }}.
+func (l *Lexer) scanVarTag() error {
+	startLine, startCol := l.line, l.col
+
+	// Emit {{
+	l.emit(TokenVarBegin, "{{")
+	l.advance(2)
+
+	// Scan contents until }}
+	for !l.peek("}}") {
+		if l.pos >= len(l.input) {
+			return l.errorAt(startLine, startCol, "unclosed variable tag, expected '}}'")
+		}
+
+		l.skipWhitespace()
+
+		if l.peek("}}") {
+			break
+		}
+
+		// Scan token inside the tag
+		if err := l.scanInsideTag(); err != nil {
+			return err
 		}
 	}
-	// Single character operator
+
+	// Emit }}
+	l.emit(TokenVarEnd, "}}")
+	l.advance(2)
+
+	return nil
+}
+
+// scanBlockTag scans a block tag {% ... %}.
+func (l *Lexer) scanBlockTag() error {
+	startLine, startCol := l.line, l.col
+
+	// Emit {%
+	l.emit(TokenTagBegin, "{%")
+	l.advance(2)
+
+	// Scan contents until %}
+	for !l.peek("%}") {
+		if l.pos >= len(l.input) {
+			return l.errorAt(startLine, startCol, "unclosed block tag, expected '%}'")
+		}
+
+		l.skipWhitespace()
+
+		if l.peek("%}") {
+			break
+		}
+
+		// Scan token inside the tag
+		if err := l.scanInsideTag(); err != nil {
+			return err
+		}
+	}
+
+	// Emit %}
+	l.emit(TokenTagEnd, "%}")
+	l.advance(2)
+
+	return nil
+}
+
+// scanInsideTag scans a single token inside {{ }} or {% %}.
+func (l *Lexer) scanInsideTag() error {
+	// Skip whitespace first
+	l.skipWhitespace()
+
+	if l.pos >= len(l.input) {
+		return nil
+	}
+
+	ch := l.input[l.pos]
+
+	// String literal
+	if ch == '"' || ch == '\'' {
+		return l.scanString()
+	}
+
+	// Number literal
+	if unicode.IsDigit(rune(ch)) {
+		return l.scanNumber()
+	}
+
+	// Identifier or keyword
+	if unicode.IsLetter(rune(ch)) || ch == '_' {
+		return l.scanIdentifier()
+	}
+
+	// Symbol (operators and punctuation)
+	return l.scanSymbol()
+}
+
+// scanIdentifier scans an identifier (variable name, keyword, etc).
+func (l *Lexer) scanIdentifier() error {
+	start := l.pos
+	startLine, startCol := l.line, l.col
+
+	// First character is letter or underscore (already checked)
 	l.pos++
-	l.emit(TokenOperator)
+	l.col++
+
+	// Continue with letters, digits, or underscores
+	for l.pos < len(l.input) {
+		ch := l.input[l.pos]
+		if unicode.IsLetter(rune(ch)) || unicode.IsDigit(rune(ch)) || ch == '_' {
+			l.pos++
+			l.col++
+		} else {
+			break
+		}
+	}
+
+	value := l.input[start:l.pos]
+	l.emitAt(TokenIdentifier, value, startLine, startCol)
+
+	return nil
 }
 
-func (l *Lexer) lexString() error {
-	quote := l.input[l.pos] // Store quote type
-	l.pos++                 // Skip opening quote
-	l.start = l.pos         // Start recording after quote
+// scanNumber scans a number literal.
+func (l *Lexer) scanNumber() error {
+	start := l.pos
+	startLine, startCol := l.line, l.col
+
+	// Check if this number is part of a property access chain (e.g., "items.0.0")
+	// If the character before this number is '.', then this is an array index,
+	// and we should NOT treat subsequent '.' as a decimal point.
+	isPropAccess := start > 0 && l.input[start-1] == '.'
+
+	// Scan digits
+	for l.pos < len(l.input) && unicode.IsDigit(rune(l.input[l.pos])) {
+		l.pos++
+		l.col++
+	}
+
+	// Check for decimal point followed by a digit
+	// Don't consume '.' if:
+	// 1. It's not followed by a digit (e.g., "0.name" should be "0" and ".name")
+	// 2. This number is part of a property access chain (e.g., ".0.0" should be ".0" and ".0")
+	if !isPropAccess && l.pos < len(l.input) && l.input[l.pos] == '.' {
+		// Peek ahead to check if there's a digit after '.'
+		if l.pos+1 < len(l.input) && unicode.IsDigit(rune(l.input[l.pos+1])) {
+			l.pos++ // consume '.'
+			l.col++
+
+			// Scan fractional part
+			for l.pos < len(l.input) && unicode.IsDigit(rune(l.input[l.pos])) {
+				l.pos++
+				l.col++
+			}
+		}
+		// If '.' is not followed by a digit, don't consume it - leave it for the next token
+	}
+
+	value := l.input[start:l.pos]
+	l.emitAt(TokenNumber, value, startLine, startCol)
+
+	return nil
+}
+
+// scanString scans a string literal ("..." or '...').
+func (l *Lexer) scanString() error {
+	startLine, startCol := l.line, l.col
+	quote := l.input[l.pos] // " or '
+
+	l.pos++ // Skip opening quote
+	l.col++
+
+	var value strings.Builder
+	escaped := false
 
 	for l.pos < len(l.input) {
-		if l.input[l.pos] == '\\' && l.pos+1 < len(l.input) {
-			l.pos += 2 // Skip escape character
+		ch := l.input[l.pos]
+
+		// Handle escape sequences
+		if escaped {
+			// Process escape sequence
+			switch ch {
+			case '"':
+				value.WriteByte('"')
+			case '\'':
+				value.WriteByte('\'')
+			case '\\':
+				value.WriteByte('\\')
+			case 'n':
+				value.WriteByte('\n')
+			case 't':
+				value.WriteByte('\t')
+			case 'r':
+				value.WriteByte('\r')
+			default:
+				return l.errorAt(l.line, l.col-1, fmt.Sprintf("unknown escape sequence: \\%c", ch))
+			}
+			escaped = false
+			l.pos++
+			l.col++
 			continue
 		}
-		if l.input[l.pos] == quote {
-			val := l.input[l.start:l.pos]
+
+		if ch == '\\' {
+			escaped = true
+			l.pos++
+			l.col++
+			continue
+		}
+
+		// End of string
+		if ch == quote {
+			l.emitAt(TokenString, value.String(), startLine, startCol)
+
 			l.pos++ // Skip closing quote
-			l.tokens = append(l.tokens, Token{Typ: TokenString, Val: val})
-			l.start = l.pos
+			l.col++
 			return nil
+		}
+
+		// Newlines are not allowed in strings (Django spec)
+		if ch == '\n' {
+			return l.errorAt(startLine, startCol, "newline in string is not allowed")
+		}
+
+		value.WriteByte(ch)
+		l.col++
+		l.pos++
+	}
+
+	return l.errorAt(startLine, startCol, fmt.Sprintf("unclosed string, expected %c", quote))
+}
+
+// scanSymbol scans an operator or punctuation symbol.
+func (l *Lexer) scanSymbol() error {
+	// Try to match 2-character symbols first
+	if l.pos+1 < len(l.input) {
+		twoChar := l.input[l.pos : l.pos+2]
+		if IsSymbol(twoChar) {
+			l.emit(TokenSymbol, twoChar)
+			l.pos += 2
+			l.col += 2
+			return nil
+		}
+	}
+
+	// Try 1-character symbol
+	oneChar := string(l.input[l.pos])
+	if IsSymbol(oneChar) {
+		l.emit(TokenSymbol, oneChar)
+		l.pos++
+		l.col++
+		return nil
+	}
+
+	return l.errorAt(l.line, l.col, fmt.Sprintf("unexpected character: %c", l.input[l.pos]))
+}
+
+// emit creates and appends a token to the token list.
+func (l *Lexer) emit(typ TokenType, value string) {
+	token := &Token{
+		Type:  typ,
+		Value: value,
+		Line:  l.line,
+		Col:   l.col,
+	}
+	l.tokens = append(l.tokens, token)
+}
+
+// emitAt creates and appends a token with explicit line/col position.
+func (l *Lexer) emitAt(typ TokenType, value string, line, col int) {
+	token := &Token{
+		Type:  typ,
+		Value: value,
+		Line:  line,
+		Col:   col,
+	}
+	l.tokens = append(l.tokens, token)
+}
+
+// peek checks if the input starts with the given string at the current position.
+func (l *Lexer) peek(s string) bool {
+	if l.pos+len(s) > len(l.input) {
+		return false
+	}
+	return l.input[l.pos:l.pos+len(s)] == s
+}
+
+// advance moves the position forward by n characters.
+func (l *Lexer) advance(n int) {
+	for i := 0; i < n && l.pos < len(l.input); i++ {
+		if l.input[l.pos] == '\n' {
+			l.line++
+			l.col = 1
+		} else {
+			l.col++
 		}
 		l.pos++
 	}
-	return ErrUnterminatedString
 }
 
-func (l *Lexer) lexArithOperator() {
-	l.pos++
-	l.emit(TokenArithOp)
-}
-
-func isSpace(ch byte) bool {
-	return ch == ' ' || ch == '\t' || ch == '\n'
-}
-
-func isDigit(ch byte) bool {
-	return ch >= '0' && ch <= '9'
-}
-
-func isLetter(ch byte) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
-}
-
-func isOperatorChar(ch byte, pos int, input string) bool {
-	if ch == '|' && pos+1 < len(input) && input[pos+1] != '|' {
-		return false
-	}
-	if ch == '!' && pos+1 < len(input) && input[pos+1] != '=' {
-		return false
-	}
-	return ch == '=' || ch == '!' || ch == '<' || ch == '>' || ch == '&' || ch == '|'
-}
-
-func isOperator(op string) bool {
-	switch op {
-	case "==", "!=", "<=", ">=", "<", ">",
-		"&&", "||",
-		"and", "or", "not",
-		"in", "not in":
-		return true
-	default:
-		return false
+// skipWhitespace skips whitespace characters.
+func (l *Lexer) skipWhitespace() {
+	for l.pos < len(l.input) {
+		ch := l.input[l.pos]
+		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+			if ch == '\n' {
+				l.line++
+				l.col = 1
+			} else {
+				l.col++
+			}
+			l.pos++
+		} else {
+			break
+		}
 	}
 }
 
-func isArithOperator(ch byte) bool {
-	return ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '%'
-}
-
-func (l *Lexer) emit(typ TokenType) {
-	if typ == TokenEOF {
-		l.tokens = append(l.tokens, Token{Typ: typ, Val: "EOF"})
-		l.start = l.pos
-		return
+// errorAt creates a lexer error at the specified position.
+func (l *Lexer) errorAt(line, col int, msg string) error {
+	return &LexerError{
+		Message: msg,
+		Line:    line,
+		Col:     col,
 	}
-	val := l.input[l.start:l.pos]
-	l.tokens = append(l.tokens, Token{Typ: typ, Val: val})
-	l.start = l.pos
 }
 
-func (l *Lexer) ignore() {
-	l.pos++
-	l.start = l.pos
+// LexerError represents a lexical analysis error.
+type LexerError struct {
+	Message string
+	Line    int
+	Col     int
+}
+
+// Error implements the error interface.
+func (e *LexerError) Error() string {
+	return fmt.Sprintf("lexer error at line %d, col %d: %s", e.Line, e.Col, e.Message)
 }

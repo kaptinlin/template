@@ -1,153 +1,23 @@
 package template
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
 
-// TestTemplateExecution verifies the correct execution of a template with various node types.
-func TestTemplateExecution(t *testing.T) {
-	t.Parallel()
-	ctx := mockUserProfileContext()
-	// Define test cases
-	cases := []struct {
-		name     string
-		nodes    []*Node
-		expected string
-	}{
-		{
-			"TextOnly",
-			[]*Node{{Type: NodeTypeText, Text: "Hello, world!"}},
-			"Hello, world!",
-		},
-		{
-			"SingleVariable",
-			[]*Node{
-				{Type: NodeTypeText, Text: "User: "},
-				{Type: NodeTypeVariable, Variable: "userName"},
-			},
-			"User: JaneDoe",
-		},
-		{
-			"NestedVariable",
-			[]*Node{
-				{Type: NodeTypeVariable, Variable: "profile.age"},
-			},
-			"29",
-		},
-		{
-			"MixedContent",
-			[]*Node{
-				{Type: NodeTypeText, Text: "Welcome, "},
-				{Type: NodeTypeVariable, Variable: "userName"},
-				{Type: NodeTypeText, Text: "! Age: "},
-				{Type: NodeTypeVariable, Variable: "profile.age"},
-			},
-			"Welcome, JaneDoe! Age: 29",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tmpl := &Template{Nodes: tc.nodes}
-			result := tmpl.MustExecute(ctx)
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
-			}
-		})
-	}
-
-	// Test that variable not found returns fallback with error via Execute
-	t.Run("VariableNotFound", func(t *testing.T) {
-		tmpl := &Template{Nodes: []*Node{
-			{Type: NodeTypeVariable, Variable: "nonexistent", Text: "{{nonexistent}}"},
-		}}
-		result, err := tmpl.Execute(ctx)
-		if err == nil {
-			t.Error("Expected an error for missing variable")
-		}
-		if result != "{{nonexistent}}" {
-			t.Errorf("Expected '{{nonexistent}}', got '%s'", result)
-		}
-	})
-}
-
-func TestConvertToString(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name     string
-		input    any
-		expected string
-	}{
-		{
-			name:     "String",
-			input:    "Hello, world!",
-			expected: "Hello, world!",
-		},
-		{
-			name:     "SliceOfString",
-			input:    []string{"apple", "banana", "cherry"},
-			expected: "[apple,banana,cherry]",
-		},
-		{
-			name:     "SliceOfInt",
-			input:    []int{1, 2, 3},
-			expected: "[1,2,3]",
-		},
-		{
-			name:     "SliceOfFloat64",
-			input:    []float64{1.1, 2.2, 3.3},
-			expected: "[1.1,2.2,3.3]",
-		},
-		{
-			name:     "SliceOfBool",
-			input:    []bool{true, false, true},
-			expected: "[true,false,true]",
-		},
-		{
-			name:     "Time",
-			input:    time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC),
-			expected: "2020-01-01 12:00:00",
-		},
-		{
-			name:     "ComplexTypeWithJSONFallback",
-			input:    map[string]any{"name": "John Doe", "age": 30},
-			expected: "{\"age\":30,\"name\":\"John Doe\"}",
-		},
-		{
-			name:     "HandleErrorInJSONFallback",
-			input:    make(chan int),
-			expected: "could not convert value to string: json: unable to marshal from Go chan int",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := convertToString(tc.input)
-			if err != nil {
-				// For error cases, just check that we got an error with the expected prefix
-				if !strings.HasPrefix(err.Error(), "could not convert value to string:") {
-					t.Fatalf("Unexpected error: %v", err)
-				}
-			} else if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
-			}
-		})
-	}
-}
-
 func TestIfConditions(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name:     "Split string",
 			template: "{{ message | split:',' }}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"message": "one,two,three",
 			},
 			expected: "[one,two,three]",
@@ -155,7 +25,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Simple condition",
 			template: "{% if age >= 18 %}Adult{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"age": 20,
 			},
 			expected: "Adult",
@@ -163,7 +33,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Simple condition with filter",
 			template: "{% if age >= 18 %}{{ name | upper }}{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"age":  20,
 				"name": "alexander",
 			},
@@ -172,7 +42,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Condition with filter",
 			template: "{% if name | length > 5 %}Name too long{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"name": "Alexander",
 			},
 			expected: "Name too long",
@@ -180,7 +50,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Multiple conditions",
 			template: "{% if score >= 90 %}Excellent{% if score == 100 %}Perfect{% endif %}{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 100,
 			},
 			expected: "ExcellentPerfect",
@@ -188,7 +58,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Multiple filters in condition",
 			template: "{% if message | trim | upper | length > 0 %}Has content{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"message": "  Hello  ",
 			},
 			expected: "Has content",
@@ -196,8 +66,8 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Complex object condition",
 			template: "{% if user.age >= 18 && user.name | length > 3 %}{{ user.name | upper }} is adult{% endif %}",
-			context: map[string]any{
-				"user": map[string]any{
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
 					"name": "Alice",
 					"age":  20,
 				},
@@ -207,7 +77,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "String comparison",
 			template: "{% if status | lower == 'active' %}Currently active{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"status": "ACTIVE",
 			},
 			expected: "Currently active",
@@ -215,7 +85,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Empty value handling",
 			template: "{% if content | default:'nil' == 'nil' %}No content{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"content": "",
 			},
 			expected: "No content",
@@ -223,7 +93,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Basic boolean",
 			template: "{% if isActive %}Active{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"isActive": true,
 			},
 			expected: "Active",
@@ -231,7 +101,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Numeric equality",
 			template: "{% if count == 0 %}Empty{% else %}Not empty{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"count": 0,
 			},
 			expected: "Empty",
@@ -239,7 +109,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "String equality",
 			template: "{% if status == 'pending' %}Pending{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"status": "pending",
 			},
 			expected: "Pending",
@@ -247,7 +117,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "AND operation",
 			template: "{% if isAdmin && isActive %}Admin online{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"isAdmin":  true,
 				"isActive": true,
 			},
@@ -256,7 +126,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "OR operation",
 			template: "{% if isVIP || isMember %}Access granted{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"isVIP":    false,
 				"isMember": true,
 			},
@@ -265,7 +135,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Simple condition with else",
 			template: "{% if age >= 18 %}Adult{% else %}Minor{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"age": 16,
 			},
 			expected: "Minor",
@@ -273,7 +143,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "String comparison with else",
 			template: "{% if status == 'active' %}Currently active{% else %}Inactive{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"status": "inactive",
 			},
 			expected: "Inactive",
@@ -281,7 +151,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Numeric comparison with else",
 			template: "{% if score >= 50 %}Pass{% else %}Fail{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 45,
 			},
 			expected: "Fail",
@@ -289,8 +159,8 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "Complex condition with else",
 			template: "{% if user.age >= 18 && user.name | length > 3 %}{{ user.name | upper }} is adult{% else %}Not an adult{% endif %}",
-			context: map[string]any{
-				"user": map[string]any{
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
 					"name": "Bob",
 					"age":  16,
 				},
@@ -300,7 +170,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "StringArraySizeCheck",
 			template: "{% if names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"names": []string{"John", "Alice", "Bob"},
 			},
 			expected: "More than two names",
@@ -308,7 +178,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "EmptyIntArrayCheck",
 			template: "{% if !scores %}No scores recorded{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"scores": []int{},
 			},
 			expected: "No scores recorded",
@@ -316,7 +186,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "EmptyStringArrayCheck",
 			template: "{% if !names %}No names available{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"names": []string{},
 			},
 			expected: "No names available",
@@ -324,13 +194,13 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "NestedMapWithEmployeeCountCheck",
 			template: "{% if department.employees | size >= 3 %}Large department{% else %}Small department{% endif %}",
-			context: map[string]any{
-				"department": map[string]any{
+			context: map[string]interface{}{
+				"department": map[string]interface{}{
 					"name": "R&D",
-					"employees": []any{
-						map[string]any{"name": "John", "role": "Developer"},
-						map[string]any{"name": "Alice", "role": "Tester"},
-						map[string]any{"name": "Bob", "role": "Product Manager"},
+					"employees": []interface{}{
+						map[string]interface{}{"name": "John", "role": "Developer"},
+						map[string]interface{}{"name": "Alice", "role": "Tester"},
+						map[string]interface{}{"name": "Bob", "role": "Product Manager"},
 					},
 				},
 			},
@@ -339,8 +209,8 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "NonEmptyMapCheck",
 			template: "{% if !settings %}Has settings{% endif %}",
-			context: map[string]any{
-				"settings": map[string]any{
+			context: map[string]interface{}{
+				"settings": map[string]interface{}{
 					"theme":   "Dark",
 					"High":    "High priority",
 					"enabled": "Feature enabled",
@@ -351,7 +221,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "NumericTypeComparison",
 			template: "{% if int_value > float_value %}Integer greater than float{% else %}Float greater than or equal to integer{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"int_value":   5,
 				"float_value": 5.5,
 			},
@@ -360,15 +230,15 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "EmptyMapCheck",
 			template: "{% if !config %}Configuration needed{% endif %}",
-			context: map[string]any{
-				"config": map[string]any{},
+			context: map[string]interface{}{
+				"config": map[string]interface{}{},
 			},
 			expected: "Configuration needed",
 		},
 		{
 			name:     "BooleanArrayWithTrueValueCheck",
 			template: "{% if !flags %}At least one enabled{% else %}All disabled{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"flags": []bool{false, false, true, false},
 			},
 			expected: "All disabled",
@@ -376,8 +246,8 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "NestedStringArraySizeCheck",
 			template: "{% if struct.names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
-			context: map[string]any{
-				"struct": map[string]any{
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
 					"names": []string{"John", "Alice", "Bob"},
 				},
 			},
@@ -386,8 +256,8 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "NonEmptyStringArrayCondition",
 			template: "{% if struct.names %}name{% endif %}",
-			context: map[string]any{
-				"struct": map[string]any{
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
 					"names": []string{"John", "Alice", "Bob"},
 				},
 			},
@@ -396,8 +266,8 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "EmptyStringArrayCondition",
 			template: "{% if struct.names %}name{% endif %}",
-			context: map[string]any{
-				"struct": map[string]any{
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
 					"names": []string{},
 				},
 			},
@@ -406,9 +276,9 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "EmptyMapCondition",
 			template: "{% if struct.names %}name{% endif %}",
-			context: map[string]any{
-				"struct": map[string]any{
-					"names": map[string]any{},
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
+					"names": map[string]interface{}{},
 				},
 			},
 			expected: "",
@@ -416,9 +286,9 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "NonEmptyMapCondition",
 			template: "{% if struct.names %}name{% endif %}",
-			context: map[string]any{
-				"struct": map[string]any{
-					"names": map[string]any{
+			context: map[string]interface{}{
+				"struct": map[string]interface{}{
+					"names": map[string]interface{}{
 						"theme":   "Dark",
 						"High":    "High priority",
 						"enabled": "Feature enabled",
@@ -430,7 +300,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "ArrayLengthComparison",
 			template: "{% if shortList | size < longList | size %}Shorter array{% else %}Equal or longer array{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"shortList": []string{"a", "b"},
 				"longList":  []string{"x", "y", "z"},
 			},
@@ -439,30 +309,30 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "MapKeysEqualityCheck",
 			template: "{% if config1.debug == config2.debug %}Same debug setting{% else %}Different debug settings{% endif %}",
-			context: map[string]any{
-				"config1": map[string]any{"debug": true, "mode": "development"},
-				"config2": map[string]any{"debug": true, "mode": "production"},
+			context: map[string]interface{}{
+				"config1": map[string]interface{}{"debug": true, "mode": "development"},
+				"config2": map[string]interface{}{"debug": true, "mode": "production"},
 			},
 			expected: "Same debug setting",
 		},
 		{
 			name:     "MapNegationCondition",
 			template: "{% if !emptyMap && !nonEmptyMap %}Both false{% else %}Both true{% endif %}",
-			context: map[string]any{
-				"emptyMap":    map[string]any{},
-				"nonEmptyMap": map[string]any{"key": "value"},
+			context: map[string]interface{}{
+				"emptyMap":    map[string]interface{}{},
+				"nonEmptyMap": map[string]interface{}{"key": "value"},
 			},
 			expected: "Both true",
 		},
 		{
 			name:     "ComplexNestedCollectionComparison",
 			template: "{% if data.users | size > data.groups | size %}More users than groups{% else %}Equal or more groups than users{% endif %}",
-			context: map[string]any{
-				"data": map[string]any{
+			context: map[string]interface{}{
+				"data": map[string]interface{}{
 					"users": []string{"User1", "User2", "User3"},
-					"groups": []any{
-						map[string]any{"name": "Admins"},
-						map[string]any{"name": "Users"},
+					"groups": []interface{}{
+						map[string]interface{}{"name": "Admins"},
+						map[string]interface{}{"name": "Users"},
 					},
 				},
 			},
@@ -471,7 +341,7 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "SliceWithANDOperator",
 			template: "{% if numbers && numbers | sum > 10 %}Non-empty array with sum > 10{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"numbers": []int{2, 4, 6, 8},
 			},
 			expected: "Non-empty array with sum > 10",
@@ -479,18 +349,18 @@ func TestIfConditions(t *testing.T) {
 		{
 			name:     "MapWithOROperator",
 			template: "{% if emptyConfig || defaultConfig %}Using config{% endif %}",
-			context: map[string]any{
-				"emptyConfig":   map[string]any{},
-				"defaultConfig": map[string]any{"theme": "light"},
+			context: map[string]interface{}{
+				"emptyConfig":   map[string]interface{}{},
+				"defaultConfig": map[string]interface{}{"theme": "light"},
 			},
 			expected: "Using config",
 		},
 		{
 			name:     "NestedArraysInNestedMaps",
 			template: "{% if project.teams.developers | size > project.teams.designers | size %}More developers{% else %}Equal or more designers{% endif %}",
-			context: map[string]any{
-				"project": map[string]any{
-					"teams": map[string]any{
+			context: map[string]interface{}{
+				"project": map[string]interface{}{
+					"teams": map[string]interface{}{
 						"developers": []string{"Dev1", "Dev2", "Dev3", "Dev4"},
 						"designers":  []string{"Des1", "Des2"},
 					},
@@ -502,19 +372,7 @@ func TestIfConditions(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
@@ -530,7 +388,7 @@ func TestComplexForLoop(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -542,43 +400,43 @@ Categories:{% for k, category in store.categories %}
     - {{ product.name }}: ${{ product.price }}{% endfor %}{% endfor %}
 
 Total Products: {{ store.products | size }}`,
-			context: map[string]any{
-				"store": map[string]any{
+			context: map[string]interface{}{
+				"store": map[string]interface{}{
 					"name": "My Store",
-					"categories": []any{
-						map[string]any{
+					"categories": []interface{}{
+						map[string]interface{}{
 							"name": "Electronics",
-							"products": []any{
-								map[string]any{
+							"products": []interface{}{
+								map[string]interface{}{
 									"name":  "Phone",
 									"price": 599,
 								},
-								map[string]any{
+								map[string]interface{}{
 									"name":  "Laptop",
 									"price": 999,
 								},
 							},
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name": "Books",
-							"products": []any{
-								map[string]any{
+							"products": []interface{}{
+								map[string]interface{}{
 									"name":  "Python Book",
 									"price": 39,
 								},
 							},
 						},
 					},
-					"products": []any{
-						map[string]any{
+					"products": []interface{}{
+						map[string]interface{}{
 							"name":  "Phone",
 							"price": 599,
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name":  "Laptop",
 							"price": 999,
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name":  "Python Book",
 							"price": 39,
 						},
@@ -601,19 +459,7 @@ Total Products: 3`,
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
@@ -629,7 +475,7 @@ func TestNestedLoopWithConditions(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -647,14 +493,14 @@ Categories:{% for k, category in store.categories %}
 Featured Products:{% for product in store.products %}
   {% if product.featured == true %}- {{ product.name }}
   {% if product.featured == true %}123{% endif %}{% endif %}{% endfor %}`,
-			context: map[string]any{
-				"store": map[string]any{
+			context: map[string]interface{}{
+				"store": map[string]interface{}{
 					"name": "Tech Marketplace",
-					"categories": []any{
-						map[string]any{
+					"categories": []interface{}{
+						map[string]interface{}{
 							"name": "Smartphones",
-							"products": []any{
-								map[string]any{
+							"products": []interface{}{
+								map[string]interface{}{
 									"name":     "Premium Phone",
 									"price":    899,
 									"stock":    15,
@@ -662,7 +508,7 @@ Featured Products:{% for product in store.products %}
 									"rating":   4.7,
 									"featured": true,
 								},
-								map[string]any{
+								map[string]interface{}{
 									"name":     "Budget Phone",
 									"price":    299,
 									"stock":    0,
@@ -671,10 +517,10 @@ Featured Products:{% for product in store.products %}
 								},
 							},
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name": "Laptops",
-							"products": []any{
-								map[string]any{
+							"products": []interface{}{
+								map[string]interface{}{
 									"name":     "Pro Laptop",
 									"price":    1299,
 									"stock":    8,
@@ -685,18 +531,18 @@ Featured Products:{% for product in store.products %}
 							},
 						},
 					},
-					"products": []any{
-						map[string]any{
+					"products": []interface{}{
+						map[string]interface{}{
 							"name":     "Premium Phone",
 							"featured": true,
 							"rating":   4.7,
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name":     "Pro Laptop",
 							"featured": true,
 							"rating":   4.8,
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name":     "Budget Phone",
 							"featured": false,
 							"rating":   4.2,
@@ -733,24 +579,10 @@ Featured Products:
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			if result != tc.expected {
 				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
 					len(tc.expected), tc.expected, len(result), result)
@@ -763,7 +595,7 @@ func TestComplexTemplateStructures(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -799,23 +631,23 @@ Special Offers:
     {% if offer.ends_soon %}Limited Time Offer!{% endif %}
   {% endif %}
 {% endfor %}`,
-			context: map[string]any{
-				"store": map[string]any{
+			context: map[string]interface{}{
+				"store": map[string]interface{}{
 					"name": "Electronics Emporium",
-					"featured_categories": []any{
-						map[string]any{
+					"featured_categories": []interface{}{
+						map[string]interface{}{
 							"name":        "Laptops",
 							"active":      true,
 							"description": "High-performance computers",
-							"items": []any{
-								map[string]any{
+							"items": []interface{}{
+								map[string]interface{}{
 									"name":     "Ultra Book Pro",
 									"price":    1299,
 									"stock":    5,
 									"discount": 15,
 									"rating":   4.8,
 								},
-								map[string]any{
+								map[string]interface{}{
 									"name":     "Budget Laptop",
 									"price":    599,
 									"stock":    10,
@@ -824,12 +656,12 @@ Special Offers:
 								},
 							},
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name":        "Smartphones",
 							"active":      true,
 							"description": "Latest mobile devices",
-							"items": []any{
-								map[string]any{
+							"items": []interface{}{
+								map[string]interface{}{
 									"name":     "Pro Phone X",
 									"price":    999,
 									"stock":    15,
@@ -839,14 +671,14 @@ Special Offers:
 							},
 						},
 					},
-					"special_offers": []any{
-						map[string]any{
+					"special_offers": []interface{}{
+						map[string]interface{}{
 							"name":      "summer sale",
 							"active":    true,
 							"discount":  20,
 							"ends_soon": true,
 						},
-						map[string]any{
+						map[string]interface{}{
 							"name":      "clearance",
 							"active":    true,
 							"discount":  30,
@@ -925,19 +757,7 @@ Special Offers:
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
@@ -995,15 +815,15 @@ func TestStructWithFilters(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Date filter with structs",
 			template: `// Date filter structure testing
-Creation time: {{ user.created_at | date "2006-01-02" }}
-Address time: {{ user.address.time | date "2006-01-02" }}`,
-			context: map[string]any{
+Creation time: {{ user.created_at | date:"Y-m-d" }}
+Address time: {{ user.address.time | date:"Y-m-d" }}`,
+			context: map[string]interface{}{
 				"user": User{
 					CreatedAt: sixMonthsAgo,
 					Address: Address{
@@ -1011,16 +831,16 @@ Address time: {{ user.address.time | date "2006-01-02" }}`,
 					},
 				},
 			},
-			expected: `// Date filter structure testing
-Creation time: {{ user.created_at | date "2006-01-02" }}
-Address time: {{ user.address.time | date "2006-01-02" }}`,
+			expected: fmt.Sprintf(`// Date filter structure testing
+Creation time: %s
+Address time: %s`, sixMonthsAgo.Format("2006-01-02"), now.Format("2006-01-02")),
 		},
 		{
 			name: "Default filter with structs",
 			template: `// Default value filter structure testing
 City: {{ user.address.city | default:"Unknown city" }}
 Name: {{ user.name | default:"Unknown user" }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Name: "",
 					Address: Address{
@@ -1039,7 +859,7 @@ Name length: {{ user.name | length }}
 City length: {{ user.address.city | length }}
 Tag count: {{ user.tags | size }}
 Score count: {{ user.scores | size }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Name: "Join",
 					Address: Address{
@@ -1061,7 +881,7 @@ Score count: 3`,
 {% if user.name | length > 0 %}User name is not empty{% endif %}
 {% if user.address.city | length > 2 %}City name is longer than 2 characters{% endif %}
 {% if user.tags | length >= 3 %}At least 3 tags{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Name: "Join",
 					Address: Address{
@@ -1079,7 +899,7 @@ At least 3 tags`,
 			name: "Split filter with structs",
 			template: `// Split filter structure testing
 Address split: {{ address_str | split:"," }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"address_str": "Shanghai,Pudong,Zhangjiang",
 			},
 			expected: `// Split filter structure testing
@@ -1090,7 +910,7 @@ Address split: [Shanghai,Pudong,Zhangjiang]`,
 			template: `// Trim filter structure testing
 Trim name: {{ user.name | trim }}
 Trim city: {{ user.address.city | trim }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Name: "  Join  ",
 					Address: Address{
@@ -1112,8 +932,8 @@ Trim city: shanghai`,
 		City: {{ item.user.address.city }}
 	{% endif %}
 {% endfor %}`,
-			context: map[string]any{
-				"items": []map[string]any{
+			context: map[string]interface{}{
+				"items": []map[string]interface{}{
 					{
 						"user": User{
 							Name: "John",
@@ -1165,7 +985,7 @@ Trim city: shanghai`,
 			template: `// Upper and lower filters with structs
 Upper name: {{ user.name | upper }}
 Lower city: {{ user.address.city | lower }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Name: "Zhang San",
 					Address: Address{
@@ -1181,24 +1001,10 @@ Lower city: shanghai`,
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			if result != tc.expected {
 				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
 					len(tc.expected), tc.expected, len(result), result)
@@ -1222,42 +1028,42 @@ func TestComplexNestedVariableAccess(t *testing.T) {
 	{{ deepStructure.0.0.user.path.0.innerPath.0 }} {{ deepStructure.0.1.profile.path.0.innerPath.0 }} 
 	{{ deepStructure.1.0.user.path.0.innerPath.0 }} {{ deepStructure.1.1.profile.path.0.innerPath.0 }}`
 
-	tmpl, err := Parse(sourceTemplate)
+	tmpl, err := Compile(sourceTemplate)
 	if err != nil {
 		t.Fatalf("Failed to parse template: %v", err)
 	}
 
 	// Create context and set complex nested data
-	ctx := NewContext()
-	ctx.Set("simpleMap", map[string]string{
+	ctx := make(map[string]interface{})
+	ctx["simpleMap"] = map[string]string{
 		"name": "SimpleMap",
-	})
-	ctx.Set("arrayMap", map[string]any{
+	}
+	ctx["arrayMap"] = map[string]interface{}{
 		"items": []string{"ArrayMap", "ArrayMap-2"},
-	})
-	ctx.Set("nestedMap", map[string]any{
-		"user": map[string]any{
+	}
+	ctx["nestedMap"] = map[string]interface{}{
+		"user": map[string]interface{}{
 			"name": "NestedMap",
 		},
-	})
-	ctx.Set("stringSliceMap", map[string][]string{
+	}
+	ctx["stringSliceMap"] = map[string][]string{
 		"items": {"StringSliceMap", "StringSliceMap-2"},
-	})
-	ctx.Set("nestedSliceMap", map[string]map[string][]string{
+	}
+	ctx["nestedSliceMap"] = map[string]map[string][]string{
 		"config": {
 			"values": []string{"NestedSliceMap", "NestedSliceMap-2"},
 		},
-	})
-	ctx.Set("basicSlice", []string{"BasicSlice", "BasicSlice-2"})
-	ctx.Set("objectSlice", []map[string]any{
+	}
+	ctx["basicSlice"] = []string{"BasicSlice", "BasicSlice-2"}
+	ctx["objectSlice"] = []map[string]interface{}{
 		{
 			"name": "ObjectSlice1",
 		},
 		{
 			"nickname": "ObjectSlice2",
 		},
-	})
-	ctx.Set("nestedObjectArray", [][]map[string]any{
+	}
+	ctx["nestedObjectArray"] = [][]map[string]interface{}{
 		{
 			{
 				"name": "NestedArray1",
@@ -1274,8 +1080,8 @@ func TestComplexNestedVariableAccess(t *testing.T) {
 				"nickname": "NestedArray4",
 			},
 		},
-	})
-	ctx.Set("deepStructure", [][]map[string]map[string][]map[string][]string{
+	}
+	ctx["deepStructure"] = [][]map[string]map[string][]map[string][]string{
 		{
 			{
 				"user": map[string][]map[string][]string{
@@ -1316,10 +1122,10 @@ func TestComplexNestedVariableAccess(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
 
 	// Execute template
-	output, err := tmpl.Execute(ctx)
+	output, err := tmpl.Render(ctx)
 	if err != nil {
 		t.Fatalf("Failed to execute template: %v", err)
 	}
@@ -1362,14 +1168,14 @@ func TestComplexNestedConditions(t *testing.T) {
 	{% if appSettings.0.preferences.display.options.flags.0 %}Option1: {{ appSettings.0.preferences.display.options.flags.1 }}!{% endif %}
 	{% if appSettings.1.preferences.display.options.flags.0 %}Option2: {{ appSettings.1.preferences.display.options.flags.1 }}!{% endif %}`
 
-	tmpl, err := Parse(sourceTemplate)
+	tmpl, err := Compile(sourceTemplate)
 	if err != nil {
 		t.Fatalf("Failed to parse template: %v", err)
 	}
 
 	// Create context and set complex nested data
-	ctx := NewContext()
-	ctx.Set("userArray", [][]map[string][]string{
+	ctx := make(map[string]interface{})
+	ctx["userArray"] = [][]map[string][]string{
 		{
 			{
 				"credentials": []string{"UserCredentials", "Password"},
@@ -1380,19 +1186,19 @@ func TestComplexNestedConditions(t *testing.T) {
 				"profile": []string{"UserProfile", "PersonalInfo"},
 			},
 		},
-	})
-	ctx.Set("userProfile", map[string][]string{
+	}
+	ctx["userProfile"] = map[string][]string{
 		"credentials": {"AccountInfo", "SecurityInfo"},
-	})
-	ctx.Set("studentList", []map[string]any{
+	}
+	ctx["studentList"] = []map[string]interface{}{
 		{
 			"info": "StudentInfo1",
 		},
 		{
 			"info": "StudentInfo2",
 		},
-	})
-	ctx.Set("teacherList", []map[string]map[string]any{
+	}
+	ctx["teacherList"] = []map[string]map[string]interface{}{
 		{
 			"details": {
 				"info": "TeacherInfo1",
@@ -1403,8 +1209,8 @@ func TestComplexNestedConditions(t *testing.T) {
 				"info": "TeacherInfo2",
 			},
 		},
-	})
-	ctx.Set("scoreData", []map[string]map[string]map[string][]int{
+	}
+	ctx["scoreData"] = []map[string]map[string]map[string][]int{
 		{
 			"subject": {
 				"math": {
@@ -1419,8 +1225,8 @@ func TestComplexNestedConditions(t *testing.T) {
 				},
 			},
 		},
-	})
-	ctx.Set("configData", []map[string]map[string]map[string]map[string]int{
+	}
+	ctx["configData"] = []map[string]map[string]map[string]map[string]int{
 		{
 			"system": {
 				"settings": {
@@ -1439,8 +1245,8 @@ func TestComplexNestedConditions(t *testing.T) {
 				},
 			},
 		},
-	})
-	ctx.Set("appSettings", []map[string]map[string]map[string]map[string][]bool{
+	}
+	ctx["appSettings"] = []map[string]map[string]map[string]map[string][]bool{
 		{
 			"preferences": {
 				"display": {
@@ -1459,10 +1265,10 @@ func TestComplexNestedConditions(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
 
 	// Execute template
-	output, err := tmpl.Execute(ctx)
+	output, err := tmpl.Render(ctx)
 	if err != nil {
 		t.Fatalf("Failed to execute template: %v", err)
 	}
@@ -1536,45 +1342,45 @@ func TestComplexNestedConditions(t *testing.T) {
 // 			{% endfor %}
 // 		{% endfor %}`
 
-// 	tmpl, err := Parse(sourceTemplate)
+// 	tmpl, err := Compile(sourceTemplate)
 // 	if err != nil {
 // 		t.Fatalf("Failed to parse template: %v", err)
 // 	}
 
 // 	// Create context and set complex nested data
-// 	ctx := NewContext()
+// 	ctx := make(map[string]interface{})
 
 // 	// Basic data types
-// 	ctx.Set("numberList", []int{1, 2, 3, 4, 5})
-// 	ctx.Set("textContent", "HelloWorld")
+// 	ctx["numberList"] = []int{1, 2, 3, 4, 5}
+// 	ctx["textContent"] = "HelloWorld"
 
 // 	// Index access
-// 	ctx.Set("stringArray", []string{"FirstItem", "SecondItem", "ThirdItem"})
-// 	ctx.Set("matrixData", [][]string{
+// 	ctx["stringArray"] = []string{"FirstItem", "SecondItem", "ThirdItem"}
+// 	ctx["matrixData"] = [][]string{
 // 		{"A1", "A2", "A3"},
 // 		{"B1", "B2", "B3"},
-// 	})
-// 	ctx.Set("productList", []map[string]any{
+// 	}
+// 	ctx["productList"] = []map[string]interface{}{
 // 		{"title": "Product1", "price": 100},
 // 		{"title": "Product2", "price": 200},
-// 	})
+// 	}
 
 // 	// 2D array
-// 	ctx.Set("gridData", [][]string{
+// 	ctx["gridData"] = [][]string{
 // 		{"A1", "A2", "A3"},
 // 		{"B1", "B2", "B3"},
 // 		{"C1", "C2", "C3"},
-// 	})
+// 	}
 
 // 	// Object array
-// 	ctx.Set("productList", []map[string]any{
+// 	ctx["productList"] = []map[string]interface{}{
 // 		{"title": "Product1", "price": 100},
 // 		{"title": "Product2", "price": 200},
 // 		{"title": "Product3", "price": 300},
-// 	})
+// 	}
 
 // 	// Nested objects
-// 	userSettings := map[string]map[string]any{
+// 	userSettings := map[string]map[string]interface{}{
 // 		"user1": {
 // 			"name": "John",
 // 			"age":  30,
@@ -1584,7 +1390,7 @@ func TestComplexNestedConditions(t *testing.T) {
 // 			"age":  25,
 // 		},
 // 	}
-// 	ctx.Set("userSettings", userSettings)
+// 	ctx["userSettings"] = userSettings
 
 // 	// Complex nested structure
 // 	academicRecords := map[string]map[string][]int{
@@ -1597,7 +1403,7 @@ func TestComplexNestedConditions(t *testing.T) {
 // 			"science": []int{92, 95, 88},
 // 		},
 // 	}
-// 	ctx.Set("academicRecords", academicRecords)
+// 	ctx["academicRecords"] = academicRecords
 
 // 	// Multi-level nested structure
 // 	schoolData := map[string]map[string][]map[string]string{
@@ -1622,10 +1428,10 @@ func TestComplexNestedConditions(t *testing.T) {
 // 			},
 // 		},
 // 	}
-// 	ctx.Set("schoolData", schoolData)
+// 	ctx["schoolData"] = schoolData
 
 // 	// Execute template
-// 	output, err := tmpl.Execute(ctx)
+// 	output, err := tmpl.Render(ctx)
 // 	if err != nil {
 // 		t.Fatalf("Failed to execute template: %v", err)
 // 	}
@@ -1714,7 +1520,7 @@ func TestComplexStructFields(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -1724,7 +1530,7 @@ Simple struct:
 User: {{ user }}
 Username: {{ user.name }}
 User age: {{ user.age }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"name": "World",
 				"user": User{
 					Name: "John",
@@ -1743,7 +1549,7 @@ User age: 30`,
 User address: {{ user.address }}
 Street: {{ user.address.street }}
 City: {{ user.address.city }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Name: "John",
 					Age:  30,
@@ -1762,7 +1568,7 @@ City: New York`,
 			name: "Time formatting",
 			template: `Time test:
 Time: {{ user.address.time }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						Time: now,
@@ -1778,7 +1584,7 @@ Time: ` + now.Format("2006-01-02 15:04:05"),
 Map: {{ user.address.map }}
 Map key1: {{ user.address.map.key1 }}
 Map key2: {{ user.address.map.key2 }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 
@@ -1797,7 +1603,7 @@ Map key2: value2`,
 Slice: {{ user.address.slice }}
 First element: {{ user.address.slice.0 }}
 Second element: {{ user.address.slice.1 }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						Slice: testSlice,
@@ -1816,7 +1622,7 @@ MapSlice: {{ user.address.mapSlice }}
 Level 1 key: {{ user.address.mapSlice.level1 }}
 Level 2 key: {{ user.address.mapSlice.level1.sublevel }}
 Array in level 2: {{ user.address.mapSlice.level1.sublevel.0 }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						MapSlice: testMapSlice,
@@ -1836,7 +1642,7 @@ SliceMap: {{ user.address.sliceMap }}
 First array: {{ user.address.sliceMap.0 }}
 First element of first array: {{ user.address.sliceMap.0.0 }}
 key1 of first element of first array: {{ user.address.sliceMap.0.0.key1 }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						SliceMap: testSliceMap,
@@ -1855,7 +1661,7 @@ key1 of first element of first array: nestedvalue1`,
 Team name: {{ team.name }}
 First member: {{ team.members.0.name }}
 Second member city: {{ team.members.1.address.city }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"team": Team{
 					Name: "Development Team",
 					Members: []User{
@@ -1888,7 +1694,7 @@ Department Map: {{ user.address.department.map }}
 Department Slice: {{ user.address.department.slice }}
 Department MapSlice: {{ user.address.department.mapSlice }}
 Department SliceMap: {{ user.address.department.sliceMap }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						Department: DepartmentAddress{
@@ -1914,24 +1720,10 @@ Department SliceMap: [[{"key1":"nestedvalue1","key2":"nestedvalue2"},{"key1":"ne
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			// For tests with JSON output, check key content rather than exact string match
 			// due to map key ordering variations in go-json-experiment
 			if tc.name == "Interface_field_access" || tc.name == "SliceMap_access" {
@@ -1979,7 +1771,7 @@ func TestIfConditionsWithComplexStructs(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -1987,7 +1779,7 @@ func TestIfConditionsWithComplexStructs(t *testing.T) {
 			template: `// Basic condition tests
 {% if user.name %}Username is: {{ user.name }}{% endif %}
 {% if user.age > 20 %}User is older than 20{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Name: "John",
 					Age:  30,
@@ -2002,7 +1794,7 @@ User is older than 20`,
 			template: `// Array and slice condition tests
 {% if user.address.slice.0 %}First slice element: {{ user.address.slice.0 }}{% endif %}
 {% if user.address.sliceMap.0.0.key1 %}Value in nested structure: {{ user.address.sliceMap.0.0.key1 }}{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						Slice: testSlice,
@@ -2023,7 +1815,7 @@ Value in nested structure: nestedvalue1`,
 			template: `// Complex structure condition tests
 {% if team.members.0.name %}First team member: {{ team.members.0.name }}{% endif %}
 {% if team.members.1.address.city %}Second member's city: {{ team.members.1.address.city }}{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"team": Team{
 					Name: "Development Team",
 					Members: []User{
@@ -2051,7 +1843,7 @@ Second member's city: Boston`,
 			template: `// Interface type condition tests
 {% if department.department.street %}Department street: {{ department.department.street }}{% endif %}
 {% if department.department.city %}Department city: {{ department.department.city }}{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"department": Address{
 					Department: DepartmentAddress{
 						Street: "123 Main St",
@@ -2067,9 +1859,9 @@ Department city: New York`,
 			name: "Time type conditions",
 			template: `// Time type condition tests
 {% if user.address.time_str %}Time exists: {{ user.address.time_str }}{% endif %}`,
-			context: map[string]any{
-				"user": map[string]any{
-					"address": map[string]any{
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"address": map[string]interface{}{
 						"time_str": now.Format(time.RFC3339),
 					},
 				},
@@ -2081,24 +1873,10 @@ Time exists: ` + now.Format(time.RFC3339),
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			if result != tc.expected {
 				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
 					len(tc.expected), tc.expected, len(result), result)
@@ -2150,7 +1928,7 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -2160,7 +1938,7 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 // {% for item in user.address.slice %}
 // 		- {{ item }}
 // {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						Slice: testSlice,
@@ -2185,7 +1963,7 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 // 		Member name: {{ member.name }}, age: {{ member.age }}
 // 		Address info: {{ member.address.city }} {{ member.address.street }}
 // {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"team": Team{
 					Members: []User{
 						{
@@ -2227,7 +2005,7 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 // 			Key-value pair: {{ item.key1 }} - {{ item.key2 }}
 // 		{% endfor %}
 // {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						SliceMap: testSliceMap,
@@ -2257,7 +2035,7 @@ MapSlice access:
 Level1 data: {{ user.address.mapSlice.level1 }}
 Sublevel data: {{ user.address.mapSlice.level1.sublevel }}
 First item: {{ user.address.mapSlice.level1.sublevel.0 }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						MapSlice: testMapSlice,
@@ -2276,7 +2054,7 @@ First item: deepitem1`,
 Map loop:
 key1: {{ user.address.map.key1 }}
 key2: {{ user.address.map.key2 }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": User{
 					Address: Address{
 						Map: map[string]string{
@@ -2295,20 +2073,7 @@ key2: value2`,
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
@@ -2380,7 +2145,7 @@ func TestPointerTypesAndNesting(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -2389,11 +2154,11 @@ func TestPointerTypesAndNesting(t *testing.T) {
 Name: {{ person.name }}
 Age: {{ person.age }}
 Status: {{ person.isActive }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"person": person,
 			},
-			expected: `ID: "EMP001"
-Name: "John Doe"
+			expected: `ID: EMP001
+Name: John Doe
 Age: 30
 Status: true`,
 		},
@@ -2403,12 +2168,12 @@ Status: true`,
 Phone: {% if person.contact.phone %}{{ person.contact.phone }}{% else %}Not set{% endif %}
 Email: {% if person.contact.email %}{{ person.contact.email }}{% else %}Not set{% endif %}
 Fax: {% if person.contact.fax %}{{ person.contact.fax }}{% else %}Not set{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"person": person,
 			},
 			expected: `Contact Information:
-Phone: "123-456-7890"
-Email: "john.doe@company.com"
+Phone: 123-456-7890
+Email: john.doe@company.com
 Fax: Not set`,
 		},
 		{
@@ -2417,12 +2182,12 @@ Fax: Not set`,
 First tag: {% if person.tags.0 %}{{ person.tags.0 }}{% else %}Empty{% endif %}
 Second tag: {% if person.tags.1 %}{{ person.tags.1 }}{% else %}Empty{% endif %}
 Third tag: {% if person.tags.2 %}{{ person.tags.2 }}{% else %}Empty{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"person": person,
 			},
 			expected: `Tags: ["Go Programming","Python Development",null]
-First tag: "Go Programming"
-Second tag: "Python Development"
+First tag: Go Programming
+Second tag: Python Development
 Third tag: Empty`,
 		},
 		{
@@ -2431,12 +2196,12 @@ Third tag: Empty`,
 Project 1: {% if person.projects.0 %}{{ person.projects.0 }}{% else %}None{% endif %}
 Project 2: {% if person.projects.1 %}{{ person.projects.1 }}{% else %}None{% endif %}
 Project 3: {% if person.projects.2 %}{{ person.projects.2 }}{% else %}None{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"person": person,
 			},
 			expected: `Projects: ["Project Alpha","Project Beta",null]
-Project 1: "Project Alpha"
-Project 2: "Project Beta"
+Project 1: Project Alpha
+Project 2: Project Beta
 Project 3: None`,
 		},
 		{
@@ -2444,35 +2209,21 @@ Project 3: None`,
 			template: `Metadata:
 Department: {% if person.metaData.department %}{{ person.metaData.department }}{% else %}Not set{% endif %}
 Empty field: {% if person.metaData.empty %}{{ person.metaData.empty }}{% else %}Not set{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"person": person,
 			},
 			expected: `Metadata:
-Department: "Engineering Department"
+Department: Engineering Department
 Empty field: Not set`,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			if result != tc.expected {
 				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
 			}
@@ -2546,7 +2297,7 @@ func TestNestedTypesWithConditions(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -2554,10 +2305,10 @@ func TestNestedTypesWithConditions(t *testing.T) {
 			template: `{% if user.name %}Name: {{ user.name }}{% else %}Name: Not set{% endif %}
 {% if user.age %}Age: {{ user.age }}{% else %}Age: Unknown{% endif %}
 {% if user.isActive %}Status: Active{% else %}Status: Inactive{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": user,
 			},
-			expected: `Name: "Test User"
+			expected: `Name: Test User
 Age: 25
 Status: Active`,
 		},
@@ -2571,14 +2322,14 @@ Address information exists:
 {% else %}
 Address information does not exist
 {% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": user,
 			},
 			expected: `
 Address information exists:
-  Street: "123 Main Street"
-  City: "New York"
-  Country: "USA"
+  Street: 123 Main Street
+  City: New York
+  Country: USA
 `,
 		},
 		{
@@ -2591,13 +2342,13 @@ Skills list:
 {% else %}
 No skills recorded
 {% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": user,
 			},
 			expected: `
 Skills list:
-  - "Go"
-  - "Python"
+  - Go
+  - Python
   - Third skill is empty
 `,
 		},
@@ -2614,15 +2365,15 @@ User is from: {{ user.address.city }}
 {% else %}
 City information unknown
 {% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": user,
 			},
 			expected: `
-Complete user info: "Test User" (25 years old)
+Complete user info: Test User (25 years old)
 
 
 
-User is from: "New York"
+User is from: New York
 `,
 		},
 		{
@@ -2630,7 +2381,7 @@ User is from: "New York"
 			template: `{% if emptyUser.name %}Name: {{ emptyUser.name }}{% else %}Name: Not set{% endif %}
 {% if emptyUser.address %}Has address info{% else %}No address info{% endif %}
 {% if emptyUser.skills %}Skill count: {{ emptyUser.skills | size }}{% else %}No skills recorded{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"emptyUser": emptyUser,
 			},
 			expected: `Name: Not set
@@ -2650,7 +2401,7 @@ Sufficient scores: has {{ user.scores | size }} scores
 {% else %}
 Insufficient scores
 {% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": user,
 			},
 			expected: `
@@ -2665,24 +2416,10 @@ Sufficient scores: has 2 scores
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			if result != tc.expected {
 				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
 			}
@@ -2767,7 +2504,7 @@ func TestNestedTypesWithLoops(t *testing.T) {
 	testCases := []struct {
 		name                string
 		template            string
-		context             map[string]any
+		context             map[string]interface{}
 		containsAll         []string // must contain all these strings
 		containsNone        []string // must not contain these strings
 		exactMatch          string   // exact match (for non-map iteration cases)
@@ -2785,28 +2522,28 @@ Members:
 {% endfor %}
 ---
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"company": company,
 			},
 			exactMatch: `Team Members:
 
-Team: "Development Team"
-Lead: "John Smith"
+Team: Development Team
+Lead: John Smith
 Members:
 
-  - "Alice Johnson"
+  - Alice Johnson
 
-  - "Bob Wilson"
+  - Bob Wilson
 
   - Vacant
 
 ---
 
-Team: "QA Team"
-Lead: "Jane Doe"
+Team: QA Team
+Lead: Jane Doe
 Members:
 
-  - "Carol Brown"
+  - Carol Brown
 
 ---
 `,
@@ -2818,14 +2555,14 @@ Members:
 {% for product in company.products %}
 Product: {% if product.name %}{{ product.name }}{% endif %} - Price: {% if product.price %}${{ product.price }}{% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"company": company,
 			},
 			exactMatch: `Product List:
 
-Product: "Product Alpha" - Price: $100
+Product: Product Alpha - Price: $100
 
-Product: "Product Beta" - Price: $200
+Product: Product Beta - Price: $200
 `,
 			useContainsChecking: false,
 		},
@@ -2835,12 +2572,12 @@ Product: "Product Beta" - Price: $200
 {% for key, value in company.settings %}
 {{ key }}: {% if value %}{{ value }}{% else %}Not set{% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"company": company,
 			},
 			containsAll: []string{
-				"theme: \"Dark Theme\"",
-				"locale: \"English\"",
+				"theme: Dark Theme",
+				"locale: English",
 				"empty: Not set",
 				"Company Settings:",
 			},
@@ -2856,23 +2593,23 @@ Product: "Product Beta" - Price: $200
 {% if member %}Member: {{ member }}{% else %}Vacant{% endif %}
 {% endfor %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"company": company,
 			},
 			exactMatch: `Detailed Team Information:
 
-=== "Development Team" ===
+=== Development Team ===
 
-Member: "Alice Johnson"
+Member: Alice Johnson
 
-Member: "Bob Wilson"
+Member: Bob Wilson
 
 Vacant
 
 
-=== "QA Team" ===
+=== QA Team ===
 
-Member: "Carol Brown"
+Member: Carol Brown
 
 `,
 			useContainsChecking: false,
@@ -2883,7 +2620,7 @@ Member: "Carol Brown"
 {% for dept, budget in company.budgets %}
 {{ dept }}: {% if budget %}${{ budget }}{% else %}Not allocated{% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"company": company,
 			},
 			containsAll: []string{
@@ -2898,24 +2635,10 @@ Member: "Carol Brown"
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			if tc.useContainsChecking {
 				// Use contains checking to handle map iteration order uncertainty
 				for _, required := range tc.containsAll {
@@ -3483,8 +3206,8 @@ func TestComplexNestedDataStructuresWithTemplateFeatures(t *testing.T) {
 	}
 
 	// Create context
-	ctx := NewContext()
-	ctx.Set("company", company)
+	ctx := make(map[string]interface{})
+	ctx["company"] = company
 
 	// Test cases - mixed exact match and contains checks
 	cases := []struct {
@@ -3501,7 +3224,7 @@ func TestComplexNestedDataStructuresWithTemplateFeatures(t *testing.T) {
 Founded year: {{ company.founded }}
 Is public: {{ company.is_public }}
 Annual revenue: ${{ company.revenue }}`,
-			expected: `Company name: "TechCorp"
+			expected: `Company name: TechCorp
 Founded year: 2010
 Is public: true
 Annual revenue: $1000000.5`,
@@ -3512,7 +3235,7 @@ Annual revenue: $1000000.5`,
 			template: `{% if company.is_public %}{{ company.name }} is a public company{% endif %}
 {% if company.revenue > 500000 %}Company revenue exceeds 500,000 USD{% endif %}
 {% if company.founded < 2015 %}Company was founded early{% endif %}`,
-			expected: `"TechCorp" is a public company
+			expected: `TechCorp is a public company
 Company revenue exceeds 500,000 USD
 Company was founded early`,
 			useContains: false,
@@ -3525,9 +3248,9 @@ Company was founded early`,
 {% endfor %}`,
 			expected: `Employee list:
 
-- "Alice Johnson" (30 years, $120000)
+- Alice Johnson (30 years, $120000)
 
-- "Bob Smith" (28 years, $95000)
+- Bob Smith (28 years, $95000)
 `,
 			useContains: false,
 		},
@@ -3539,10 +3262,10 @@ Company was founded early`,
 {% endfor %}`,
 			containsAll: []string{
 				"Company settings:",
-				"timezone: \"UTC\"",
-				"currency: \"USD\"",
-				"work_mode: \"hybrid\"",
-				"dress_code: \"casual\"",
+				"timezone: UTC",
+				"currency: USD",
+				"work_mode: hybrid",
+				"dress_code: casual",
 			},
 			useContains: true,
 		},
@@ -3555,10 +3278,10 @@ Address: {{ location.street }}
 {% endfor %}`,
 			containsAll: []string{
 				"Office locations:",
-				"hq: \"San Francisco\", \"USA\"",
-				"Address: \"123 Tech Street\"",
-				"branch: \"Austin\", \"USA\"",
-				"Address: \"456 Innovation Ave\"",
+				"hq: San Francisco, USA",
+				"Address: 123 Tech Street",
+				"branch: Austin, USA",
+				"Address: 456 Innovation Ave",
 			},
 			useContains: true,
 		},
@@ -3573,18 +3296,18 @@ Address: {{ location.street }}
 {% endfor %}`,
 			expected: `Employee skill details:
 
-"Alice Johnson"'s skills:
+Alice Johnson's skills:
 
-  - "Python": Level 9, 5.5 years experience, Certified: true
+  - Python: Level 9, 5.5 years experience, Certified: true
 
-  - "Machine Learning": Level 8, 3 years experience, Certified: true
+  - Machine Learning: Level 8, 3 years experience, Certified: true
 
 
-"Bob Smith"'s skills:
+Bob Smith's skills:
 
-  - "JavaScript": Level 8, 4 years experience, Certified: false
+  - JavaScript: Level 8, 4 years experience, Certified: false
 
-  - "React": Level 7, 2.5 years experience, Certified: true
+  - React: Level 7, 2.5 years experience, Certified: true
 
 `,
 			useContains: false,
@@ -3603,18 +3326,18 @@ Address: {{ location.street }}
 {% endfor %}`,
 			containsAll: []string{
 				"Employee contact information:",
-				"\"Alice Johnson\":",
-				"Email: \"alice@techcorp.com\"",
-				"Phone: \"+1-555-0101\"",
+				"Alice Johnson:",
+				"Email: alice@techcorp.com",
+				"Phone: +1-555-0101",
 				"Social media:",
-				"linkedin: \"alice-johnson\"",
-				"github: \"alicejohnson\"",
-				"twitter: \"@alice_codes\"",
-				"\"Bob Smith\":",
-				"Email: \"bob@techcorp.com\"",
-				"Phone: \"+1-555-0201\"",
-				"linkedin: \"bob-smith\"",
-				"github: \"bobsmith\"",
+				"linkedin: alice-johnson",
+				"github: alicejohnson",
+				"twitter: @alice_codes",
+				"Bob Smith:",
+				"Email: bob@techcorp.com",
+				"Phone: +1-555-0201",
+				"linkedin: bob-smith",
+				"github: bobsmith",
 			},
 			useContains: true,
 		},
@@ -3626,9 +3349,9 @@ Address: {{ location.street }}
 {% endfor %}`,
 			expected: `Employee ratings:
 
-"Alice Johnson" ratings: [95, 87, 92]
+Alice Johnson ratings: [95, 87, 92]
 
-"Bob Smith" ratings: [82, 90, 85]
+Bob Smith ratings: [82, 90, 85]
 `,
 			useContains: false,
 		},
@@ -3645,13 +3368,13 @@ Address: {{ location.street }}
 			containsAll: []string{
 				"Project status report:",
 				"active project:",
-				"- \"AI Platform\" (Budget: $250000)",
-				"Team members: \"emp-001\" \"emp-002\"",
-				"- \"Mobile App\" (Budget: $150000)",
-				"Team members: \"emp-003\" \"emp-001\"",
+				"- AI Platform (Budget: $250000)",
+				"Team members: emp-001 emp-002",
+				"- Mobile App (Budget: $150000)",
+				"Team members: emp-003 emp-001",
 				"completed project:",
-				"- \"Website Redesign\" (Budget: $75000)",
-				"Team members: \"emp-002\"",
+				"- Website Redesign (Budget: $75000)",
+				"Team members: emp-002",
 			},
 			useContains: true,
 		},
@@ -3676,18 +3399,18 @@ High-salary employee {{ employee.name }}:
 			expected: `Employee evaluation:
 
 
-High-salary employee "Alice Johnson":
-  - Living city: "San Francisco"
-  - Department: "Engineering"
+High-salary employee Alice Johnson:
+  - Living city: San Francisco
+  - Department: Engineering
   
    Core skills:
   
     
-    - "Python" (Expert Level 9)
+    - Python (Expert Level 9)
     
   
     
-    - "Machine Learning" (Expert Level 8)
+    - Machine Learning (Expert Level 8)
     
   
   
@@ -3700,7 +3423,7 @@ High-salary employee "Alice Johnson":
 			name: "complex nested array and coordinate access (using contains check)",
 			template: `Office location coordinates:
 {% for name, location in company.locations %}
-{{ name }} ({{ location.city }}): 
+{{ name }} ({{ location.city }}):
    Coordinates: [{{ location.coords.0 }}, {{ location.coords.1 }}]
    Metadata:
 {% for key, value in location.metadata %}
@@ -3709,17 +3432,17 @@ High-salary employee "Alice Johnson":
 {% endfor %}`,
 			containsAll: []string{
 				"Office location coordinates:",
-				"hq (\"San Francisco\"):",
+				"hq (San Francisco):",
 				"Coordinates: [37.7749, -122.4194]",
 				"Metadata:",
-				"building_type: \"office\"",
-				"floor_count: \"10\"",
-				"parking: \"available\"",
-				"branch (\"Austin\"):",
+				"building_type: office",
+				"floor_count: 10",
+				"parking: available",
+				"branch (Austin):",
 				"Coordinates: [30.2672, -97.7431]",
-				"building_type: \"co-working\"",
-				"floor_count: \"5\"",
-				"parking: \"limited\"",
+				"building_type: co-working",
+				"floor_count: 5",
+				"parking: limited",
 			},
 			useContains: true,
 		},
@@ -3737,16 +3460,16 @@ High-salary employee "Alice Johnson":
 {% endfor %}`,
 			containsAll: []string{
 				"Employee achievements:",
-				"\"Alice Johnson\":",
+				"Alice Johnson:",
 				"2023 year:",
-				"- \"best_performer\" (Priority: 1)",
-				"- \"innovation_award\" (Priority: 2)",
+				"- best_performer (Priority: 1)",
+				"- innovation_award (Priority: 2)",
 				"2024 year:",
-				"- \"team_lead\" (Priority: 1)",
-				"- \"mentor\" (Priority: 3)",
-				"\"Bob Smith\":",
-				"- \"fast_learner\" (Priority: 1)",
-				"- \"team_player\" (Priority: 2)",
+				"- team_lead (Priority: 1)",
+				"- mentor (Priority: 3)",
+				"Bob Smith:",
+				"- fast_learner (Priority: 1)",
+				"- team_player (Priority: 2)",
 			},
 			useContains: true,
 		},
@@ -3762,10 +3485,10 @@ Team:
 {% endfor %}`,
 			containsAll: []string{
 				"Department team information:",
-				"Department: \"Engineering\"",
+				"Department: Engineering",
 				"Team:",
-				"development: \"Development Team\" (Lead: \"emp-001\", Budget: $300000)",
-				"qa: \"QA Team\" (Lead: \"emp-004\", Budget: $150000)",
+				"development: Development Team (Lead: emp-001, Budget: $300000)",
+				"qa: QA Team (Lead: emp-004, Budget: $150000)",
 			},
 			useContains: true,
 		},
@@ -3783,14 +3506,14 @@ Team:
 {% endfor %}`,
 			containsAll: []string{
 				"Team certification details:",
-				"\"Development Team\" certification:",
-				"- \"Java Certified Developer\" (\"Oracle\", Valid until: \"2025-12-31\")",
-				"Tags: \"java\" \"backend\"",
-				"- \"AWS Solutions Architect\" (\"Amazon\", Valid until: \"2026-06-15\")",
-				"Tags: \"aws\" \"cloud\"",
-				"\"QA Team\" certification:",
-				"- \"ISTQB Foundation\" (\"ISTQB\", Valid until: \"2027-01-01\")",
-				"Tags: \"testing\" \"quality\"",
+				"Development Team certification:",
+				"- Java Certified Developer (Oracle, Valid until: 2025-12-31)",
+				"Tags: java backend",
+				"- AWS Solutions Architect (Amazon, Valid until: 2026-06-15)",
+				"Tags: aws cloud",
+				"QA Team certification:",
+				"- ISTQB Foundation (ISTQB, Valid until: 2027-01-01)",
+				"Tags: testing quality",
 			},
 			useContains: true,
 		},
@@ -3810,15 +3533,15 @@ Team:
 {% endfor %}`,
 			containsAll: []string{
 				"Department subsidiary information:",
-				"\"Engineering\" subsidiary:",
-				"lab: \"Palo Alto\", \"789 Research Blvd\"",
+				"Engineering subsidiary:",
+				"lab: Palo Alto, 789 Research Blvd",
 				"Coordinates: [37.4419, -122.143]",
-				"type: \"research_lab\"",
-				"security: \"high\"",
-				"datacenter: \"Denver\", \"321 Server Farm Rd\"",
+				"type: research_lab",
+				"security: high",
+				"datacenter: Denver, 321 Server Farm Rd",
 				"Coordinates: [39.7392, -104.9903]",
-				"type: \"datacenter\"",
-				"power_backup: \"redundant\"",
+				"type: datacenter",
+				"power_backup: redundant",
 			},
 			useContains: true,
 		},
@@ -3836,13 +3559,13 @@ Team:
 {% endfor %}`,
 			containsAll: []string{
 				"Organizational settings details:",
-				"\"North America Division\":",
+				"North America Division:",
 				"hr configuration:",
-				"vacation_days: \"25\"",
-				"sick_days: \"10\"",
+				"vacation_days: 25",
+				"sick_days: 10",
 				"it configuration:",
-				"laptop_budget: \"2000\"",
-				"software_budget: \"500\"",
+				"laptop_budget: 2000",
+				"software_budget: 500",
 			},
 			useContains: true,
 		},
@@ -3860,25 +3583,19 @@ Team:
 {% endfor %}`,
 			containsAll: []string{
 				"Organizational team structure:",
-				"\"North America Division\":",
+				"North America Division:",
 				"engineering department:",
-				"dev: \"Development Team\" (3 members)",
-				"qa: \"QA Team\" (2 members)",
+				"dev: Development Team (3 members)",
+				"qa: QA Team (2 members)",
 			},
 			useContains: true,
 		},
 	}
 
 	// Execute tests
-	parser := NewParser()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			template, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := template.Execute(ctx)
+			result, err := Render(tc.template, ctx)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -4025,7 +3742,7 @@ func TestAliasTypes(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -4038,7 +3755,7 @@ Score: {{ user.score }}
 Active: {{ user.is_active }}
 Department: {{ user.department }}
 Priority: {{ user.priority }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": users[0],
 			},
 			expected: `User Information:
@@ -4058,7 +3775,7 @@ Priority: 1`,
 {% if user.score > 90 %}{{ user.name }} has excellent score: {{ user.score }}{% endif %}
 {% if user.department == "Engineering" %}{{ user.name }} works in {{ user.department }}{% endif %}
 {% if user.priority <= 2 %}{{ user.name }} has high priority: {{ user.priority }}{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": users[0],
 			},
 			expected: `User Status Report:
@@ -4075,7 +3792,7 @@ Alice Johnson has high priority: 1`,
 - {{ user.name }} ({{ user.id }}): Age {{ user.age }}, Score {{ user.score }}, Department {{ user.department }}
   {% if user.is_active %}Status: Active{% else %}Status: Inactive{% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"users": users,
 			},
 			expected: `All Users:
@@ -4111,7 +3828,7 @@ Status List:
 {% for status in statusList %}
 - {{ status }}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"tags":       tags,
 				"scores":     scores,
 				"userIDs":    userIDs,
@@ -4165,7 +3882,7 @@ Status List:
   Priority: {{ user.priority }}
 {% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"users": users,
 			},
 			expected: `Active High-Performing Users:
@@ -4202,7 +3919,7 @@ Status List:
   Department: {{ user.department | lower }}
   {% if user.score >= 85 %}Long score: {{ user.score }}{% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"users": users,
 			},
 			expected: `User Summary:
@@ -4232,7 +3949,7 @@ CAROL BROWN:
   {% if user.score >= 90 %}Performance: Excellent{% else %}Performance: Good{% endif %}
   {% if user.priority == 1 %}Priority: Highest{% else %}Priority: {{ user.priority }}{% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"users": users,
 			},
 			expected: `User Comparison:
@@ -4263,7 +3980,7 @@ Carol Brown:
   Status: {% if user.is_active %}Active{% else %}Inactive{% endif %}
   Priority Level: {{ user.priority }}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"users": users,
 			},
 			expected: `Department Statistics:
@@ -4297,16 +4014,16 @@ Score: {{ user.score }}
 Active: {{ user.is_active }}
 Department: {{ user.department }}
 Manager: {{ user.manager.name }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": usersWithPointers[0],
 			},
 			expected: `User with Pointers:
-ID: "ptr-user-001"
-Name: "Alice Pointer"
+ID: ptr-user-001
+Name: Alice Pointer
 Age: 28
 Score: 93.5
 Active: true
-Department: "Engineering"
+Department: Engineering
 Manager: Alice Johnson`,
 		},
 		{
@@ -4319,12 +4036,12 @@ Score: {{ user.score }}
 Active: {{ user.is_active }}
 Department: {% if user.department %}{{ user.department }}{% else %}N/A{% endif %}
 Manager: {{ user.manager.name }}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"user": usersWithPointers[2],
 			},
 			expected: `User with Nil Pointers:
 ID: N/A
-Name: "Carol Pointer"
+Name: Carol Pointer
 Age: N/A
 Score: 91.8
 Active: true
@@ -4341,24 +4058,24 @@ Manager: Carol Brown`,
   Department: {% if user.department %}{{ user.department }}{% else %}N/A{% endif %}
   Manager: {{ user.manager.name }}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"users": usersWithPointers,
 			},
 			expected: `All Users with Pointers:
 
-- "Alice Pointer" ("ptr-user-001")
+- Alice Pointer (ptr-user-001)
   Age: 28
   Score: 93.5
-  Department: "Engineering"
+  Department: Engineering
   Manager: Alice Johnson
 
-- "Bob Pointer" ("ptr-user-002")
+- Bob Pointer (ptr-user-002)
   Age: 32
   Score: 89.2
-  Department: "Marketing"
+  Department: Marketing
   Manager: Bob Smith
 
-- "Carol Pointer"
+- Carol Pointer
   Age: N/A
   Score: 91.8
   Department: N/A
@@ -4375,24 +4092,24 @@ Manager: Carol Brown`,
   {% if user.department %}Department: {{ user.department }}{% else %}Department: Unknown{% endif %}
   {% if user.is_active %}Status: Active{% else %}Status: Inactive{% endif %}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"users": usersWithPointers,
 			},
 			expected: `Pointer Alias Conditions:
 
-"Alice Pointer":
-  Has ID: "ptr-user-001"
+Alice Pointer:
+  Has ID: ptr-user-001
   Age: 28
-  Department: "Engineering"
+  Department: Engineering
   Status: Active
 
-"Bob Pointer":
-  Has ID: "ptr-user-002"
+Bob Pointer:
+  Has ID: ptr-user-002
   Age: 32
-  Department: "Marketing"
+  Department: Marketing
   Status: Inactive
 
-"Carol Pointer":
+Carol Pointer:
   No ID
   Age: Unknown
   Department: Unknown
@@ -4403,24 +4120,10 @@ Manager: Carol Brown`,
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tmpl := NewTemplate()
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.template)
-			if err != nil {
-				t.Fatalf("Template parsing failed: %v", err)
-			}
-			tmpl.Nodes = tpl.Nodes
-
-			ctx := NewContext()
-			for k, v := range tc.context {
-				ctx.Set(k, v)
-			}
-
-			result, err := tmpl.Execute(ctx)
+			result, err := Render(tc.template, tc.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-
 			if result != tc.expected {
 				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
 			}
@@ -4481,13 +4184,7 @@ func TestBasicBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tt.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := tmpl.Execute(tt.context)
+			result, err := Render(tt.template, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -4534,13 +4231,7 @@ func TestNestedBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tt.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := tmpl.Execute(tt.context)
+			result, err := Render(tt.template, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -4592,13 +4283,7 @@ func TestBreakContinueErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tt.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := tmpl.Execute(tt.context)
+			result, err := Render(tt.template, tt.context)
 
 			if tt.expectError {
 				if err == nil {
@@ -4677,13 +4362,7 @@ func TestAdvancedBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tt.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := tmpl.Execute(tt.context)
+			result, err := Render(tt.template, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -4724,13 +4403,7 @@ func TestDeepNestedBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tt.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := tmpl.Execute(tt.context)
+			result, err := Render(tt.template, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -4789,7 +4462,7 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 			name:     "Array of maps with break",
 			template: `{% for item in items %}{% if item.skip %}{% break %}{% endif %}{{ item.name }}|{% endfor %}`,
 			context: Context{
-				"items": []map[string]any{
+				"items": []map[string]interface{}{
 					{"name": "a", "skip": false},
 					{"name": "b", "skip": false},
 					{"name": "c", "skip": true},
@@ -4802,7 +4475,7 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 			name:     "Array of maps with continue",
 			template: `{% for item in items %}{% if item.skip %}{% continue %}{% endif %}{{ item.name }}|{% endfor %}`,
 			context: Context{
-				"items": []map[string]any{
+				"items": []map[string]interface{}{
 					{"name": "a", "skip": false},
 					{"name": "b", "skip": true},
 					{"name": "c", "skip": false},
@@ -4815,13 +4488,7 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tt.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := tmpl.Execute(tt.context)
+			result, err := Render(tt.template, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -4880,13 +4547,7 @@ func TestBreakContinueEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			tmpl, err := parser.Parse(tt.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			result, err := tmpl.Execute(tt.context)
+			result, err := Render(tt.template, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -4903,13 +4564,13 @@ func TestElifBasic(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name:     "If true, elif ignored",
 			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 95,
 			},
 			expected: "Excellent",
@@ -4917,7 +4578,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "If false, first elif true",
 			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 85,
 			},
 			expected: "Good",
@@ -4925,7 +4586,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "If false, first elif false, second elif true",
 			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 65,
 			},
 			expected: "Pass",
@@ -4933,7 +4594,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "All conditions false, else branch",
 			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 45,
 			},
 			expected: "Fail",
@@ -4941,7 +4602,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "No else branch, all conditions false",
 			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 45,
 			},
 			expected: "",
@@ -4949,7 +4610,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "Single elif with variables",
 			template: "{% if age < 18 %}Minor{% elif age >= 65 %}Senior{% else %}Adult{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"age": 70,
 			},
 			expected: "Senior",
@@ -4957,7 +4618,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "Complex conditions with filters",
 			template: "{% if name | length > 10 %}Long name{% elif name | length > 5 %}Medium name{% else %}Short name{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"name": "Alexander",
 			},
 			expected: "Medium name",
@@ -4965,8 +4626,8 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "Nested variables in elif",
 			template: "{% if user.age < 18 %}Minor{% elif user.age >= 65 %}Senior{% else %}Adult{% endif %}",
-			context: map[string]any{
-				"user": map[string]any{
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
 					"age": 25,
 				},
 			},
@@ -4975,7 +4636,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "String comparison in elif",
 			template: "{% if status == 'active' %}Active User{% elif status == 'inactive' %}Inactive User{% else %}Unknown Status{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"status": "inactive",
 			},
 			expected: "Inactive User",
@@ -4983,7 +4644,7 @@ func TestElifBasic(t *testing.T) {
 		{
 			name:     "Boolean conditions in elif",
 			template: "{% if is_admin %}Admin{% elif is_moderator %}Moderator{% else %}User{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"is_admin":     false,
 				"is_moderator": true,
 			},
@@ -5010,7 +4671,7 @@ func TestElifNested(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
@@ -5020,7 +4681,7 @@ func TestElifNested(t *testing.T) {
 			{% else %}
 				Not a student
 			{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"category": "student",
 				"age":      20,
 			},
@@ -5035,7 +4696,7 @@ func TestElifNested(t *testing.T) {
 			{% else %}
 				Unknown role
 			{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"role":  "user",
 				"level": "premium",
 			},
@@ -5048,7 +4709,7 @@ func TestElifNested(t *testing.T) {
 			{% else %}
 				{% if score >= 90 %}Excellent{% elif score >= 70 %}Good{% else %}Average{% endif %}
 			{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"type":  "regular",
 				"score": 85,
 			},
@@ -5067,7 +4728,7 @@ func TestElifNested(t *testing.T) {
 			{% else %}
 				Non-engineering role
 			{% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"department": "engineering",
 				"level":      "senior",
 				"experience": 4,
@@ -5087,10 +4748,10 @@ func TestElifNested(t *testing.T) {
 			{% else %}
 				Unknown user type
 			{% endif %}`,
-			context: map[string]any{
-				"user": map[string]any{
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
 					"type": "premium",
-					"subscription": map[string]any{
+					"subscription": map[string]interface{}{
 						"active": true,
 						"plan":   "pro",
 					},
@@ -5119,13 +4780,13 @@ func TestElifComplexExpressions(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
-		context  map[string]any
+		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name:     "Multiple AND conditions in elif",
 			template: "{% if score < 50 %}Fail{% elif score >= 80 && grade == 'A' %}Excellent{% elif score >= 60 && grade == 'B' %}Good{% else %}Average{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 85,
 				"grade": "A",
 			},
@@ -5134,7 +4795,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Multiple OR conditions in elif",
 			template: "{% if age < 18 %}Minor{% elif status == 'vip' || points >= 1000 %}Premium{% elif status == 'member' || points >= 500 %}Regular{% else %}Guest{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"age":    25,
 				"status": "member",
 				"points": 300,
@@ -5144,7 +4805,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Complex logical expressions",
 			template: "{% if (age >= 18 && age <= 65) && (income > 50000 || education == 'college') %}Qualified{% elif age > 65 && savings >= 100000 %}Senior qualified{% else %}Not qualified{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"age":       30,
 				"income":    45000,
 				"education": "college",
@@ -5155,7 +4816,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Filter expressions in elif",
 			template: "{% if name | length < 3 %}Too short{% elif name | length > 10 %}Too long{% elif name | upper == 'ADMIN' %}Administrator{% else %}Valid name{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"name": "admin",
 			},
 			expected: "Administrator",
@@ -5163,7 +4824,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Multiple filters in elif",
 			template: "{% if text | trim | length == 0 %}Empty{% elif text | trim | upper | length > 5 %}Long text{% elif text | trim | lower == 'hello' %}Greeting{% else %}Regular text{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"text": "  HELLO  ",
 			},
 			expected: "Greeting",
@@ -5171,12 +4832,12 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Nested object access in elif",
 			template: "{% if user.profile.level == 'admin' %}Admin{% elif user.profile.level == 'moderator' && user.profile.permissions.write %}Moderator{% elif user.profile.active %}Active user{% else %}Inactive user{% endif %}",
-			context: map[string]any{
-				"user": map[string]any{
-					"profile": map[string]any{
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"profile": map[string]interface{}{
 						"level":  "moderator",
 						"active": true,
-						"permissions": map[string]any{
+						"permissions": map[string]interface{}{
 							"write": true,
 						},
 					},
@@ -5187,7 +4848,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Array operations in elif",
 			template: "{% if items | size == 0 %}Empty list{% elif items | size > 10 %}Large list{% elif items | size > 5 %}Medium list{% else %}Small list{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"items": []string{"a", "b", "c", "d", "e", "f", "g"},
 			},
 			expected: "Medium list",
@@ -5195,7 +4856,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Mixed arithmetic and comparison in elif",
 			template: "{% if score * 2 < 100 %}Low{% elif score + bonus >= 150 %}High{% elif score - penalty > 80 %}Medium{% else %}Average{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score":   90,
 				"bonus":   70,
 				"penalty": 5,
@@ -5205,7 +4866,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "String comparison with filters",
 			template: "{% if status | lower == 'active' %}Active{% elif status | lower == 'pending' %}Pending{% elif status | lower == 'inactive' %}Inactive{% else %}Unknown{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"status": "PENDING",
 			},
 			expected: "Pending",
@@ -5213,7 +4874,7 @@ func TestElifComplexExpressions(t *testing.T) {
 		{
 			name:     "Complex boolean expressions",
 			template: "{% if (is_admin || is_moderator) && is_active %}Privileged{% elif is_user && (has_subscription || trial_active) %}Subscriber{% elif is_guest %}Guest{% else %}Unknown{% endif %}",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"is_admin":         false,
 				"is_moderator":     false,
 				"is_user":          true,
@@ -5245,7 +4906,7 @@ func TestElifComplexNestedWithLoops(t *testing.T) {
 	cases := []struct {
 		name        string
 		template    string
-		context     map[string]any
+		context     map[string]interface{}
 		expected    string
 		expectError bool
 	}{
@@ -5270,8 +4931,8 @@ User: {{ user.name }}
 {% endif %}
 ---
 {% endfor %}`,
-			context: map[string]any{
-				"users": []map[string]any{
+			context: map[string]interface{}{
+				"users": []map[string]interface{}{
 					{
 						"name":        "Alice",
 						"role":        "admin",
@@ -5282,7 +4943,7 @@ User: {{ user.name }}
 						"name":   "Bob",
 						"role":   "user",
 						"active": true,
-						"subscription": map[string]any{
+						"subscription": map[string]interface{}{
 							"type": "premium",
 						},
 					},
@@ -5290,7 +4951,7 @@ User: {{ user.name }}
 						"name":   "Charlie",
 						"role":   "user",
 						"active": false,
-						"subscription": map[string]any{
+						"subscription": map[string]interface{}{
 							"type": "basic",
 						},
 					},
@@ -5357,8 +5018,8 @@ Item: {{ item.name }}
 {% endif %}
 ---
 {% endfor %}`,
-			context: map[string]any{
-				"items": []map[string]any{
+			context: map[string]interface{}{
+				"items": []map[string]interface{}{
 					{
 						"name":     "Laptop",
 						"category": "electronics",
@@ -5439,23 +5100,23 @@ Company: {{ company.name }}
 {% endif %}
 ---
 {% endfor %}`,
-			context: map[string]any{
-				"companies": []map[string]any{
+			context: map[string]interface{}{
+				"companies": []map[string]interface{}{
 					{
 						"name": "TechCorp",
 						"size": "large",
-						"departments": []map[string]any{
+						"departments": []map[string]interface{}{
 							{
 								"name":   "Engineering",
 								"budget": 1500000,
-								"manager": map[string]any{
+								"manager": map[string]interface{}{
 									"experience": 12,
 								},
 							},
 							{
 								"name":   "Marketing",
 								"budget": 300000,
-								"manager": map[string]any{
+								"manager": map[string]interface{}{
 									"experience": 3,
 								},
 							},
@@ -5515,15 +5176,15 @@ Category: {{ category.name }}
 {% endfor %}
 ---
 {% endfor %}`,
-			context: map[string]any{
-				"categories": []map[string]any{
+			context: map[string]interface{}{
+				"categories": []map[string]interface{}{
 					{
 						"name": "Electronics",
-						"products": []map[string]any{
+						"products": []map[string]interface{}{
 							{
 								"name":   "Smartphone",
 								"rating": 4.6,
-								"reviews": []map[string]any{
+								"reviews": []map[string]interface{}{
 									{
 										"rating":        5,
 										"comment":       "Great phone!",
@@ -5576,18 +5237,13 @@ Category: Electronics
     Active item
   {% endif %}
 {% endfor %}`,
-			context: map[string]any{
-				"items": []map[string]any{
+			context: map[string]interface{}{
+				"items": []map[string]interface{}{
 					{"name": "Item1", "active": true},
 				},
 			},
-			expected: `
-  Item: Item1
-  {% elif item.active %}
-    Active item
-  {% endif %}
-`,
-			expectError: false,
+			expected:    "",
+			expectError: true,
 		},
 		{
 			name: "Error case: else without matching if",
@@ -5597,18 +5253,13 @@ Category: Electronics
     No users
   {% endif %}
 {% endfor %}`,
-			context: map[string]any{
-				"users": []map[string]any{
+			context: map[string]interface{}{
+				"users": []map[string]interface{}{
 					{"name": "User1"},
 				},
 			},
-			expected: `
-  User: User1
-  {% else %}
-    No users
-  {% endif %}
-`,
-			expectError: false,
+			expected:    "",
+			expectError: true,
 		},
 		{
 			name: "Error case: nested elif without matching if",
@@ -5621,26 +5272,18 @@ Category: Electronics
     {% endif %}
   {% endfor %}
 {% endfor %}`,
-			context: map[string]any{
-				"categories": []map[string]any{
+			context: map[string]interface{}{
+				"categories": []map[string]interface{}{
 					{
 						"name": "Electronics",
-						"products": []map[string]any{
+						"products": []map[string]interface{}{
 							{"name": "Phone", "featured": true},
 						},
 					},
 				},
 			},
-			expected: `
-  Category: Electronics
-  
-    Product: Phone
-    {% elif product.featured %}
-      Featured product
-    {% endif %}
-  
-`,
-			expectError: false,
+			expected:    "",
+			expectError: true,
 		},
 		{
 			name: "Error case: multiple else statements",
@@ -5653,8 +5296,8 @@ Category: Electronics
     Another else
   {% endif %}
 {% endfor %}`,
-			context: map[string]any{
-				"items": []map[string]any{
+			context: map[string]interface{}{
+				"items": []map[string]interface{}{
 					{"active": true},
 				},
 			},
@@ -5672,7 +5315,7 @@ Category: Electronics
     Second else
   {% endif %}
 {% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"condition1": true,
 				"condition2": false,
 			},
@@ -5690,7 +5333,7 @@ Category: Electronics
 {% else %}
   Third else
 {% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"condition": false,
 			},
 			expected:    "",
@@ -5707,7 +5350,7 @@ Category: Electronics
 {% else %}
   Poor
 {% endif %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"score": 65,
 			},
 			expected: `
@@ -5760,14 +5403,14 @@ func TestCompleteParameterGeneration(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		context     map[string]any
+		context     map[string]interface{}
 		template    string
 		expected    string
 		expectError bool
 	}{
 		{
 			name: "String query parameter with request body",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: true,
@@ -5823,7 +5466,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		},
 		{
 			name: "Non-string header parameter without request body",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -5876,7 +5519,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		},
 		{
 			name: "Path parameter",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -5929,7 +5572,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		},
 		{
 			name: "Cookie parameter",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -5982,7 +5625,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		},
 		{
 			name: "Default case (unknown parameter type)",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: true,
@@ -6038,7 +5681,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		},
 		{
 			name: "Simple elif test with single parameter",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: true,
@@ -6068,7 +5711,7 @@ String param: username
 		},
 		{
 			name: "Integer parameter test",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -6098,7 +5741,7 @@ Integer param: count
 		},
 		{
 			name: "Empty parameters map",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -6117,7 +5760,7 @@ Integer param: count
 		},
 		{
 			name: "String query parameter with nested if elif",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -6168,8 +5811,8 @@ Integer param: count
 `,
 		},
 		{
-			name: "Unmatched elif in for loop (treated as text)",
-			context: map[string]any{
+			name: "Unmatched elif in for loop (should error)",
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -6188,17 +5831,12 @@ Integer param: count
     String parameter
     {% endif %}
 {% endfor %}`,
-			expected: `
-    // Process test
-    {% elif param.schema.type == "string" %}
-    String parameter
-    {% endif %}
-`,
-			expectError: false,
+			expected:    "",
+			expectError: true,
 		},
 		{
-			name: "Unmatched else in for loop (treated as text)",
-			context: map[string]any{
+			name: "Unmatched else in for loop (should error)",
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -6217,17 +5855,12 @@ Integer param: count
     No parameters
     {% endif %}
 {% endfor %}`,
-			expected: `
-    // Process test
-    {% else %}
-    No parameters
-    {% endif %}
-`,
-			expectError: false,
+			expected:    "",
+			expectError: true,
 		},
 		{
 			name: "Error case: multiple else statements in nested structure",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: false,
@@ -6254,10 +5887,10 @@ Integer param: count
 		},
 		{
 			name: "Deep nested for loops with if elif",
-			context: map[string]any{
-				"category": map[string]any{
+			context: map[string]interface{}{
+				"category": map[string]interface{}{
 					"name": "API",
-					"operations": []map[string]any{
+					"operations": []map[string]interface{}{
 						{
 							"name": "GetUser",
 							"parameters": map[string]Param{
@@ -6309,7 +5942,7 @@ Integer param: count
 		},
 		{
 			name: "Complex validation with nested conditions",
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": Data{
 					Operation: Operation{
 						RequestBody: true,
@@ -6321,7 +5954,7 @@ Integer param: count
 						},
 					},
 				},
-				"config": map[string]any{
+				"config": map[string]interface{}{
 					"validateParams": true,
 					"debugMode":      false,
 				},
@@ -6408,7 +6041,7 @@ func TestLoopContextFeatures(t *testing.T) {
 	testCases := []struct {
 		name        string
 		template    string
-		context     map[string]any
+		context     map[string]interface{}
 		expected    string
 		expectError bool
 	}{
@@ -6416,7 +6049,7 @@ func TestLoopContextFeatures(t *testing.T) {
 			name: "Basic loop context properties",
 			template: `{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}
 {% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"items": []string{"apple", "banana", "cherry"},
 			},
 			expected: `0-2-true-false-3: apple
@@ -6427,7 +6060,7 @@ func TestLoopContextFeatures(t *testing.T) {
 		{
 			name:     "Loop context with string iteration",
 			template: `{% for char in word %}[{{ loop.Index }}:{{ char }}]{% if loop.Last == false %}-{% endif %}{% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"word": "hello",
 			},
 			expected: `[0:h]-[1:e]-[2:l]-[3:l]-[4:o]`,
@@ -6435,7 +6068,7 @@ func TestLoopContextFeatures(t *testing.T) {
 		{
 			name:     "Loop context with map iteration",
 			template: `{% for key, value in data %}{{ loop.Index }}: {{ key }}={{ value }}{% if loop.Last == false %}, {% endif %}{% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"data": map[string]string{"a": "1", "b": "2", "c": "3"},
 			},
 			expected: `0: a=1, 1: b=2, 2: c=3`,
@@ -6445,7 +6078,7 @@ func TestLoopContextFeatures(t *testing.T) {
 			template: `{% for outer in outers %}Outer[{{ loop.Index }}]:
 {% for inner in inners %}  Inner[{{ loop.Index }}]: {{ outer }}-{{ inner }}
 {% endfor %}{% endfor %}`,
-			context: map[string]any{
+			context: map[string]interface{}{
 				"outers": []string{"A", "B"},
 				"inners": []string{"1", "2"},
 			},
@@ -6522,12 +6155,12 @@ func TestLoopContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Parse(tt.template)
+			tmpl, err := Compile(tt.template)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
 
-			result, err := tmpl.Execute(tt.ctx)
+			result, err := tmpl.Render(tt.ctx)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
@@ -6572,12 +6205,12 @@ Outer loop 1 (first: false, last: true):
 
 `
 
-	tmpl, err := Parse(template)
+	tmpl, err := Compile(template)
 	if err != nil {
 		t.Fatalf("Failed to parse template: %v", err)
 	}
 
-	result, err := tmpl.Execute(ctx)
+	result, err := tmpl.Render(ctx)
 	if err != nil {
 		t.Fatalf("Failed to execute template: %v", err)
 	}
@@ -6789,18 +6422,99 @@ ROW[1]:FOOTER (rev:0)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Parse(tt.template)
+			tmpl, err := Compile(tt.template)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
 
-			result, err := tmpl.Execute(tt.ctx)
+			result, err := tmpl.Render(tt.ctx)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
 			if result != tt.expected {
 				t.Errorf("Expected:\n%q\nGot:\n%q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// Moved from loop_features_test.go
+func TestLoopContextFullFeatures(t *testing.T) {
+	tests := []struct {
+		name     string
+		tmpl     string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name: "Index (0-indexed)",
+			tmpl: `{% for item in items %}{{ loop.Index }},{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []string{"a", "b", "c"},
+			},
+			expected: "0,1,2,",
+		},
+		{
+			name: "Counter (1-indexed)",
+			tmpl: `{% for item in items %}{{ loop.Counter }},{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []string{"a", "b", "c"},
+			},
+			expected: "1,2,3,",
+		},
+		{
+			name: "Revindex",
+			tmpl: `{% for item in items %}{{ loop.Revindex }},{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []string{"a", "b", "c"},
+			},
+			expected: "2,1,0,",
+		},
+		{
+			name: "Revcounter",
+			tmpl: `{% for item in items %}{{ loop.Revcounter }},{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []string{"a", "b", "c"},
+			},
+			expected: "3,2,1,",
+		},
+		{
+			name: "First and Last",
+			tmpl: `{% for item in items %}{% if loop.First %}FIRST{% endif %}{{ item }}{% if loop.Last %}LAST{% endif %},{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []string{"a", "b", "c"},
+			},
+			expected: "FIRSTa,b,cLAST,",
+		},
+		{
+			name: "Length",
+			tmpl: `{% for item in items %}{{ loop.Index }}/{{ loop.Length }},{% endfor %}`,
+			context: map[string]interface{}{
+				"items": []string{"a", "b", "c"},
+			},
+			expected: "0/3,1/3,2/3,",
+		},
+		{
+			name: "Nested loop with Parentloop",
+			tmpl: `{% for outer in outers %}[O{{ loop.Counter }}]{% for inner in inners %}{{ loop.Parentloop.Counter }}-{{ loop.Counter }},{% endfor %};{% endfor %}`,
+			context: map[string]interface{}{
+				"outers": []string{"A", "B"},
+				"inners": []string{"x", "y"},
+			},
+			expected: "[O1]1-1,1-2,;[O2]2-1,2-2,;",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
+			if err != nil {
+				t.Fatalf("Render error: %v", err)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Output mismatch\nExpected: %q\nGot:      %q", tt.expected, result)
 			}
 		})
 	}

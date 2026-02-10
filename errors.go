@@ -15,6 +15,9 @@ var (
 	// ErrFilterNotFound indicates that the requested filter was not found in the global registry.
 	ErrFilterNotFound = errors.New("filter not found")
 
+	// ErrFilterExecutionFailed indicates that a filter returned an execution error.
+	ErrFilterExecutionFailed = errors.New("filter execution failed")
+
 	// ErrFilterInputInvalid indicates an issue with the filter input value being of an unexpected type or format.
 	ErrFilterInputInvalid = errors.New("filter input is invalid")
 
@@ -96,8 +99,17 @@ var (
 	// ErrCannotDivideTypes is returned when attempting to divide incompatible types.
 	ErrCannotDivideTypes = errors.New("cannot divide values of these types")
 
+	// ErrCannotModuloTypes is returned when attempting to modulo incompatible types.
+	ErrCannotModuloTypes = errors.New("cannot modulo values of these types")
+
 	// ErrCannotConvertToBool is returned when a value cannot be converted to boolean.
 	ErrCannotConvertToBool = errors.New("cannot convert type to boolean")
+
+	// ErrCannotNegate is returned when unary negation cannot be applied.
+	ErrCannotNegate = errors.New("cannot negate value")
+
+	// ErrCannotApplyUnaryPlus is returned when unary plus cannot be applied.
+	ErrCannotApplyUnaryPlus = errors.New("cannot apply unary plus")
 
 	// ErrCannotCompareTypes is returned when attempting to compare incompatible types.
 	ErrCannotCompareTypes = errors.New("cannot compare values of these types")
@@ -111,6 +123,27 @@ var (
 	// ErrIndexOutOfRange is returned when an array index is out of bounds.
 	ErrIndexOutOfRange = errors.New("index out of range")
 
+	// ErrCannotIndexNil is returned when attempting to index a nil value.
+	ErrCannotIndexNil = errors.New("cannot index nil")
+
+	// ErrTypeNotIndexable is returned when attempting to index a non-indexable value.
+	ErrTypeNotIndexable = errors.New("type is not indexable")
+
+	// ErrCannotGetKeyFromNil is returned when attempting to read a map key from nil.
+	ErrCannotGetKeyFromNil = errors.New("cannot get key from nil")
+
+	// ErrTypeNotMap is returned when map-key access is attempted on a non-map value.
+	ErrTypeNotMap = errors.New("type is not a map")
+
+	// ErrCannotGetFieldFromNil is returned when attempting to read a field from nil.
+	ErrCannotGetFieldFromNil = errors.New("cannot get field from nil")
+
+	// ErrStructHasNoField is returned when a struct does not contain a requested field.
+	ErrStructHasNoField = errors.New("struct has no field")
+
+	// ErrTypeHasNoField is returned when field access is attempted on unsupported types.
+	ErrTypeHasNoField = errors.New("type has no field")
+
 	// ErrUnsupportedArrayType is returned when an unsupported array type is encountered.
 	ErrUnsupportedArrayType = errors.New("unsupported array type")
 
@@ -123,6 +156,24 @@ var (
 	// ErrUnsupportedCollectionType is returned when an unsupported collection type is used in a for loop.
 	ErrUnsupportedCollectionType = errors.New("unsupported collection type for for loop")
 
+	// ErrTypeNotIterable is returned when iteration is attempted on a non-iterable value.
+	ErrTypeNotIterable = errors.New("type is not iterable")
+
+	// ErrTypeHasNoLength is returned when length is requested from an unsupported type.
+	ErrTypeHasNoLength = errors.New("type has no length")
+
+	// ErrCannotConvertNilToInt is returned when converting nil to int.
+	ErrCannotConvertNilToInt = errors.New("cannot convert nil to int")
+
+	// ErrCannotConvertToInt is returned when converting a value to int is unsupported.
+	ErrCannotConvertToInt = errors.New("cannot convert value to int")
+
+	// ErrCannotConvertNilToFloat is returned when converting nil to float.
+	ErrCannotConvertNilToFloat = errors.New("cannot convert nil to float")
+
+	// ErrCannotConvertToFloat is returned when converting a value to float is unsupported.
+	ErrCannotConvertToFloat = errors.New("cannot convert value to float")
+
 	// ErrUnexpectedCharacter is returned when the lexer encounters an unexpected character.
 	ErrUnexpectedCharacter = errors.New("unexpected character")
 
@@ -132,12 +183,18 @@ var (
 	// ErrIntegerOverflow is returned when an unsigned integer value exceeds the maximum int64 value.
 	ErrIntegerOverflow = errors.New("unsigned integer value exceeds maximum int64 value")
 
+	// ErrModuloByZero is returned when attempting to modulo by zero.
+	ErrModuloByZero = errors.New("modulo by zero")
+
 	// ErrBreakOutsideLoop is returned when a break statement is used outside of a loop.
 	ErrBreakOutsideLoop = errors.New("break statement outside of loop")
 
 	// ErrContinueOutsideLoop is returned when a continue statement is used outside of a loop.
 	ErrContinueOutsideLoop = errors.New("continue statement outside of loop")
 
-	// ErrMultipleElseStatements indicates that multiple else statements are found in an if block.
-	ErrMultipleElseStatements = errors.New("multiple 'else' statements found in if block, use 'elif' for additional conditions")
+	// ErrTagAlreadyRegistered is returned when registering a duplicate tag parser.
+	ErrTagAlreadyRegistered = errors.New("tag already registered")
+
+	// ErrMultipleElseStatements indicates that multiple else statements are found in an if block
+	ErrMultipleElseStatements = errors.New("multiple 'else' statements found in if block. Use 'elif' for additional conditions")
 )

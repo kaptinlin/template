@@ -1,2353 +1,1252 @@
 package template
 
 import (
+	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestParseTextNode(t *testing.T) {
-	source := "Hello, world!"
-	parser := NewParser()
-	tpl, err := parser.Parse(source)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
+// =============================================================================
+// Test Group 1: Basic Text Node Parsing
+// =============================================================================
 
-	expected := &Template{
-		Nodes: []*Node{{Type: "text", Text: "Hello, world!"}},
-	}
-
-	if !reflect.DeepEqual(tpl, expected) {
-		t.Errorf("Expected %v, got %v", expected, tpl)
-	}
-}
-
-func TestParseTextNodeWithWhitespace(t *testing.T) {
-	cases := []struct {
+func TestParserTextNode(t *testing.T) {
+	tests := []struct {
 		name     string
-		source   string
-		expected *Template
+		input    string
+		expected []Statement
 	}{
 		{
-			"OnlySpaces",
-			"    ",
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "    "}},
+			name:  "Plain text",
+			input: "Hello, World!",
+			expected: []Statement{
+				&TextNode{Text: "Hello, World!", Line: 1, Col: 1},
 			},
 		},
 		{
-			"OnlyLineBreaks",
-			"\n\n\n",
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "\n\n\n"}},
+			name:  "Multiple lines of text",
+			input: "Line 1\nLine 2\nLine 3",
+			expected: []Statement{
+				&TextNode{Text: "Line 1\nLine 2\nLine 3", Line: 1, Col: 1},
 			},
 		},
 		{
-			"OnlyTabs",
-			"\t\t\t",
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "\t\t\t"}},
+			name:  "Text with special characters",
+			input: "Hello <html> & \"quotes\"",
+			expected: []Statement{
+				&TextNode{Text: "Hello <html> & \"quotes\"", Line: 1, Col: 1},
 			},
 		},
 		{
-			"SpacesAndText",
-			"  Hello, world!  ",
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "  Hello, world!  "}},
-			},
-		},
-		{
-			"Newlines",
-			"\nHello,\nworld!\n",
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "\nHello,\nworld!\n"}},
-			},
-		},
-		{
-			"TabsAndSpaces",
-			"\tHello,  world!\t",
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "\tHello,  world!\t"}},
-			},
+			name:     "Empty template",
+			input:    "",
+			expected: nil, // Parse returns nil for empty input
 		},
 	}
 
-	parser := NewParser()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
 
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, tc.expected, tpl)
-			}
+			assert.Equal(t, tt.expected, nodes)
 		})
 	}
 }
 
-func TestParseTextNodeWithMultipleLinesAndVariations(t *testing.T) {
-	cases := []struct {
+// =============================================================================
+// Test Group 2: Output Node (Variable) Parsing
+// =============================================================================
+
+func TestParserOutputNode(t *testing.T) {
+	tests := []struct {
 		name     string
-		source   string
-		expected *Template
+		input    string
+		expected []Statement
 	}{
 		{
-			"MultipleLinesSimple",
-			`Hello,
-World!
-This is a test.`,
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "Hello,\nWorld!\nThis is a test."}},
-			},
-		},
-		{
-			"MultipleLinesWithEmptyLines",
-			`Hello,
-
-World!
-
-
-This is a test.`,
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "Hello,\n\nWorld!\n\n\nThis is a test."}},
-			},
-		},
-		{
-			"MultipleLinesWithVariable",
-			`User: {{username}}
-Welcome back!`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Text: "{{username}}"},
-					{Type: "text", Text: "\nWelcome back!"},
+			name:  "Simple variable",
+			input: "{{ name }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &VariableNode{Name: "name", Line: 1, Col: 4},
+					Line:       1,
+					Col:        1,
 				},
 			},
 		},
 		{
-			"MultipleLinesWithVariableAndText",
-			`User: {{
-username
-}}
-Welcome back!`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Text: "{{\nusername\n}}"},
-					{Type: "text", Text: "\nWelcome back!"},
+			name:  "Variable with number",
+			input: "{{ 42 }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &LiteralNode{Value: 42.0, Line: 1, Col: 4},
+					Line:       1,
+					Col:        1,
 				},
 			},
 		},
 		{
-			"MultipleLinesWithVariableAndTextAndSpaces",
-			`User: {{
-	username
-	}}
-Welcome back!`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Text: `{{
-	username
-	}}`},
-					{Type: "text", Text: "\nWelcome back!"},
+			name:  "Variable with string",
+			input: `{{ "hello" }}`,
+			expected: []Statement{
+				&OutputNode{
+					Expression: &LiteralNode{Value: "hello", Line: 1, Col: 4},
+					Line:       1,
+					Col:        1,
 				},
 			},
 		},
 		{
-			"MultipleLinesWithVariableAndTextAndTabs",
-			"User: {{\t username \n}}\nWelcome back!",
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Text: "{{\t username \n}}"},
-					{Type: "text", Text: "\nWelcome back!"},
+			name:  "Variable with boolean",
+			input: "{{ true }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &LiteralNode{Value: true, Line: 1, Col: 4},
+					Line:       1,
+					Col:        1,
 				},
 			},
 		},
 		{
-			"MultipleLinesWithVariableAndFilters",
-			`User: {{username|lower}}
-Welcome back!`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Filters: []Filter{{Name: "lower"}}, Text: "{{username|lower}}"},
-					{Type: "text", Text: "\nWelcome back!"},
-				},
-			},
-		},
-		{
-			"MultipleLinesWithVariableAndFiltersAndText",
-			`User: {{username|lower}}
-Welcome back, {{username}}!`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Filters: []Filter{{Name: "lower"}}, Text: "{{username|lower}}"},
-					{Type: "text", Text: "\nWelcome back, "},
-					{Type: "variable", Variable: "username", Text: "{{username}}"},
-					{Type: "text", Text: "!"},
-				},
-			},
-		},
-		{
-			"MultipleLinesWithVariableAndFiltersAndTextAndSpaces",
-			`User: {{ username | lower }}
-Welcome back, {{ username }}!`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Filters: []Filter{{Name: "lower"}}, Text: "{{ username | lower }}"},
-					{Type: "text", Text: "\nWelcome back, "},
-					{Type: "variable", Variable: "username", Text: "{{ username }}"},
-					{Type: "text", Text: "!"},
-				},
-			},
-		},
-		{
-			"MultipleLinesWithVariableAndFiltersAndArgs",
-			`User: {{username|replace:"Mr.","Mrs."}}
-Welcome back!`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "username", Filters: []Filter{{Name: "replace", Args: []FilterArg{StringArg{val: "Mr."}, StringArg{val: "Mrs."}}}}, Text: `{{username|replace:"Mr.","Mrs."}}`},
-					{Type: "text", Text: "\nWelcome back!"},
-				},
-			},
-		},
-		{
-			"MixedSpacesAndTabs",
-			"\tHello,\n  World!  \n\tThis is a test.",
-			&Template{
-				Nodes: []*Node{{Type: "text", Text: "\tHello,\n  World!  \n\tThis is a test."}},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseVariableNode(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-	}{
-		{"NoSpaces", "{{username}}"},
-		{"SpacesBeforeVariable", "{{  username}}"},
-		{"SpacesAfterVariable", "{{username  }}"},
-		{"SpacesBeforeAndAfterVariable", "{{  username  }}"},
-		{"LineBreakBeforeVariable", "{{\nusername}}"},
-		{"LineBreakAfterVariable", "{{username\n}}"},
-		{"LineBreakBeforeAndAfterVariable", "{{\nusername\n}}"},
-		{"LineBreaksAndSpacesBeforeVariable", "{{  \nusername}}"},
-		{"LineBreaksAndSpacesAfterVariable", "{{username\n  }}"},
-		{"LineBreaksAndSpacesBeforeAndAfterVariable", "{{  \nusername\n  }}"},
-		{"TabsBeforeVariable", "{{\tusername}}"},
-		{"TabsAfterVariable", "{{username\t}}"},
-		{"TabsBeforeAndAfterVariable", "{{\tusername\t}}"},
-		{"TabsAndSpacesBeforeVariable", "{{\t  username}}"},
-		{"TabsAndSpacesAfterVariable", "{{username  \t}}"},
-		{"TabsAndSpacesBeforeAndAfterVariable", "{{\t  username  \t}}"},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-			expected := &Template{
-				Nodes: []*Node{{
-					Type:     "variable",
-					Variable: "username",
-					Text:     tc.source,
-				}},
-			}
-
-			if !reflect.DeepEqual(tpl, expected) {
-				t.Errorf("Expected %v, got %v", expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseNestedContextVariable(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-	}{
-		{"DirectNestedVariable", "{{user.details.name}}"},
-		{"SpacesInsideBraces", "{{ user.details.name }}"},
-		{"SpacesBeforeVariable", "{{  user.details.name}}"},
-		{"SpacesAfterVariable", "{{user.details.name  }}"},
-		{"SpacesBeforeAndAfterVariable", "{{  user.details.name  }}"},
-		{"TabsBeforeNestedVariable", "{{\tuser.details.name}}"},
-		{"TabsAfterNestedVariable", "{{user.details.name\t}}"},
-		{"TabsAroundNestedVariable", "{{\tuser.details.name\t}}"},
-		{"LineBreakBeforeNestedVariable", "{{\nuser.details.name}}"},
-		{"LineBreakAfterNestedVariable", "{{user.details.name\n}}"},
-		{"LineBreaksAroundNestedVariable", "{{\nuser.details.name\n}}"},
-		{"MixedWhitespaceAroundNestedVariable", "{{ \t\nuser.details.name\t\n }}"},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			expected := &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "user.details.name",
-						Text:     tc.source,
+			name:  "Variable with property access",
+			input: "{{ user.name }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &PropertyAccessNode{
+						Object:   &VariableNode{Name: "user", Line: 1, Col: 4},
+						Property: "name",
+						Line:     1,
+						Col:      8,
 					},
+					Line: 1,
+					Col:  1,
 				},
-			}
+			},
+		},
+		{
+			name:  "Variable with subscript",
+			input: "{{ items[0] }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &SubscriptNode{
+						Object: &VariableNode{Name: "items", Line: 1, Col: 4},
+						Index:  &LiteralNode{Value: 0.0, Line: 1, Col: 10},
+						Line:   1,
+						Col:    9,
+					},
+					Line: 1,
+					Col:  1,
+				},
+			},
+		},
+		{
+			name:  "Variable with filter",
+			input: "{{ name|upper }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &FilterNode{
+						Expression: &VariableNode{Name: "name", Line: 1, Col: 4},
+						FilterName: "upper",
+						Args:       nil, // Args is nil, not empty slice
+						Line:       1,
+						Col:        8,
+					},
+					Line: 1,
+					Col:  1,
+				},
+			},
+		},
+		{
+			name:  "Variable with filter and argument",
+			input: "{{ price|add:10 }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &FilterNode{
+						Expression: &VariableNode{Name: "price", Line: 1, Col: 4},
+						FilterName: "add",
+						Args: []Expression{
+							&LiteralNode{Value: 10.0, Line: 1, Col: 14},
+						},
+						Line: 1,
+						Col:  9, // Col of "|" is 9, not 10
+					},
+					Line: 1,
+					Col:  1,
+				},
+			},
+		},
+		{
+			name:  "Variable with binary operation",
+			input: "{{ a + b }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &BinaryOpNode{
+						Operator: "+",
+						Left:     &VariableNode{Name: "a", Line: 1, Col: 4},
+						Right:    &VariableNode{Name: "b", Line: 1, Col: 8},
+						Line:     1,
+						Col:      6,
+					},
+					Line: 1,
+					Col:  1,
+				},
+			},
+		},
+		{
+			name:  "Variable with comparison",
+			input: "{{ x > 10 }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &BinaryOpNode{
+						Operator: ">",
+						Left:     &VariableNode{Name: "x", Line: 1, Col: 4},
+						Right:    &LiteralNode{Value: 10.0, Line: 1, Col: 8},
+						Line:     1,
+						Col:      6,
+					},
+					Line: 1,
+					Col:  1,
+				},
+			},
+		},
+	}
 
-			if !reflect.DeepEqual(tpl, expected) {
-				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, expected, tpl)
-			}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, nodes)
 		})
 	}
 }
 
-func TestParseMixedTextAndVariableNodes(t *testing.T) {
-	cases := []struct {
+// =============================================================================
+// Test Group 3: If Tag Parsing
+// =============================================================================
+
+func TestParserIfTag(t *testing.T) {
+	tests := []struct {
 		name     string
-		source   string
-		expected *Template
+		input    string
+		expected []Statement
 	}{
 		{
-			"BasicMixedContent",
-			"Hello, {{username}}! Welcome to the site.",
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Hello, "},
-					{Type: "variable", Variable: "username", Text: "{{username}}"},
-					{Type: "text", Text: "! Welcome to the site."},
-				},
-			},
-		},
-		{
-			"SpacesInsideVariableBraces",
-			"Hello, {{ username }}! Welcome to our world.",
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Hello, "},
-					{Type: "variable", Variable: "username", Text: "{{ username }}"},
-					{Type: "text", Text: "! Welcome to our world."},
-				},
-			},
-		},
-		{
-			"MultipleVariables",
-			"User: {{ firstName }} {{ lastName }} - Welcome back!",
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "User: "},
-					{Type: "variable", Variable: "firstName", Text: "{{ firstName }}"},
-					{Type: "text", Text: " "},
-					{Type: "variable", Variable: "lastName", Text: "{{ lastName }}"},
-					{Type: "text", Text: " - Welcome back!"},
-				},
-			},
-		},
-		{
-			"VariableStartOfLine",
-			"{{ greeting }} John, have a great day!",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "greeting", Text: "{{ greeting }}"},
-					{Type: "text", Text: " John, have a great day!"},
-				},
-			},
-		},
-		{
-			"VariableEndOfLine",
-			"Goodbye, {{ username }}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Goodbye, "},
-					{Type: "variable", Variable: "username", Text: "{{ username }}"},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseVariableNodeWithFilterNoParams(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			name:   "SingleFilterNoSpace",
-			source: "{{username|upper}}",
-			expected: &Template{
-				Nodes: []*Node{{Type: "variable", Variable: "username", Filters: []Filter{{Name: "upper"}}, Text: "{{username|upper}}"}},
-			},
-		},
-		{
-			name:   "SpaceBeforePipe",
-			source: "{{username |upper}}",
-			expected: &Template{
-				Nodes: []*Node{{Type: "variable", Variable: "username", Filters: []Filter{{Name: "upper"}}, Text: "{{username |upper}}"}},
-			},
-		},
-		{
-			name:   "SpaceAfterPipe",
-			source: "{{username| upper}}",
-			expected: &Template{
-				Nodes: []*Node{{Type: "variable", Variable: "username", Filters: []Filter{{Name: "upper"}}, Text: "{{username| upper}}"}},
-			},
-		},
-		{
-			name:   "SpacesAroundPipe",
-			source: "{{username | upper}}",
-			expected: &Template{
-				Nodes: []*Node{{Type: "variable", Variable: "username", Filters: []Filter{{Name: "upper"}}, Text: "{{username | upper}}"}},
-			},
-		},
-		{
-			name:   "MultipleFiltersNoSpaces",
-			source: "{{username|lower|capitalize}}",
-			expected: &Template{
-				Nodes: []*Node{{Type: "variable", Variable: "username", Filters: []Filter{{Name: "lower"}, {Name: "capitalize"}}, Text: "{{username|lower|capitalize}}"}},
-			},
-		},
-		{
-			name:   "SpacesAroundMultipleFilters",
-			source: "{{username | lower | capitalize}}",
-			expected: &Template{
-				Nodes: []*Node{{Type: "variable", Variable: "username", Filters: []Filter{{Name: "lower"}, {Name: "capitalize"}}, Text: "{{username | lower | capitalize}}"}},
-			},
-		},
-		{
-			name:   "TextNodesAroundVariableWithFilter",
-			source: "Hello {{name|capitalize}}, welcome!",
-			expected: &Template{
-				Nodes: []*Node{{Type: "text", Text: "Hello "}, {Type: "variable", Variable: "name", Filters: []Filter{{Name: "capitalize"}}, Text: "{{name|capitalize}}"}, {Type: "text", Text: ", welcome!"}},
-			},
-		},
-		{
-			name:   "TextNodeBeforeVariableMultipleFilters",
-			source: "User: {{username|trim|lower}}",
-			expected: &Template{
-				Nodes: []*Node{{Type: "text", Text: "User: "}, {Type: "variable", Variable: "username", Filters: []Filter{{Name: "trim"}, {Name: "lower"}}, Text: "{{username|trim|lower}}"}},
-			},
-		},
-		{
-			name:   "TextNodeAfterVariableMultipleFilters",
-			source: "{{username|trim|capitalize}} logged in",
-			expected: &Template{
-				Nodes: []*Node{{Type: "variable", Variable: "username", Filters: []Filter{{Name: "trim"}, {Name: "capitalize"}}, Text: "{{username|trim|capitalize}}"}, {Type: "text", Text: " logged in"}},
-			},
-		},
-		{
-			name:   "ComplexMixedTextAndVariables",
-			source: "Dear {{name|capitalize}}, your score is {{score|round}}.",
-			expected: &Template{
-				Nodes: []*Node{{Type: "text", Text: "Dear "}, {Type: "variable", Variable: "name", Filters: []Filter{{Name: "capitalize"}}, Text: "{{name|capitalize}}"}, {Type: "text", Text: ", your score is "}, {Type: "variable", Variable: "score", Filters: []Filter{{Name: "round"}}, Text: "{{score|round}}"}, {Type: "text", Text: "."}},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-// TestFilterWithDoubleQuotesStringLiteralArguments covers various scenarios for filters with string literal arguments.
-func TestFilterWithDoubleQuotesStringLiteralArguments(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			name:   "SingleFilterSingleStringArgument",
-			source: `{{ name|append:"!" }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters: []Filter{
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
-						},
-						Text: `{{ name|append:"!" }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "SingleFilterMultipleStringArguments",
-			source: `{{ greeting|replace:"Hello","Hi" }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "greeting",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
-						},
-						Text: `{{ greeting|replace:"Hello","Hi" }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleFiltersSingleStringArgument",
-			source: `{{ name|append:"!"|uppercase }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters: []Filter{
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
-							{Name: "uppercase"},
-						},
-						Text: `{{ name|append:"!"|uppercase }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleFiltersMultipleStringArguments",
-			source: `{{ greeting|replace:"Hello","Hi"|append:" everyone" }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "greeting",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
-							{Name: "append", Args: []FilterArg{StringArg{val: " everyone"}}},
-						},
-						Text: `{{ greeting|replace:"Hello","Hi"|append:" everyone" }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleVariablesWithFilters",
-			source: `Hello {{name|capitalize|append:""}}, you have {{count|pluralize:"item","items"}}.`,
-			expected: &Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Hello "},
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []FilterArg{StringArg{val: ""}}}},
-						Text:     `{{name|capitalize|append:""}}`,
-					},
-					{Type: "text", Text: ", you have "},
-					{
-						Type:     "variable",
-						Variable: "count",
-						Filters:  []Filter{{Name: "pluralize", Args: []FilterArg{StringArg{val: "item"}, StringArg{val: "items"}}}},
-						Text:     `{{count|pluralize:"item","items"}}`,
-					},
-					{Type: "text", Text: "."},
-				},
-			},
-		},
-		{
-			name:   "MultipleVariablesNoDelimiter",
-			source: `{{firstName}}{{lastName}}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "firstName",
-						Text:     "{{firstName}}",
-					},
-					{
-						Type:     "variable",
-						Variable: "lastName",
-						Text:     "{{lastName}}",
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleVariablesSpaceDelimiter",
-			source: `{{ firstName }} {{ lastName }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "firstName",
-						Text:     "{{ firstName }}",
-					},
-					{
-						Type: "text",
-						Text: " ",
-					},
-					{
-						Type:     "variable",
-						Variable: "lastName",
-						Text:     "{{ lastName }}",
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleVariablesOtherDelimiters",
-			source: `{{firstName}},{{lastName}}!`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "firstName",
-						Text:     "{{firstName}}",
-					},
-					{
-						Type: "text",
-						Text: ",",
-					},
-					{
-						Type:     "variable",
-						Variable: "lastName",
-						Text:     "{{lastName}}",
-					},
-					{
-						Type: "text",
-						Text: "!",
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleVariablesWithFiltersAndDelimiters",
-			source: `{{firstName|replace:"Mr.",""|replace:"Mrs.",""}}, {{lastName|lower}}!`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "firstName",
-						Filters:  []Filter{{Name: "replace", Args: []FilterArg{StringArg{val: "Mr."}, StringArg{val: ""}}}, {Name: "replace", Args: []FilterArg{StringArg{val: "Mrs."}, StringArg{val: ""}}}},
-						Text:     `{{firstName|replace:"Mr.",""|replace:"Mrs.",""}}`,
-					},
-					{
-						Type: "text",
-						Text: ", ",
-					},
-					{
-						Type:     "variable",
-						Variable: "lastName",
-						Filters:  []Filter{{Name: "lower"}},
-						Text:     `{{lastName|lower}}`,
-					},
-					{
-						Type: "text",
-						Text: "!",
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error for case '%s': %v", tc.name, err)
-			}
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("For case '%s', expected %+v, got %+v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-// TestFilterWithSingleQuotesStringLiteralArguments covers various scenarios for filters with string literal arguments.
-func TestFilterWithSingleQuotesStringLiteralArguments(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			name:   "SingleFilterSingleStringArgument",
-			source: `{{ name|append:'!' }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters: []Filter{
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
-						},
-						Text: `{{ name|append:'!' }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "SingleFilterMultipleStringArguments",
-			source: `{{ greeting|replace:'Hello','Hi' }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "greeting",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
-						},
-						Text: `{{ greeting|replace:'Hello','Hi' }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleFiltersSingleStringArgument",
-			source: `{{ name|append:'!'|uppercase }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters: []Filter{
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
-							{Name: "uppercase"},
-						},
-						Text: `{{ name|append:'!'|uppercase }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleFiltersMultipleStringArguments",
-			source: `{{ greeting|replace:'Hello','Hi'|append:' everyone' }}`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "greeting",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
-							{Name: "append", Args: []FilterArg{StringArg{val: " everyone"}}},
-						},
-						Text: `{{ greeting|replace:'Hello','Hi'|append:' everyone' }}`,
-					},
-				},
-			},
-		},
-		{
-			name:   "MultipleVariablesWithFilters",
-			source: `Hello {{name|capitalize|append:''}}, you have {{count|pluralize:'item','items'}}.`,
-			expected: &Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Hello "},
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters:  []Filter{{Name: "capitalize"}, {Name: "append", Args: []FilterArg{StringArg{val: ""}}}},
-						Text:     `{{name|capitalize|append:''}}`,
-					},
-					{Type: "text", Text: ", you have "},
-					{
-						Type:     "variable",
-						Variable: "count",
-						Filters:  []Filter{{Name: "pluralize", Args: []FilterArg{StringArg{val: "item"}, StringArg{val: "items"}}}},
-						Text:     `{{count|pluralize:'item','items'}}`,
-					},
-					{Type: "text", Text: "."},
-				},
-			},
-		},
-		{
-			name:   "MultipleVariablesWithFiltersAndDelimiters",
-			source: `{{firstName|replace:'Mr.',''|replace:'Mrs.',''}}, {{lastName|lower}}!`,
-			expected: &Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "firstName",
-						Filters:  []Filter{{Name: "replace", Args: []FilterArg{StringArg{val: "Mr."}, StringArg{val: ""}}}, {Name: "replace", Args: []FilterArg{StringArg{val: "Mrs."}, StringArg{val: ""}}}},
-						Text:     `{{firstName|replace:'Mr.',''|replace:'Mrs.',''}}`,
-					},
-					{
-						Type: "text",
-						Text: ", ",
-					},
-					{
-						Type:     "variable",
-						Variable: "lastName",
-						Filters:  []Filter{{Name: "lower"}},
-						Text:     `{{lastName|lower}}`,
-					},
-					{
-						Type: "text",
-						Text: "!",
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error for case '%s': %v", tc.name, err)
-			}
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("For case '%s', expected %+v, got %+v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseFilterWithMultipleParameters(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		// Basic case with a single filter and multiple string literal arguments
-		{
-			"SingleFilterWithMultipleArgs",
-			"{{ value|replace:'hello','world' }}",
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "value",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
-						},
-						Text: `{{ value|replace:'hello','world' }}`,
-					},
-				},
-			},
-		},
-		// Spaces around arguments
-		{
-			"SpacesAroundArguments",
-			"{{ value|replace: 'hello', 'world' }}",
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "value",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
-						},
-						Text: `{{ value|replace: 'hello', 'world' }}`,
-					},
-				},
-			},
-		},
-		// Multiple filters with multiple arguments
-		{
-			"MultipleFiltersWithMultipleArgs",
-			"{{ greeting|replace:'Hello','Hi'|append: '!', ' Have a great day' }}",
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "greeting",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "Hello"}, StringArg{val: "Hi"}}},
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}, StringArg{val: " Have a great day"}}},
-						},
-						Text: `{{ greeting|replace:'Hello','Hi'|append: '!', ' Have a great day' }}`,
-					},
-				},
-			},
-		},
-		// Complex scenario with mixed text and multiple variables with filters and multiple arguments
-		{
-			"ComplexMixedTextAndVariables",
-			`Hello {{ name|capitalize }}, you have {{ unread|pluralize:"message","messages" }}.`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Hello "},
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters:  []Filter{{Name: "capitalize"}},
-						Text:     "{{ name|capitalize }}",
-					},
-					{Type: "text", Text: ", you have "},
-					{
-						Type:     "variable",
-						Variable: "unread",
-						Filters:  []Filter{{Name: "pluralize", Args: []FilterArg{StringArg{val: "message"}, StringArg{val: "messages"}}}},
-						Text:     `{{ unread|pluralize:"message","messages" }}`,
-					},
-					{Type: "text", Text: "."},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseVariableWithMultiplePipelineFiltersWithMultipleParameters(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		// Original case
-		{
-			"ReplaceAndAppend",
-			`{{ username|replace:"hello","world"|append:"!" }}`,
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "username",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
-						},
-						Text: `{{ username|replace:"hello","world"|append:"!" }}`,
-					},
-				},
-			},
-		},
-		// Additional case with space around pipe symbols
-		{
-			"SpacesAroundPipes",
-			`{{ username | replace:"hello","world" | append:"!" }}`,
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "username",
-						Filters: []Filter{
-							{Name: "replace", Args: []FilterArg{StringArg{val: "hello"}, StringArg{val: "world"}}},
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
-						},
-						Text: `{{ username | replace:"hello","world" | append:"!" }}`,
-					},
-				},
-			},
-		},
-		// Multiple filters with varied arguments
-		{
-			"MultipleFiltersVariedArgs",
-			`{{ date|date:"YYYY-MM-DD"|prepend:"Date: " }}`,
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "date",
-						Filters: []Filter{
-							{Name: "date", Args: []FilterArg{StringArg{val: "YYYY-MM-DD"}}},
-							{Name: "prepend", Args: []FilterArg{StringArg{val: "Date: "}}},
-						},
-						Text: `{{ date|date:"YYYY-MM-DD"|prepend:"Date: " }}`,
-					},
-				},
-			},
-		},
-		// Complex scenario mixing text and multiple variables with multiple filters
-		{
-			"MixedTextMultipleVarsFilters",
-			`Hello {{ name|capitalize|append:"!" }}, you have {{ unread|pluralize:"1 message","%d messages"|replace:"%d","many" }}.`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Hello "},
-					{
-						Type:     "variable",
-						Variable: "name",
-						Filters: []Filter{
-							{Name: "capitalize"},
-							{Name: "append", Args: []FilterArg{StringArg{val: "!"}}},
-						},
-						Text: `{{ name|capitalize|append:"!" }}`,
-					},
-					{Type: "text", Text: ", you have "},
-					{
-						Type:     "variable",
-						Variable: "unread",
-						Filters: []Filter{
-							{Name: "pluralize", Args: []FilterArg{StringArg{val: "1 message"}, StringArg{val: "%d messages"}}},
-							{Name: "replace", Args: []FilterArg{StringArg{val: "%d"}, StringArg{val: "many"}}},
-						},
-						Text: `{{ unread|pluralize:"1 message","%d messages"|replace:"%d","many" }}`,
-					},
-					{Type: "text", Text: "."},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseMultipleAdjacentVariables(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			"TwoVariablesNoSpace",
-			"{{firstName}}{{lastName}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Text: "{{firstName}}"},
-					{Type: "variable", Variable: "lastName", Text: "{{lastName}}"},
-				},
-			},
-		},
-		{
-			"TwoVariablesSpaceBetween",
-			"{{firstName}} {{lastName}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Text: "{{firstName}}"},
-					{Type: "text", Text: " "},
-					{Type: "variable", Variable: "lastName", Text: "{{lastName}}"},
-				},
-			},
-		},
-		{
-			"ThreeVariablesMixedWhitespace",
-			"{{firstName}}\t{{lastName}}\n{{email}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Text: "{{firstName}}"},
-					{Type: "text", Text: "\t"},
-					{Type: "variable", Variable: "lastName", Text: "{{lastName}}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "email", Text: "{{email}}"},
-				},
-			},
-		},
-		{
-			"FourVariablesLineBreaks",
-			"{{firstName}}\n{{lastName}}\n{{email}}\n{{username}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Text: "{{firstName}}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "lastName", Text: "{{lastName}}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "email", Text: "{{email}}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "username", Text: "{{username}}"},
-				},
-			},
-		},
-		{
-			"TwoVariablesOneFilter",
-			"{{firstName|upper}}{{lastName}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "upper"}}, Text: "{{firstName|upper}}"},
-					{Type: "variable", Variable: "lastName", Text: "{{lastName}}"},
-				},
-			},
-		},
-		{
-			"VariablesWithFilterAndArgument",
-			"{{user|default:'Anonymous'}}{{age|default:18}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "user", Filters: []Filter{{Name: "default", Args: []FilterArg{StringArg{val: "Anonymous"}}}}, Text: "{{user|default:'Anonymous'}}"},
-					{Type: "variable", Variable: "age", Filters: []Filter{{Name: "default", Args: []FilterArg{NumberArg{val: 18}}}}, Text: "{{age|default:18}}"},
-				},
-			},
-		},
-		{
-			"VariablesFilterPipeline",
-			"{{firstName|trim|capitalize}}{{lastName|lower}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "trim"}, {Name: "capitalize"}}, Text: "{{firstName|trim|capitalize}}"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "lower"}}, Text: "{{lastName|lower}}"},
-				},
-			},
-		},
-		{
-			"ThreeVariablesWithMultipleFilters",
-			"{{firstName|trim}}{{lastName|lower|capitalize}}{{age|default:30}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "trim"}}, Text: "{{firstName|trim}}"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "lower"}, {Name: "capitalize"}}, Text: "{{lastName|lower|capitalize}}"},
-					{Type: "variable", Variable: "age", Filters: []Filter{{Name: "default", Args: []FilterArg{NumberArg{val: 30}}}}, Text: "{{age|default:30}}"},
-				},
-			},
-		},
-		{
-			"TwoVariablesTabBetweenWithFilter",
-			"{{firstName|capitalize}}\t{{lastName|upper}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "capitalize"}}, Text: "{{firstName|capitalize}}"},
-					{Type: "text", Text: "\t"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "upper"}}, Text: "{{lastName|upper}}"},
-				},
-			},
-		},
-		{
-			"VariablesWithLineBreakAndFilter",
-			"{{firstName|lower}}\n{{lastName|upper}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "lower"}}, Text: "{{firstName|lower}}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "upper"}}, Text: "{{lastName|upper}}"},
-				},
-			},
-		},
-		{
-			"ThreeVariablesSpaceAndFilter",
-			"{{firstName|upper}} {{lastName|upper}} {{email|upper}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "upper"}}, Text: "{{firstName|upper}}"},
-					{Type: "text", Text: " "},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "upper"}}, Text: "{{lastName|upper}}"},
-					{Type: "text", Text: " "},
-					{Type: "variable", Variable: "email", Filters: []Filter{{Name: "upper"}}, Text: "{{email|upper}}"},
-				},
-			},
-		},
-		{
-			"NestedVariablesWithFilters",
-			"{{user.firstName|capitalize}}{{user.lastName|upper}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "user.firstName", Filters: []Filter{{Name: "capitalize"}}, Text: "{{user.firstName|capitalize}}"},
-					{Type: "variable", Variable: "user.lastName", Filters: []Filter{{Name: "upper"}}, Text: "{{user.lastName|upper}}"},
-				},
-			},
-		},
-		{
-			"VariablesWithMultipleFiltersAndWhitespace",
-			"{{ firstName | trim | capitalize }}\n{{ lastName | lower | trim }}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "trim"}, {Name: "capitalize"}}, Text: "{{ firstName | trim | capitalize }}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "lower"}, {Name: "trim"}}, Text: "{{ lastName | lower | trim }}"},
-				},
-			},
-		},
-		{
-			"FourVariablesWithMixedFiltersAndWhitespace",
-			"{{firstName|capitalize}} {{lastName|lower}}\t{{email|upper}}\n{{username|reverse}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "capitalize"}}, Text: "{{firstName|capitalize}}"},
-					{Type: "text", Text: " "},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "lower"}}, Text: "{{lastName|lower}}"},
-					{Type: "text", Text: "\t"},
-					{Type: "variable", Variable: "email", Filters: []Filter{{Name: "upper"}}, Text: "{{email|upper}}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "username", Filters: []Filter{{Name: "reverse"}}, Text: "{{username|reverse}}"},
-				},
-			},
-		},
-		{
-			"VariablesWithSpecialCharactersAndFilters",
-			"{{firstName|capitalize|replace:'John','Jonathan'}}{{lastName|append:' Smith'}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "capitalize"}, {Name: "replace", Args: []FilterArg{StringArg{val: "John"}, StringArg{val: "Jonathan"}}}}, Text: "{{firstName|capitalize|replace:'John','Jonathan'}}"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "append", Args: []FilterArg{StringArg{val: " Smith"}}}}, Text: "{{lastName|append:' Smith'}}"},
-				},
-			},
-		},
-		{
-			"NestedAndComplexFilters",
-			"{{user.details.address.city|capitalize}}\n{{user.details.phoneNumber|default:'N/A'}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "user.details.address.city", Filters: []Filter{{Name: "capitalize"}}, Text: "{{user.details.address.city|capitalize}}"},
-					{Type: "text", Text: "\n"},
-					{Type: "variable", Variable: "user.details.phoneNumber", Filters: []Filter{{Name: "default", Args: []FilterArg{StringArg{val: "N/A"}}}}, Text: "{{user.details.phoneNumber|default:'N/A'}}"},
-				},
-			},
-		},
-		{
-			"ComplexNestedVariablesWithMultipleFilters",
-			"{{user.address|trim}} {{user.phone|default:'Unknown'|upper}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "user.address", Filters: []Filter{{Name: "trim"}}, Text: "{{user.address|trim}}"},
-					{Type: "text", Text: " "},
-					{Type: "variable", Variable: "user.phone", Filters: []Filter{{Name: "default", Args: []FilterArg{StringArg{val: "Unknown"}}}, {Name: "upper"}}, Text: "{{user.phone|default:'Unknown'|upper}}"},
-				},
-			},
-		},
-		{
-			"MultipleAdjacentVariablesWithMixedFilters",
-			"{{firstName|lower}}{{middleName|capitalize}}{{lastName|upper}}",
-			&Template{
-				Nodes: []*Node{
-					{Type: "variable", Variable: "firstName", Filters: []Filter{{Name: "lower"}}, Text: "{{firstName|lower}}"},
-					{Type: "variable", Variable: "middleName", Filters: []Filter{{Name: "capitalize"}}, Text: "{{middleName|capitalize}}"},
-					{Type: "variable", Variable: "lastName", Filters: []Filter{{Name: "upper"}}, Text: "{{lastName|upper}}"},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseVariableWithFilterHavingCommaInArguments(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			"DateFilterWithComma",
-			`{{ current | date:"F j, Y" }}`,
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "current",
-						Filters: []Filter{
-							{Name: "date", Args: []FilterArg{StringArg{val: "F j, Y"}}},
-						},
-						Text: `{{ current | date:"F j, Y" }}`,
-					},
-				},
-			},
-		},
-		{
-			"DateFilterWithQuotedComma",
-			`{{ current | date:'F j, Y' }}`,
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "current",
-						Filters: []Filter{
-							{Name: "date", Args: []FilterArg{StringArg{val: "F j, Y"}}},
-						},
-						Text: `{{ current | date:'F j, Y' }}`,
-					},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseMalformedVariableNodeAsText(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-	}{
-		{
-			"MissingClosingBracket",
-			"Welcome back, {{username",
-		},
-		{
-			"MissingOpeningBracket",
-			"Hello, username}}!",
-		},
-		{
-			"UnfinishedFilter",
-			"Your account balance is {{balance|}} today.",
-		},
-		{
-			"PipeWithoutFilterName",
-			"Good morning, {{name| . Have a nice day!",
-		},
-		{
-			"MissingFilterNameWithArguments",
-			"Record: {{record||upper}}",
-		},
-		{
-			"NestedBracesMalformed",
-			"Error: {{user.details.{name}}",
-		},
-		{
-			"MissingVariableName",
-			"New message: {{|capitalize}}",
-		},
-		{
-			"MalformedWithTextAround",
-			"Hello, {{user|trim} in the system.",
-		},
-		{
-			"MultipleMalformedInText",
-			"Start {{of something |middle|end}} incomplete.",
-		},
-		{
-			"SpaceBeforeClosingBracket",
-			"Attempt: {{attempt | }}",
-		},
-		{
-			"RandomCharactersInBraces",
-			"Code: {{1234abcd!@#$}}",
-		},
-		{
-			"MalformedFilterSyntax",
-			"Discount: {{price|*0.85}}",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			parser := NewParser()
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			// Expecting the problematic part, or in some cases the entire input, to be treated as a text node
-			expected := &Template{
-				Nodes: []*Node{
-					{Type: "text", Text: tc.source},
-				},
-			}
-
-			if !reflect.DeepEqual(tpl, expected) {
-				t.Errorf("Case %s: Expected %v, got %v", tc.name, expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParserWithMultipleFiltersAndNumericArguments(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			"MultipleFiltersOnSingleVariable",
-			`{{ price|plus:10|minus:5|times:2|divide:3|round }}`,
-			&Template{
-				Nodes: []*Node{
-					{
-						Type:     "variable",
-						Variable: "price",
-						Filters: []Filter{
-							{Name: "plus", Args: []FilterArg{NumberArg{val: 10}}},
-							{Name: "minus", Args: []FilterArg{NumberArg{val: 5}}},
-							{Name: "times", Args: []FilterArg{NumberArg{val: 2}}},
-							{Name: "divide", Args: []FilterArg{NumberArg{val: 3}}},
-							{Name: "round"},
-						},
-						Text: `{{ price|plus:10|minus:5|times:2|divide:3|round }}`,
-					},
-				},
-			},
-		},
-		{
-			"MultipleVariablesAndFilters",
-			`Total: {{ price|plus:taxes|minus:discount }} and {{ shipping|plus:5 }}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "text", Text: "Total: "},
-					{
-						Type:     "variable",
-						Variable: "price",
-						Filters: []Filter{
-							{Name: "plus", Args: []FilterArg{VariableArg{name: "taxes"}}},
-							{Name: "minus", Args: []FilterArg{VariableArg{name: "discount"}}},
-						},
-						Text: `{{ price|plus:taxes|minus:discount }}`,
-					},
-					{Type: "text", Text: " and "},
-					{
-						Type:     "variable",
-						Variable: "shipping",
-						Filters: []Filter{
-							{Name: "plus", Args: []FilterArg{NumberArg{val: 5}}},
-						},
-						Text: `{{ shipping|plus:5 }}`,
-					},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseComplexLoopsAndSorting(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			"BasicLoop",
-			`{% for item in simple.multiple_item_list %}{{ item }} {% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for item in simple.multiple_item_list %}",
-						Variable:   "item",
-						Collection: "simple.multiple_item_list",
-						Children: []*Node{
-							{Type: "variable", Variable: "item", Text: "{{ item }}"},
-							{Type: "text", Text: " "},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"StringMapIteration",
-			`{% for key in simple.strmap %}{{ key }} {% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for key in simple.strmap %}",
-						Variable:   "key",
-						Collection: "simple.strmap",
-						Children: []*Node{
-							{Type: "variable", Variable: "key", Text: "{{ key }}"},
-							{Type: "text", Text: " "},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"IntMapIteration",
-			`{% for key in simple.intmap %}{{ key }} {% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for key in simple.intmap %}",
-						Variable:   "key",
-						Collection: "simple.intmap",
-						Children: []*Node{
-							{Type: "variable", Variable: "key", Text: "{{ key }}"},
-							{Type: "text", Text: " "},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"IntListIteration",
-			`{% for key in simple.unsorted_int_list %}{{ key }} {% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for key in simple.unsorted_int_list %}",
-						Variable:   "key",
-						Collection: "simple.unsorted_int_list",
-						Children: []*Node{
-							{Type: "variable", Variable: "key", Text: "{{ key }}"},
-							{Type: "text", Text: " "},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"StringIteration",
-			`{% for char in simple.name %}{{ char }}{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for char in simple.name %}",
-						Variable:   "char",
-						Collection: "simple.name",
-						Children: []*Node{
-							{Type: "variable", Variable: "char", Text: "{{ char }}"},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"StringIteration",
-			`{% for char in simple.name %}{{ char }}{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for char in simple.name %}",
-						Variable:   "char",
-						Collection: "simple.name",
-						Children: []*Node{
-							{Type: "variable", Variable: "char", Text: "{{ char }}"},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"StringUnicode",
-			`{% for char in simple.chinese_hello_world %}{{ char }}{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for char in simple.chinese_hello_world %}",
-						Variable:   "char",
-						Collection: "simple.chinese_hello_world",
-						Children: []*Node{
-							{Type: "variable", Variable: "char", Text: "{{ char }}"},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"StringUnicodeIteration",
-			`{% for char in simple.chinese_hello_world %}{{ char }}{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for char in simple.chinese_hello_world %}",
-						Variable:   "char",
-						Collection: "simple.chinese_hello_world",
-						Children: []*Node{
-							{Type: "variable", Variable: "char", Text: "{{ char }}"},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"NestedForLoop",
-			`{% for item in simple.items %}
-				{% for subitem in item.subitems %}
-					{{ subitem.name }}
-				{% endfor %}
-			{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for item in simple.items %}",
-						Variable:   "item",
-						Collection: "simple.items",
-						Children: []*Node{
-							{Type: "text", Text: "\n\t\t\t\t"},
-							{Type: "for",
-								Text:       "{% for subitem in item.subitems %}",
-								Variable:   "subitem",
-								Collection: "item.subitems",
-								Children: []*Node{
-									{Type: "text", Text: "\n\t\t\t\t\t"},
-									{Type: "variable", Variable: "subitem.name", Text: "{{ subitem.name }}"},
-									{Type: "text", Text: "\n\t\t\t\t"},
-								},
-								EndText: "{% endfor %}",
-							},
-							{Type: "text", Text: "\n\t\t\t"},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"NestedForLoopWithMultipleVariables",
-			`{% for category in shop.categories %}
-				Category: {{ category.name }}
-				{% for product in category.products %}
-					- {{ product.name }}: ${{ product.price }}
-				{% endfor %}
-			{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for category in shop.categories %}",
-						Variable:   "category",
-						Collection: "shop.categories",
-						Children: []*Node{
-							{Type: "text", Text: "\n\t\t\t\tCategory: "},
-							{Type: "variable", Variable: "category.name", Text: "{{ category.name }}"},
-							{Type: "text", Text: "\n\t\t\t\t"},
-							{Type: "for",
-								Text:       "{% for product in category.products %}",
-								Variable:   "product",
-								Collection: "category.products",
-								Children: []*Node{
-									{Type: "text", Text: "\n\t\t\t\t\t- "},
-									{Type: "variable", Variable: "product.name", Text: "{{ product.name }}"},
-									{Type: "text", Text: ": $"},
-									{Type: "variable", Variable: "product.price", Text: "{{ product.price }}"},
-									{Type: "text", Text: "\n\t\t\t\t"},
-								},
-								EndText: "{% endfor %}",
-							},
-							{Type: "text", Text: "\n\t\t\t"},
-						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseConditionalStatements(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			"BasicIfElse",
-			`{% if nothing %}false{% else %}true{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if nothing %}",
-						Children: []*Node{
-							{Type: "text", Text: "false"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "true"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"BasicIf",
-			`{% if simple %}simple != nil{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple %}",
-						Children: []*Node{
-							{Type: "text", Text: "simple != nil"},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"BasicIfUint",
-			`{% if simple.uint %}uint != 0{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.uint %}",
-						Children: []*Node{
-							{Type: "text", Text: "uint != 0"},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"BasicIfFloat",
-			`{% if simple.float %}float != 0.0{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.float %}",
-						Children: []*Node{
-							{Type: "text", Text: "float != 0.0"},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"IfWithNegationOperator",
-			`{% if !simple %}false{% else %}!simple{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if !simple %}",
-						Children: []*Node{
-							{Type: "text", Text: "false"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "!simple"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"IfWithNegationUint",
-			`{% if !simple.uint %}false{% else %}!simple.uint{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if !simple.uint %}",
-						Children: []*Node{
-							{Type: "text", Text: "false"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "!simple.uint"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"IfWithNegationFloat",
-			`{% if !simple.float %}false{% else %}!simple.float{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if !simple.float %}",
-						Children: []*Node{
-							{Type: "text", Text: "false"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "!simple.float"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"NegationZero",
-			`{% if !0.0 %}!0.0{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if !0.0 %}",
-						Children: []*Node{
-							{Type: "text", Text: "!0.0"},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"NegationZeroInt",
-			`{% if !0 %}!0{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if !0 %}",
-						Children: []*Node{
-							{Type: "text", Text: "!0"},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"NotCondition",
-			`{% if not complex.post %}true{% else %}false{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if not complex.post %}",
-						Children: []*Node{
-							{Type: "text", Text: "true"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "false"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"IfWithEqualityOperator",
-			`{% if simple.number == 43 %}no{% else %}42{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.number == 43 %}",
-						Children: []*Node{
-							{Type: "text", Text: "no"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "42"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"IfWithLessThanOperator",
-			`{% if simple.number < 42 %}false{% else %}no{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.number < 42 %}",
-						Children: []*Node{
-							{Type: "text", Text: "false"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "no"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"LessThanComparison",
-			`{% if simple.number < 42 %}false{% else %}yes{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.number < 42 %}",
-						Children: []*Node{
-							{Type: "text", Text: "false"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "yes"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"IfWithZeroValue",
-			`{% if 0 %}!0{% else %}true{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if 0 %}",
-						Children: []*Node{
-							{Type: "text", Text: "!0"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "true"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"SimpleIfWithZero",
-			`{% if 0 %}!0{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if 0 %}",
-						Children: []*Node{
-							{Type: "text", Text: "!0"},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"NestedIfConditions",
-			`{% if simple.number > 0 %}
-				{% if simple.name %}
-					Number: {{ simple.number }}
-					Name: {{ simple.name }}
-				{% endif %}
-			{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.number > 0 %}",
-						Children: []*Node{
-							{Type: "text", Text: "\n\t\t\t\t"},
-							{Type: "if",
-								Text: "{% if simple.name %}",
-								Children: []*Node{
-									{Type: "text", Text: "\n\t\t\t\t\tNumber: "},
-									{Type: "variable", Variable: "simple.number", Text: "{{ simple.number }}"},
-									{Type: "text", Text: "\n\t\t\t\t\tName: "},
-									{Type: "variable", Variable: "simple.name", Text: "{{ simple.name }}"},
-									{Type: "text", Text: "\n\t\t\t\t"},
-								},
-								EndText: "{% endif %}",
-							},
-							{Type: "text", Text: "\n\t\t\t"},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-		{
-			"NestedIfElseConditions",
-			`{% if user.isAdmin %}
-				Welcome Admin!
-				{% if user.hasFullAccess %}
-					You have full access.
-				{% else %}
-					You have limited admin access.
-				{% endif %}
-			{% else %}
-				{% if user.isAuthenticated %}
-					Welcome User!
-				{% else %}
-					Please log in.
-				{% endif %}
-			{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if user.isAdmin %}",
-						Children: []*Node{
-							{Type: "text", Text: "\n\t\t\t\tWelcome Admin!\n\t\t\t\t"},
-							{Type: "if",
-								Text: "{% if user.hasFullAccess %}",
-								Children: []*Node{
-									{Type: "text", Text: "\n\t\t\t\t\tYou have full access.\n\t\t\t\t"},
-									{Type: "else", Text: "{% else %}", Children: []*Node{
-										{Type: "text", Text: "\n\t\t\t\t\tYou have limited admin access.\n\t\t\t\t"},
-									}},
-								},
-								EndText: "{% endif %}",
-							},
-							{Type: "text", Text: "\n\t\t\t"},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "\n\t\t\t\t"},
-								{Type: "if",
-									Text: "{% if user.isAuthenticated %}",
-									Children: []*Node{
-										{Type: "text", Text: "\n\t\t\t\t\tWelcome User!\n\t\t\t\t"},
-										{Type: "else", Text: "{% else %}", Children: []*Node{
-											{Type: "text", Text: "\n\t\t\t\t\tPlease log in.\n\t\t\t\t"},
-										}},
-									},
-									EndText: "{% endif %}",
-								},
-								{Type: "text", Text: "\n\t\t\t"},
-							}},
-						},
-						EndText: "{% endif %}",
-					},
-				},
-			},
-		},
-	}
-
-	parser := NewParser()
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
-
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
-			}
-		})
-	}
-}
-
-func TestParseMixedIfAndForStatements(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		expected *Template
-	}{
-		{
-			"IfInsideFor",
-			`{% for item in simple.list %}{% if item %}{{ item }}{% endif %}{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for item in simple.list %}",
-						Variable:   "item",
-						Collection: "simple.list",
-						Children: []*Node{
-							{Type: "if",
-								Text: "{% if item %}",
-								Children: []*Node{
-									{Type: "variable", Variable: "item", Text: "{{ item }}"},
-								},
-								EndText: "{% endif %}",
+			name:  "Simple if",
+			input: "{% if x %}yes{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&TextNode{Text: "yes", Line: 1, Col: 11},
 							},
 						},
-						EndText: "{% endfor %}",
 					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      4, // Col of "if" token, not "{%"
 				},
 			},
 		},
 		{
-			"ForInsideIf",
-			`{% if simple.list %}{% for item in simple.list %}{{ item }}{% endfor %}{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.list %}",
-						Children: []*Node{
-							{Type: "for",
-								Text:       "{% for item in simple.list %}",
-								Variable:   "item",
-								Collection: "simple.list",
-								Children: []*Node{
-									{Type: "variable", Variable: "item", Text: "{{ item }}"},
-								},
-								EndText: "{% endfor %}",
+			name:  "If with else",
+			input: "{% if x %}yes{% else %}no{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&TextNode{Text: "yes", Line: 1, Col: 11},
 							},
 						},
-						EndText: "{% endif %}",
 					},
+					ElseBody: []Node{
+						&TextNode{Text: "no", Line: 1, Col: 24},
+					},
+					Line: 1,
+					Col:  4, // Col of "if" token
 				},
 			},
 		},
 		{
-			"NestedIfAndFor",
-			`{% for item in simple.list %}{% if item.active %}{{ item.name }}{% for subitem in item.sublist %}{{ subitem }}{% endfor %}{% endif %}{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for item in simple.list %}",
-						Variable:   "item",
-						Collection: "simple.list",
-						Children: []*Node{
-							{Type: "if",
-								Text: "{% if item.active %}",
-								Children: []*Node{
-									{Type: "variable", Variable: "item.name", Text: "{{ item.name }}"},
-									{Type: "for",
-										Text:       "{% for subitem in item.sublist %}",
-										Variable:   "subitem",
-										Collection: "item.sublist",
-										Children: []*Node{
-											{Type: "variable", Variable: "subitem", Text: "{{ subitem }}"},
-										},
-										EndText: "{% endfor %}",
-									},
-								},
-								EndText: "{% endif %}",
+			name:  "If with elif",
+			input: "{% if x %}a{% elif y %}b{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&TextNode{Text: "a", Line: 1, Col: 11},
 							},
 						},
-						EndText: "{% endfor %}",
-					},
-				},
-			},
-		},
-		{
-			"IfElseWithFor",
-			`{% if simple.condition %}{% for item in simple.list %}{{ item }}{% endfor %}{% else %}No items{% endif %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "if",
-						Text: "{% if simple.condition %}",
-						Children: []*Node{
-							{Type: "for",
-								Text:       "{% for item in simple.list %}",
-								Variable:   "item",
-								Collection: "simple.list",
-								Children: []*Node{
-									{Type: "variable", Variable: "item", Text: "{{ item }}"},
-								},
-								EndText: "{% endfor %}",
+						{
+							Condition: &VariableNode{Name: "y", Line: 1, Col: 20},
+							Body: []Node{
+								&TextNode{Text: "b", Line: 1, Col: 24},
 							},
-							{Type: "else", Text: "{% else %}", Children: []*Node{
-								{Type: "text", Text: "No items"},
-							}},
 						},
-						EndText: "{% endif %}",
 					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      4, // Col of "if" token
 				},
 			},
 		},
 		{
-			"DeepNestedForLoops",
-			`{% for x in data.items %}
-				{% for y in x.subitems %}
-					{% for z in y.details %}
-						{{ x.name }}-{{ y.title }}-{{ z }}
-					{% endfor %}
-				{% endfor %}
-			{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for x in data.items %}",
-						Variable:   "x",
-						Collection: "data.items",
-						Children: []*Node{
-							{Type: "text", Text: "\n\t\t\t\t"},
-							{Type: "for",
-								Text:       "{% for y in x.subitems %}",
-								Variable:   "y",
-								Collection: "x.subitems",
-								Children: []*Node{
-									{Type: "text", Text: "\n\t\t\t\t\t"},
-									{Type: "for",
-										Text:       "{% for z in y.details %}",
-										Variable:   "z",
-										Collection: "y.details",
-										Children: []*Node{
-											{Type: "text", Text: "\n\t\t\t\t\t\t"},
-											{Type: "variable", Variable: "x.name", Text: "{{ x.name }}"},
-											{Type: "text", Text: "-"},
-											{Type: "variable", Variable: "y.title", Text: "{{ y.title }}"},
-											{Type: "text", Text: "-"},
-											{Type: "variable", Variable: "z", Text: "{{ z }}"},
-											{Type: "text", Text: "\n\t\t\t\t\t"},
-										},
-										EndText: "{% endfor %}",
-									},
-									{Type: "text", Text: "\n\t\t\t\t"},
-								},
-								EndText: "{% endfor %}",
+			name:  "If with elif and else",
+			input: "{% if x %}a{% elif y %}b{% else %}c{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&TextNode{Text: "a", Line: 1, Col: 11},
 							},
-							{Type: "text", Text: "\n\t\t\t"},
 						},
-						EndText: "{% endfor %}",
+						{
+							Condition: &VariableNode{Name: "y", Line: 1, Col: 20},
+							Body: []Node{
+								&TextNode{Text: "b", Line: 1, Col: 24},
+							},
+						},
 					},
+					ElseBody: []Node{
+						&TextNode{Text: "c", Line: 1, Col: 35},
+					},
+					Line: 1,
+					Col:  4, // Col of "if" token
 				},
 			},
 		},
 		{
-			"ComplexNestedIfFor",
-			`{% for user in users %}
-				{% if user.active %}
-					{{ user.name }}:
-					{% for role in user.roles %}
-						{% if role.enabled %}
-							{% if role.permissions %}
-								{% for perm in role.permissions %}
-									{{ perm.name }}{% if not perm.isLast %}, {% endif %}
-								{% endfor %}
-							{% endif %}
-						{% endif %}
-					{% endfor %}
-				{% endif %}
-			{% endfor %}`,
-			&Template{
-				Nodes: []*Node{
-					{Type: "for",
-						Text:       "{% for user in users %}",
-						Variable:   "user",
-						Collection: "users",
-						Children: []*Node{
-							{Type: "text", Text: "\n\t\t\t\t"},
-							{Type: "if",
-								Text: "{% if user.active %}",
-								Children: []*Node{
-									{Type: "text", Text: "\n\t\t\t\t\t"},
-									{Type: "variable", Variable: "user.name", Text: "{{ user.name }}"},
-									{Type: "text", Text: ":\n\t\t\t\t\t"},
-									{Type: "for",
-										Text:       "{% for role in user.roles %}",
-										Variable:   "role",
-										Collection: "user.roles",
-										Children: []*Node{
-											{Type: "text", Text: "\n\t\t\t\t\t\t"},
-											{Type: "if",
-												Text: "{% if role.enabled %}",
-												Children: []*Node{
-													{Type: "text", Text: "\n\t\t\t\t\t\t\t"},
-													{Type: "if",
-														Text: "{% if role.permissions %}",
-														Children: []*Node{
-															{Type: "text", Text: "\n\t\t\t\t\t\t\t\t"},
-															{Type: "for",
-																Text:       "{% for perm in role.permissions %}",
-																Variable:   "perm",
-																Collection: "role.permissions",
-																Children: []*Node{
-																	{Type: "text", Text: "\n\t\t\t\t\t\t\t\t\t"},
-																	{Type: "variable", Variable: "perm.name", Text: "{{ perm.name }}"},
-																	{Type: "if",
-																		Text: "{% if not perm.isLast %}",
-																		Children: []*Node{
-																			{Type: "text", Text: ", "},
-																		},
-																		EndText: "{% endif %}",
-																	},
-																	{Type: "text", Text: "\n\t\t\t\t\t\t\t\t"},
-																},
-																EndText: "{% endfor %}",
-															},
-															{Type: "text", Text: "\n\t\t\t\t\t\t\t"},
-														},
-														EndText: "{% endif %}",
-													},
-													{Type: "text", Text: "\n\t\t\t\t\t\t"},
-												},
-												EndText: "{% endif %}",
+			name:  "If with multiple elif",
+			input: "{% if x %}a{% elif y %}b{% elif z %}c{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&TextNode{Text: "a", Line: 1, Col: 11},
+							},
+						},
+						{
+							Condition: &VariableNode{Name: "y", Line: 1, Col: 20},
+							Body: []Node{
+								&TextNode{Text: "b", Line: 1, Col: 24},
+							},
+						},
+						{
+							Condition: &VariableNode{Name: "z", Line: 1, Col: 33},
+							Body: []Node{
+								&TextNode{Text: "c", Line: 1, Col: 37},
+							},
+						},
+					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      4, // Col of "if" token
+				},
+			},
+		},
+		{
+			name:  "If with condition expression",
+			input: "{% if x > 0 %}positive{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &BinaryOpNode{
+								Operator: ">",
+								Left:     &VariableNode{Name: "x", Line: 1, Col: 7},
+								Right:    &LiteralNode{Value: 0.0, Line: 1, Col: 11},
+								Line:     1,
+								Col:      9,
+							},
+							Body: []Node{
+								&TextNode{Text: "positive", Line: 1, Col: 15},
+							},
+						},
+					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      4, // Col of "if" token
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, nodes)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 4: For Tag Parsing
+// =============================================================================
+
+func TestParserForTag(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []Statement
+	}{
+		{
+			name:  "Simple for loop",
+			input: "{% for item in items %}{{ item }}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"item"},
+					Collection: &VariableNode{Name: "items", Line: 1, Col: 16},
+					Body: []Node{
+						&OutputNode{
+							Expression: &VariableNode{Name: "item", Line: 1, Col: 27},
+							Line:       1,
+							Col:        24,
+						},
+					},
+					Line: 1,
+					Col:  4, // Col of "for" token
+				},
+			},
+		},
+		{
+			name:  "For loop with two variables",
+			input: "{% for key, value in dict %}{{ key }}: {{ value }}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"key", "value"},
+					Collection: &VariableNode{Name: "dict", Line: 1, Col: 22},
+					Body: []Node{
+						&OutputNode{
+							Expression: &VariableNode{Name: "key", Line: 1, Col: 32},
+							Line:       1,
+							Col:        29,
+						},
+						&TextNode{Text: ": ", Line: 1, Col: 38},
+						&OutputNode{
+							Expression: &VariableNode{Name: "value", Line: 1, Col: 43},
+							Line:       1,
+							Col:        40,
+						},
+					},
+					Line: 1,
+					Col:  4, // Col of "for" token
+				},
+			},
+		},
+		{
+			name:  "For loop with text",
+			input: "{% for i in nums %}Item: {{ i }}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"i"},
+					Collection: &VariableNode{Name: "nums", Line: 1, Col: 13},
+					Body: []Node{
+						&TextNode{Text: "Item: ", Line: 1, Col: 20},
+						&OutputNode{
+							Expression: &VariableNode{Name: "i", Line: 1, Col: 29},
+							Line:       1,
+							Col:        26,
+						},
+					},
+					Line: 1,
+					Col:  4, // Col of "for" token
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, nodes)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 5: Break and Continue Tag Parsing
+// =============================================================================
+
+func TestParserBreakContinueTag(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []Statement
+	}{
+		{
+			name:  "Break in for loop",
+			input: "{% for i in nums %}{% break %}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"i"},
+					Collection: &VariableNode{Name: "nums", Line: 1, Col: 13},
+					Body: []Node{
+						&BreakNode{Line: 1, Col: 23}, // Col of "break" token
+					},
+					Line: 1,
+					Col:  4, // Col of "for" token
+				},
+			},
+		},
+		{
+			name:  "Continue in for loop",
+			input: "{% for i in nums %}{% continue %}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"i"},
+					Collection: &VariableNode{Name: "nums", Line: 1, Col: 13},
+					Body: []Node{
+						&ContinueNode{Line: 1, Col: 23}, // Col of "continue" token
+					},
+					Line: 1,
+					Col:  4, // Col of "for" token
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, nodes)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 6: Mixed Content Parsing
+// =============================================================================
+
+func TestParserMixedContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []Statement
+	}{
+		{
+			name:  "Text and variable",
+			input: "Hello {{ name }}!",
+			expected: []Statement{
+				&TextNode{Text: "Hello ", Line: 1, Col: 1},
+				&OutputNode{
+					Expression: &VariableNode{Name: "name", Line: 1, Col: 10},
+					Line:       1,
+					Col:        7,
+				},
+				&TextNode{Text: "!", Line: 1, Col: 17},
+			},
+		},
+		{
+			name:  "Multiple variables with text",
+			input: "{{ x }} and {{ y }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &VariableNode{Name: "x", Line: 1, Col: 4},
+					Line:       1,
+					Col:        1,
+				},
+				&TextNode{Text: " and ", Line: 1, Col: 8},
+				&OutputNode{
+					Expression: &VariableNode{Name: "y", Line: 1, Col: 16},
+					Line:       1,
+					Col:        13,
+				},
+			},
+		},
+		{
+			name:  "If with mixed content",
+			input: "Start{% if x %}{{ x }}{% endif %}End",
+			expected: []Statement{
+				&TextNode{Text: "Start", Line: 1, Col: 1},
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 12},
+							Body: []Node{
+								&OutputNode{
+									Expression: &VariableNode{Name: "x", Line: 1, Col: 19},
+									Line:       1,
+									Col:        16,
+								},
+							},
+						},
+					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      9, // Col of "if" token
+				},
+				&TextNode{Text: "End", Line: 1, Col: 34},
+			},
+		},
+		{
+			name:  "For with mixed content",
+			input: "Start{% for i in nums %}{{ i }}{% endfor %}End",
+			expected: []Statement{
+				&TextNode{Text: "Start", Line: 1, Col: 1},
+				&ForNode{
+					LoopVars:   []string{"i"},
+					Collection: &VariableNode{Name: "nums", Line: 1, Col: 18},
+					Body: []Node{
+						&OutputNode{
+							Expression: &VariableNode{Name: "i", Line: 1, Col: 28},
+							Line:       1,
+							Col:        25,
+						},
+					},
+					Line: 1,
+					Col:  9, // Col of "for" token
+				},
+				&TextNode{Text: "End", Line: 1, Col: 44},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, nodes)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 7: Nested Structures
+// =============================================================================
+
+func TestParserNestedStructures(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []Statement
+	}{
+		{
+			name:  "Nested if",
+			input: "{% if x %}{% if y %}yes{% endif %}{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&IfNode{
+									Branches: []IfBranch{
+										{
+											Condition: &VariableNode{Name: "y", Line: 1, Col: 17},
+											Body: []Node{
+												&TextNode{Text: "yes", Line: 1, Col: 21},
 											},
-											{Type: "text", Text: "\n\t\t\t\t\t"},
 										},
-										EndText: "{% endfor %}",
 									},
-									{Type: "text", Text: "\n\t\t\t\t"},
+									ElseBody: nil,
+									Line:     1,
+									Col:      14, // Col of inner "if" token
 								},
-								EndText: "{% endif %}",
 							},
-							{Type: "text", Text: "\n\t\t\t"},
 						},
-						EndText: "{% endfor %}",
 					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      4, // Col of outer "if" token
+				},
+			},
+		},
+		{
+			name:  "Nested for",
+			input: "{% for i in nums %}{% for j in items %}{{ j }}{% endfor %}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"i"},
+					Collection: &VariableNode{Name: "nums", Line: 1, Col: 13},
+					Body: []Node{
+						&ForNode{
+							LoopVars:   []string{"j"},
+							Collection: &VariableNode{Name: "items", Line: 1, Col: 32},
+							Body: []Node{
+								&OutputNode{
+									Expression: &VariableNode{Name: "j", Line: 1, Col: 43},
+									Line:       1,
+									Col:        40,
+								},
+							},
+							Line: 1,
+							Col:  23, // Col of inner "for" token
+						},
+					},
+					Line: 1,
+					Col:  4, // Col of outer "for" token
+				},
+			},
+		},
+		{
+			name:  "For inside if",
+			input: "{% if x %}{% for i in nums %}{{ i }}{% endfor %}{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&ForNode{
+									LoopVars:   []string{"i"},
+									Collection: &VariableNode{Name: "nums", Line: 1, Col: 23},
+									Body: []Node{
+										&OutputNode{
+											Expression: &VariableNode{Name: "i", Line: 1, Col: 33},
+											Line:       1,
+											Col:        30,
+										},
+									},
+									Line: 1,
+									Col:  14, // Col of "for" token
+								},
+							},
+						},
+					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      4, // Col of "if" token
+				},
+			},
+		},
+		{
+			name:  "If inside for",
+			input: "{% for i in nums %}{% if i %}{{ i }}{% endif %}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"i"},
+					Collection: &VariableNode{Name: "nums", Line: 1, Col: 13},
+					Body: []Node{
+						&IfNode{
+							Branches: []IfBranch{
+								{
+									Condition: &VariableNode{Name: "i", Line: 1, Col: 26},
+									Body: []Node{
+										&OutputNode{
+											Expression: &VariableNode{Name: "i", Line: 1, Col: 33},
+											Line:       1,
+											Col:        30,
+										},
+									},
+								},
+							},
+							ElseBody: nil,
+							Line:     1,
+							Col:      23, // Col of "if" token
+						},
+					},
+					Line: 1,
+					Col:  4, // Col of "for" token
 				},
 			},
 		},
 	}
 
-	parser := NewParser()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := parser.Parse(tc.source)
-			if err != nil {
-				t.Fatalf("Unexpected error in %s: %v", tc.name, err)
-			}
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
 
-			if !reflect.DeepEqual(tpl, tc.expected) {
-				t.Errorf("Case %s: Expected %+v, got %+v", tc.name, tc.expected, tpl)
+			assert.Equal(t, tt.expected, nodes)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 8: Error Cases
+// =============================================================================
+
+func TestParserErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		// Note: Unclosed tags are caught by the lexer, not the parser
+		{
+			name:  "Empty variable tag",
+			input: "{{ }}",
+		},
+		{
+			name:  "Unknown tag",
+			input: "{% unknown %}",
+		},
+		{
+			name:  "Missing endif",
+			input: "{% if x %}yes",
+		},
+		{
+			name:  "Missing endfor",
+			input: "{% for i in nums %}{{ i }}",
+		},
+		{
+			name:  "Invalid for syntax - missing in",
+			input: "{% for i nums %}{{ i }}{% endfor %}",
+		},
+		{
+			name:  "Invalid for syntax - no variable",
+			input: "{% for %}{% endfor %}",
+		},
+		{
+			name:  "Break with arguments",
+			input: "{% for i in nums %}{% break x %}{% endfor %}",
+		},
+		{
+			name:  "Continue with arguments",
+			input: "{% for i in nums %}{% continue y %}{% endfor %}",
+		},
+		{
+			name:  "Endif with arguments",
+			input: "{% if x %}yes{% endif x %}",
+		},
+		{
+			name:  "Endfor with arguments",
+			input: "{% for i in nums %}{{ i }}{% endfor i %}",
+		},
+		{
+			name:  "Else with arguments",
+			input: "{% if x %}yes{% else x %}no{% endif %}",
+		},
+		{
+			name:  "Extra tokens after if condition",
+			input: "{% if x y %}yes{% endif %}",
+		},
+		{
+			name:  "Extra tokens after for collection",
+			input: "{% for i in nums extra %}{{ i }}{% endfor %}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			_, err = parser.Parse()
+			assert.Error(t, err, "Expected error for input: %s", tt.input)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 9: Parser Helper Methods
+// =============================================================================
+
+func TestParserHelperMethods(t *testing.T) {
+	t.Run("Current and Advance", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenText, Value: "hello", Line: 1, Col: 1},
+			{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 6},
+			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 8},
+			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 9},
+			{Type: TokenEOF, Value: "", Line: 1, Col: 11},
+		}
+
+		parser := NewParser(tokens)
+
+		// Test Current
+		assert.Equal(t, tokens[0], parser.Current())
+
+		// Test Advance
+		parser.Advance()
+		assert.Equal(t, tokens[1], parser.Current())
+
+		parser.Advance()
+		assert.Equal(t, tokens[2], parser.Current())
+
+		// Test Remaining
+		assert.Equal(t, 3, parser.Remaining())
+	})
+
+	t.Run("Match", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenIdentifier, Value: "for", Line: 1, Col: 1},
+			{Type: TokenIdentifier, Value: "i", Line: 1, Col: 5},
+			{Type: TokenEOF, Value: "", Line: 1, Col: 6},
+		}
+
+		parser := NewParser(tokens)
+
+		// Match success
+		tok := parser.Match(TokenIdentifier, "for")
+		assert.NotNil(t, tok)
+		assert.Equal(t, "for", tok.Value)
+
+		// Match failure (wrong value)
+		tok = parser.Match(TokenIdentifier, "while")
+		assert.Nil(t, tok)
+
+		// Current should be "i"
+		assert.Equal(t, "i", parser.Current().Value)
+	})
+
+	t.Run("ExpectIdentifier", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenIdentifier, Value: "name", Line: 1, Col: 1},
+			{Type: TokenNumber, Value: "42", Line: 1, Col: 6},
+			{Type: TokenEOF, Value: "", Line: 1, Col: 8},
+		}
+
+		parser := NewParser(tokens)
+
+		// Expect success
+		tok, err := parser.ExpectIdentifier()
+		assert.NoError(t, err)
+		assert.Equal(t, "name", tok.Value)
+
+		// Expect failure (wrong type)
+		_, err = parser.ExpectIdentifier()
+		assert.Error(t, err)
+	})
+
+	t.Run("Error methods", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenText, Value: "hello", Line: 5, Col: 10},
+			{Type: TokenEOF, Value: "", Line: 5, Col: 15},
+		}
+
+		parser := NewParser(tokens)
+
+		// Test Error
+		err := parser.Error("test error")
+		assert.Error(t, err)
+		var parseErr *ParseError
+		ok := errors.As(err, &parseErr)
+		assert.True(t, ok)
+		assert.Equal(t, 5, parseErr.Line)
+		assert.Equal(t, 10, parseErr.Col)
+		assert.Equal(t, "test error", parseErr.Message)
+
+		// Test Errorf
+		err = parser.Errorf("error with %s", "format")
+		assert.Error(t, err)
+		ok = errors.As(err, &parseErr)
+		assert.True(t, ok)
+		assert.Equal(t, "error with format", parseErr.Message)
+	})
+}
+
+// =============================================================================
+// Test Group 10: Edge Cases
+// =============================================================================
+
+func TestParserEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []Statement
+	}{
+		{
+			name:     "Empty input",
+			input:    "",
+			expected: nil, // Empty input returns nil, not []Statement{}
+		},
+		{
+			name:  "Only whitespace",
+			input: "   \n\t  ",
+			expected: []Statement{
+				&TextNode{Text: "   \n\t  ", Line: 1, Col: 1},
+			},
+		},
+		{
+			name:  "Adjacent tags",
+			input: "{{ x }}{{ y }}",
+			expected: []Statement{
+				&OutputNode{
+					Expression: &VariableNode{Name: "x", Line: 1, Col: 4},
+					Line:       1,
+					Col:        1,
+				},
+				&OutputNode{
+					Expression: &VariableNode{Name: "y", Line: 1, Col: 11},
+					Line:       1,
+					Col:        8,
+				},
+			},
+		},
+		{
+			name:  "Empty if body",
+			input: "{% if x %}{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body:      nil, // Empty body is nil, not []Node{}
+						},
+					},
+					ElseBody: nil,
+					Line:     1,
+					Col:      4, // Col of "if" token
+				},
+			},
+		},
+		{
+			name:  "Empty for body",
+			input: "{% for i in nums %}{% endfor %}",
+			expected: []Statement{
+				&ForNode{
+					LoopVars:   []string{"i"},
+					Collection: &VariableNode{Name: "nums", Line: 1, Col: 13},
+					Body:       nil, // Empty body is nil, not []Node{}
+					Line:       1,
+					Col:        4, // Col of "for" token
+				},
+			},
+		},
+		{
+			name:  "Empty else body",
+			input: "{% if x %}yes{% else %}{% endif %}",
+			expected: []Statement{
+				&IfNode{
+					Branches: []IfBranch{
+						{
+							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
+							Body: []Node{
+								&TextNode{Text: "yes", Line: 1, Col: 11},
+							},
+						},
+					},
+					ElseBody: nil, // Empty else body is nil, not []Node{}
+					Line:     1,
+					Col:      4, // Col of "if" token
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, nodes)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 11: Complex Real-World Templates
+// =============================================================================
+
+func TestParserComplexTemplates(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		check func(t *testing.T, nodes []Statement)
+	}{
+		{
+			name: "Complete template with mixed content",
+			input: `<html>
+<body>
+  <h1>{{ title }}</h1>
+  {% if user %}
+    <p>Welcome, {{ user.name }}!</p>
+  {% else %}
+    <p>Please log in.</p>
+  {% endif %}
+</body>
+</html>`,
+			check: func(t *testing.T, nodes []Statement) {
+				// Structure: text, output, text, if, text
+				// Actually it's: text (including newlines and spaces), output, text, if, text
+				assert.Equal(t, 5, len(nodes))
+			},
+		},
+		{
+			name: "List rendering with for loop",
+			input: `<ul>
+{% for item in items %}
+  <li>{{ item.name }}: {{ item.price }}</li>
+{% endfor %}
+</ul>`,
+			check: func(t *testing.T, nodes []Statement) {
+				// Structure: text, for, text (newlines create separate text nodes)
+				assert.Equal(t, 3, len(nodes))
+
+				// Check for loop
+				forNode, ok := nodes[1].(*ForNode)
+				assert.True(t, ok)
+				assert.Equal(t, []string{"item"}, forNode.LoopVars)
+				// Body has: text (newline+spaces), text ("<li>"), output, text ("</li>"), text (newline)
+				assert.Equal(t, 5, len(forNode.Body))
+			},
+		},
+		{
+			name: "Nested loops and conditionals",
+			input: `{% for category in categories %}
+  <h2>{{ category.name }}</h2>
+  {% for product in category.products %}
+    {% if product.inStock %}
+      <p>{{ product.name }} - ${{ product.price }}</p>
+    {% endif %}
+  {% endfor %}
+{% endfor %}`,
+			check: func(t *testing.T, nodes []Statement) {
+				assert.Equal(t, 1, len(nodes))
+
+				// Outer for loop
+				outerFor, ok := nodes[0].(*ForNode)
+				assert.True(t, ok)
+				assert.Equal(t, []string{"category"}, outerFor.LoopVars)
+
+				// Should have text, output, text, for, text
+				assert.Equal(t, 5, len(outerFor.Body))
+
+				// Inner for loop
+				innerFor, ok := outerFor.Body[3].(*ForNode)
+				assert.True(t, ok)
+				assert.Equal(t, []string{"product"}, innerFor.LoopVars)
+
+				// Inner for should have text, if, text
+				assert.Equal(t, 3, len(innerFor.Body))
+
+				// If inside inner for
+				ifNode, ok := innerFor.Body[1].(*IfNode)
+				assert.True(t, ok)
+				assert.Equal(t, 1, len(ifNode.Branches))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			nodes, err := parser.Parse()
+			require.NoError(t, err)
+
+			tt.check(t, nodes)
+		})
+	}
+}
+
+// =============================================================================
+// Test Group 12: ParseExpression Method
+// =============================================================================
+
+func TestParserParseExpression(t *testing.T) {
+	tests := []struct {
+		name     string
+		tokens   []*Token
+		expected Expression
+	}{
+		{
+			name: "Simple variable",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "x", Line: 1, Col: 1},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 2},
+			},
+			expected: &VariableNode{Name: "x", Line: 1, Col: 1},
+		},
+		{
+			name: "Binary expression",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
+				{Type: TokenSymbol, Value: "+", Line: 1, Col: 3},
+				{Type: TokenIdentifier, Value: "b", Line: 1, Col: 5},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 6},
+			},
+			expected: &BinaryOpNode{
+				Operator: "+",
+				Left:     &VariableNode{Name: "a", Line: 1, Col: 1},
+				Right:    &VariableNode{Name: "b", Line: 1, Col: 5},
+				Line:     1,
+				Col:      3,
+			},
+		},
+		{
+			name: "Expression with filter",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "name", Line: 1, Col: 1},
+				{Type: TokenSymbol, Value: "|", Line: 1, Col: 5},
+				{Type: TokenIdentifier, Value: "upper", Line: 1, Col: 6},
+				{Type: TokenEOF, Value: "", Line: 1, Col: 11},
+			},
+			expected: &FilterNode{
+				Expression: &VariableNode{Name: "name", Line: 1, Col: 1},
+				FilterName: "upper",
+				Args:       nil, // Args is nil, not empty slice
+				Line:       1,
+				Col:        5,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser(tt.tokens)
+			expr, err := parser.ParseExpression()
+			require.NoError(t, err)
+
+			// Use reflect.DeepEqual for complex structure comparison
+			if !reflect.DeepEqual(tt.expected, expr) {
+				t.Errorf("Expression mismatch.\nExpected: %#v\nGot: %#v", tt.expected, expr)
 			}
 		})
 	}

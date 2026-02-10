@@ -191,3 +191,64 @@ func (cb *ContextBuilder) Build() (Context, error) {
 	}
 	return cb.context, nil
 }
+
+// ========================================
+// ExecutionContext - for template execution
+// ========================================
+
+// ExecutionContext holds the execution state for template rendering.
+// It separates user-provided variables (Public) from internal variables (Private).
+type ExecutionContext struct {
+	// Public contains user-provided variables
+	Public Context
+
+	// Private contains internal variables (e.g., loop counters, temporary values)
+	Private Context
+}
+
+// NewExecutionContext creates a new execution context from user data.
+// The data is stored in the Public context, and an empty Private context is created.
+func NewExecutionContext(data map[string]interface{}) *ExecutionContext {
+	return &ExecutionContext{
+		Public:  Context(data),
+		Private: NewContext(),
+	}
+}
+
+// Get retrieves a variable from the execution context.
+// It first checks Private (for loop variables, etc.), then checks Public.
+func (ctx *ExecutionContext) Get(name string) (interface{}, bool) {
+	// Check private first (for loop variables, etc.)
+	if val, err := ctx.Private.Get(name); err == nil {
+		return val, true
+	}
+
+	// Then check public
+	if val, err := ctx.Public.Get(name); err == nil {
+		return val, true
+	}
+
+	return nil, false
+}
+
+// Set sets a variable in the private context.
+// This is used for internal variables like loop counters.
+func (ctx *ExecutionContext) Set(name string, value interface{}) {
+	ctx.Private.Set(name, value)
+}
+
+// NewChildContext creates a child execution context.
+// It shares the same Public context but gets a copy of the Private context.
+// This is useful for nested scopes (like loops or blocks).
+func NewChildContext(parent *ExecutionContext) *ExecutionContext {
+	// Create new private context and copy parent's private variables
+	childPrivate := NewContext()
+	for k, v := range parent.Private {
+		childPrivate[k] = v
+	}
+
+	return &ExecutionContext{
+		Public:  parent.Public, // Share public context
+		Private: childPrivate,  // Copy private context
+	}
+}
