@@ -8,31 +8,31 @@ import (
 )
 
 func TestIfConditions(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
-			name:     "Split string",
-			template: "{{ message | split:',' }}",
+			name: "Split string",
+			tmpl: "{{ message | split:',' }}",
 			context: map[string]interface{}{
 				"message": "one,two,three",
 			},
 			expected: "[one,two,three]",
 		},
 		{
-			name:     "Simple condition",
-			template: "{% if age >= 18 %}Adult{% endif %}",
+			name: "Simple condition",
+			tmpl: "{% if age >= 18 %}Adult{% endif %}",
 			context: map[string]interface{}{
 				"age": 20,
 			},
 			expected: "Adult",
 		},
 		{
-			name:     "Simple condition with filter",
-			template: "{% if age >= 18 %}{{ name | upper }}{% endif %}",
+			name: "Simple condition with filter",
+			tmpl: "{% if age >= 18 %}{{ name | upper }}{% endif %}",
 			context: map[string]interface{}{
 				"age":  20,
 				"name": "alexander",
@@ -40,32 +40,32 @@ func TestIfConditions(t *testing.T) {
 			expected: "ALEXANDER",
 		},
 		{
-			name:     "Condition with filter",
-			template: "{% if name | length > 5 %}Name too long{% endif %}",
+			name: "Condition with filter",
+			tmpl: "{% if name | length > 5 %}Name too long{% endif %}",
 			context: map[string]interface{}{
 				"name": "Alexander",
 			},
 			expected: "Name too long",
 		},
 		{
-			name:     "Multiple conditions",
-			template: "{% if score >= 90 %}Excellent{% if score == 100 %}Perfect{% endif %}{% endif %}",
+			name: "Multiple conditions",
+			tmpl: "{% if score >= 90 %}Excellent{% if score == 100 %}Perfect{% endif %}{% endif %}",
 			context: map[string]interface{}{
 				"score": 100,
 			},
 			expected: "ExcellentPerfect",
 		},
 		{
-			name:     "Multiple filters in condition",
-			template: "{% if message | trim | upper | length > 0 %}Has content{% endif %}",
+			name: "Multiple filters in condition",
+			tmpl: "{% if message | trim | upper | length > 0 %}Has content{% endif %}",
 			context: map[string]interface{}{
 				"message": "  Hello  ",
 			},
 			expected: "Has content",
 		},
 		{
-			name:     "Complex object condition",
-			template: "{% if user.age >= 18 && user.name | length > 3 %}{{ user.name | upper }} is adult{% endif %}",
+			name: "Complex object condition",
+			tmpl: "{% if user.age >= 18 && user.name | length > 3 %}{{ user.name | upper }} is adult{% endif %}",
 			context: map[string]interface{}{
 				"user": map[string]interface{}{
 					"name": "Alice",
@@ -75,48 +75,48 @@ func TestIfConditions(t *testing.T) {
 			expected: "ALICE is adult",
 		},
 		{
-			name:     "String comparison",
-			template: "{% if status | lower == 'active' %}Currently active{% endif %}",
+			name: "String comparison",
+			tmpl: "{% if status | lower == 'active' %}Currently active{% endif %}",
 			context: map[string]interface{}{
 				"status": "ACTIVE",
 			},
 			expected: "Currently active",
 		},
 		{
-			name:     "Empty value handling",
-			template: "{% if content | default:'nil' == 'nil' %}No content{% endif %}",
+			name: "Empty value handling",
+			tmpl: "{% if content | default:'nil' == 'nil' %}No content{% endif %}",
 			context: map[string]interface{}{
 				"content": "",
 			},
 			expected: "No content",
 		},
 		{
-			name:     "Basic boolean",
-			template: "{% if isActive %}Active{% endif %}",
+			name: "Basic boolean",
+			tmpl: "{% if isActive %}Active{% endif %}",
 			context: map[string]interface{}{
 				"isActive": true,
 			},
 			expected: "Active",
 		},
 		{
-			name:     "Numeric equality",
-			template: "{% if count == 0 %}Empty{% else %}Not empty{% endif %}",
+			name: "Numeric equality",
+			tmpl: "{% if count == 0 %}Empty{% else %}Not empty{% endif %}",
 			context: map[string]interface{}{
 				"count": 0,
 			},
 			expected: "Empty",
 		},
 		{
-			name:     "String equality",
-			template: "{% if status == 'pending' %}Pending{% endif %}",
+			name: "String equality",
+			tmpl: "{% if status == 'pending' %}Pending{% endif %}",
 			context: map[string]interface{}{
 				"status": "pending",
 			},
 			expected: "Pending",
 		},
 		{
-			name:     "AND operation",
-			template: "{% if isAdmin && isActive %}Admin online{% endif %}",
+			name: "AND operation",
+			tmpl: "{% if isAdmin && isActive %}Admin online{% endif %}",
 			context: map[string]interface{}{
 				"isAdmin":  true,
 				"isActive": true,
@@ -124,8 +124,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "Admin online",
 		},
 		{
-			name:     "OR operation",
-			template: "{% if isVIP || isMember %}Access granted{% endif %}",
+			name: "OR operation",
+			tmpl: "{% if isVIP || isMember %}Access granted{% endif %}",
 			context: map[string]interface{}{
 				"isVIP":    false,
 				"isMember": true,
@@ -133,32 +133,32 @@ func TestIfConditions(t *testing.T) {
 			expected: "Access granted",
 		},
 		{
-			name:     "Simple condition with else",
-			template: "{% if age >= 18 %}Adult{% else %}Minor{% endif %}",
+			name: "Simple condition with else",
+			tmpl: "{% if age >= 18 %}Adult{% else %}Minor{% endif %}",
 			context: map[string]interface{}{
 				"age": 16,
 			},
 			expected: "Minor",
 		},
 		{
-			name:     "String comparison with else",
-			template: "{% if status == 'active' %}Currently active{% else %}Inactive{% endif %}",
+			name: "String comparison with else",
+			tmpl: "{% if status == 'active' %}Currently active{% else %}Inactive{% endif %}",
 			context: map[string]interface{}{
 				"status": "inactive",
 			},
 			expected: "Inactive",
 		},
 		{
-			name:     "Numeric comparison with else",
-			template: "{% if score >= 50 %}Pass{% else %}Fail{% endif %}",
+			name: "Numeric comparison with else",
+			tmpl: "{% if score >= 50 %}Pass{% else %}Fail{% endif %}",
 			context: map[string]interface{}{
 				"score": 45,
 			},
 			expected: "Fail",
 		},
 		{
-			name:     "Complex condition with else",
-			template: "{% if user.age >= 18 && user.name | length > 3 %}{{ user.name | upper }} is adult{% else %}Not an adult{% endif %}",
+			name: "Complex condition with else",
+			tmpl: "{% if user.age >= 18 && user.name | length > 3 %}{{ user.name | upper }} is adult{% else %}Not an adult{% endif %}",
 			context: map[string]interface{}{
 				"user": map[string]interface{}{
 					"name": "Bob",
@@ -168,32 +168,32 @@ func TestIfConditions(t *testing.T) {
 			expected: "Not an adult",
 		},
 		{
-			name:     "StringArraySizeCheck",
-			template: "{% if names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
+			name: "StringArraySizeCheck",
+			tmpl: "{% if names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
 			context: map[string]interface{}{
 				"names": []string{"John", "Alice", "Bob"},
 			},
 			expected: "More than two names",
 		},
 		{
-			name:     "EmptyIntArrayCheck",
-			template: "{% if !scores %}No scores recorded{% endif %}",
+			name: "EmptyIntArrayCheck",
+			tmpl: "{% if !scores %}No scores recorded{% endif %}",
 			context: map[string]interface{}{
 				"scores": []int{},
 			},
 			expected: "No scores recorded",
 		},
 		{
-			name:     "EmptyStringArrayCheck",
-			template: "{% if !names %}No names available{% endif %}",
+			name: "EmptyStringArrayCheck",
+			tmpl: "{% if !names %}No names available{% endif %}",
 			context: map[string]interface{}{
 				"names": []string{},
 			},
 			expected: "No names available",
 		},
 		{
-			name:     "NestedMapWithEmployeeCountCheck",
-			template: "{% if department.employees | size >= 3 %}Large department{% else %}Small department{% endif %}",
+			name: "NestedMapWithEmployeeCountCheck",
+			tmpl: "{% if department.employees | size >= 3 %}Large department{% else %}Small department{% endif %}",
 			context: map[string]interface{}{
 				"department": map[string]interface{}{
 					"name": "R&D",
@@ -207,8 +207,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "Large department",
 		},
 		{
-			name:     "NonEmptyMapCheck",
-			template: "{% if !settings %}Has settings{% endif %}",
+			name: "NonEmptyMapCheck",
+			tmpl: "{% if !settings %}Has settings{% endif %}",
 			context: map[string]interface{}{
 				"settings": map[string]interface{}{
 					"theme":   "Dark",
@@ -219,8 +219,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "NumericTypeComparison",
-			template: "{% if int_value > float_value %}Integer greater than float{% else %}Float greater than or equal to integer{% endif %}",
+			name: "NumericTypeComparison",
+			tmpl: "{% if int_value > float_value %}Integer greater than float{% else %}Float greater than or equal to integer{% endif %}",
 			context: map[string]interface{}{
 				"int_value":   5,
 				"float_value": 5.5,
@@ -228,24 +228,24 @@ func TestIfConditions(t *testing.T) {
 			expected: "Float greater than or equal to integer",
 		},
 		{
-			name:     "EmptyMapCheck",
-			template: "{% if !config %}Configuration needed{% endif %}",
+			name: "EmptyMapCheck",
+			tmpl: "{% if !config %}Configuration needed{% endif %}",
 			context: map[string]interface{}{
 				"config": map[string]interface{}{},
 			},
 			expected: "Configuration needed",
 		},
 		{
-			name:     "BooleanArrayWithTrueValueCheck",
-			template: "{% if !flags %}At least one enabled{% else %}All disabled{% endif %}",
+			name: "BooleanArrayWithTrueValueCheck",
+			tmpl: "{% if !flags %}At least one enabled{% else %}All disabled{% endif %}",
 			context: map[string]interface{}{
 				"flags": []bool{false, false, true, false},
 			},
 			expected: "All disabled",
 		},
 		{
-			name:     "NestedStringArraySizeCheck",
-			template: "{% if struct.names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
+			name: "NestedStringArraySizeCheck",
+			tmpl: "{% if struct.names | size > 2 %}More than two names{% else %}Two or fewer names{% endif %}",
 			context: map[string]interface{}{
 				"struct": map[string]interface{}{
 					"names": []string{"John", "Alice", "Bob"},
@@ -254,8 +254,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "More than two names",
 		},
 		{
-			name:     "NonEmptyStringArrayCondition",
-			template: "{% if struct.names %}name{% endif %}",
+			name: "NonEmptyStringArrayCondition",
+			tmpl: "{% if struct.names %}name{% endif %}",
 			context: map[string]interface{}{
 				"struct": map[string]interface{}{
 					"names": []string{"John", "Alice", "Bob"},
@@ -264,8 +264,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "name",
 		},
 		{
-			name:     "EmptyStringArrayCondition",
-			template: "{% if struct.names %}name{% endif %}",
+			name: "EmptyStringArrayCondition",
+			tmpl: "{% if struct.names %}name{% endif %}",
 			context: map[string]interface{}{
 				"struct": map[string]interface{}{
 					"names": []string{},
@@ -274,8 +274,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "EmptyMapCondition",
-			template: "{% if struct.names %}name{% endif %}",
+			name: "EmptyMapCondition",
+			tmpl: "{% if struct.names %}name{% endif %}",
 			context: map[string]interface{}{
 				"struct": map[string]interface{}{
 					"names": map[string]interface{}{},
@@ -284,8 +284,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "NonEmptyMapCondition",
-			template: "{% if struct.names %}name{% endif %}",
+			name: "NonEmptyMapCondition",
+			tmpl: "{% if struct.names %}name{% endif %}",
 			context: map[string]interface{}{
 				"struct": map[string]interface{}{
 					"names": map[string]interface{}{
@@ -298,8 +298,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "name",
 		},
 		{
-			name:     "ArrayLengthComparison",
-			template: "{% if shortList | size < longList | size %}Shorter array{% else %}Equal or longer array{% endif %}",
+			name: "ArrayLengthComparison",
+			tmpl: "{% if shortList | size < longList | size %}Shorter array{% else %}Equal or longer array{% endif %}",
 			context: map[string]interface{}{
 				"shortList": []string{"a", "b"},
 				"longList":  []string{"x", "y", "z"},
@@ -307,8 +307,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "Shorter array",
 		},
 		{
-			name:     "MapKeysEqualityCheck",
-			template: "{% if config1.debug == config2.debug %}Same debug setting{% else %}Different debug settings{% endif %}",
+			name: "MapKeysEqualityCheck",
+			tmpl: "{% if config1.debug == config2.debug %}Same debug setting{% else %}Different debug settings{% endif %}",
 			context: map[string]interface{}{
 				"config1": map[string]interface{}{"debug": true, "mode": "development"},
 				"config2": map[string]interface{}{"debug": true, "mode": "production"},
@@ -316,8 +316,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "Same debug setting",
 		},
 		{
-			name:     "MapNegationCondition",
-			template: "{% if !emptyMap && !nonEmptyMap %}Both false{% else %}Both true{% endif %}",
+			name: "MapNegationCondition",
+			tmpl: "{% if !emptyMap && !nonEmptyMap %}Both false{% else %}Both true{% endif %}",
 			context: map[string]interface{}{
 				"emptyMap":    map[string]interface{}{},
 				"nonEmptyMap": map[string]interface{}{"key": "value"},
@@ -325,8 +325,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "Both true",
 		},
 		{
-			name:     "ComplexNestedCollectionComparison",
-			template: "{% if data.users | size > data.groups | size %}More users than groups{% else %}Equal or more groups than users{% endif %}",
+			name: "ComplexNestedCollectionComparison",
+			tmpl: "{% if data.users | size > data.groups | size %}More users than groups{% else %}Equal or more groups than users{% endif %}",
 			context: map[string]interface{}{
 				"data": map[string]interface{}{
 					"users": []string{"User1", "User2", "User3"},
@@ -339,16 +339,16 @@ func TestIfConditions(t *testing.T) {
 			expected: "More users than groups",
 		},
 		{
-			name:     "SliceWithANDOperator",
-			template: "{% if numbers && numbers | sum > 10 %}Non-empty array with sum > 10{% endif %}",
+			name: "SliceWithANDOperator",
+			tmpl: "{% if numbers && numbers | sum > 10 %}Non-empty array with sum > 10{% endif %}",
 			context: map[string]interface{}{
 				"numbers": []int{2, 4, 6, 8},
 			},
 			expected: "Non-empty array with sum > 10",
 		},
 		{
-			name:     "MapWithOROperator",
-			template: "{% if emptyConfig || defaultConfig %}Using config{% endif %}",
+			name: "MapWithOROperator",
+			tmpl: "{% if emptyConfig || defaultConfig %}Using config{% endif %}",
 			context: map[string]interface{}{
 				"emptyConfig":   map[string]interface{}{},
 				"defaultConfig": map[string]interface{}{"theme": "light"},
@@ -356,8 +356,8 @@ func TestIfConditions(t *testing.T) {
 			expected: "Using config",
 		},
 		{
-			name:     "NestedArraysInNestedMaps",
-			template: "{% if project.teams.developers | size > project.teams.designers | size %}More developers{% else %}Equal or more designers{% endif %}",
+			name: "NestedArraysInNestedMaps",
+			tmpl: "{% if project.teams.developers | size > project.teams.designers | size %}More developers{% else %}Equal or more designers{% endif %}",
 			context: map[string]interface{}{
 				"project": map[string]interface{}{
 					"teams": map[string]interface{}{
@@ -370,30 +370,30 @@ func TestIfConditions(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
 
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
 }
 
 func TestComplexForLoop(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Nested data structure",
-			template: `Store: {{ store.name }}
+			tmpl: `Store: {{ store.name }}
 Categories:{% for k, category in store.categories %}
   {{ k | plus:1 }}. {{ category.name }}
   Products:{% for product in category.products %}
@@ -457,30 +457,30 @@ Total Products: 3`,
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
 
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
 			}
 		})
 	}
 }
 
 func TestNestedLoopWithConditions(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Complex nested structure with conditions",
-			template: `Store: {{ store.name }}
+			tmpl: `Store: {{ store.name }}
 Categories:{% for k, category in store.categories %}
   {{ k | plus:1 }}. {{ category.name }}
   Products:{% for product in category.products %}
@@ -577,30 +577,30 @@ Featured Products:
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
-					len(tc.expected), tc.expected, len(result), result)
+			if result != tt.expected {
+				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
+					len(tt.expected), len(result), tt.expected, result)
 			}
 		})
 	}
 }
 
 func TestComplexTemplateStructures(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Complex E-commerce Template",
-			template: `Store: {{ store.name }}
+			tmpl: `Store: {{ store.name }}
 
 Featured Categories:
 {% for category in store.featured_categories %}
@@ -755,16 +755,16 @@ Special Offers:
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
 
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
-					len(tc.expected), tc.expected, len(result), result)
+			if result != tt.expected {
+				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
+					len(tt.expected), len(result), tt.expected, result)
 			}
 		})
 	}
@@ -812,15 +812,15 @@ func TestStructWithFilters(t *testing.T) {
 	now := time.Now()
 	sixMonthsAgo := now.AddDate(0, -6, 0)
 
-	testCases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Date filter with structs",
-			template: `// Date filter structure testing
+			tmpl: `// Date filter structure testing
 Creation time: {{ user.created_at | date:"Y-m-d" }}
 Address time: {{ user.address.time | date:"Y-m-d" }}`,
 			context: map[string]interface{}{
@@ -837,7 +837,7 @@ Address time: %s`, sixMonthsAgo.Format("2006-01-02"), now.Format("2006-01-02")),
 		},
 		{
 			name: "Default filter with structs",
-			template: `// Default value filter structure testing
+			tmpl: `// Default value filter structure testing
 City: {{ user.address.city | default:"Unknown city" }}
 Name: {{ user.name | default:"Unknown user" }}`,
 			context: map[string]interface{}{
@@ -854,7 +854,7 @@ Name: Unknown user`,
 		},
 		{
 			name: "Length filter with structs",
-			template: `// Length filter structure testing
+			tmpl: `// Length filter structure testing
 Name length: {{ user.name | length }}
 City length: {{ user.address.city | length }}
 Tag count: {{ user.tags | size }}
@@ -877,7 +877,7 @@ Score count: 3`,
 		},
 		{
 			name: "Basic conditions with filters on structs",
-			template: `// Structure condition filter testing
+			tmpl: `// Structure condition filter testing
 {% if user.name | length > 0 %}User name is not empty{% endif %}
 {% if user.address.city | length > 2 %}City name is longer than 2 characters{% endif %}
 {% if user.tags | length >= 3 %}At least 3 tags{% endif %}`,
@@ -897,7 +897,7 @@ At least 3 tags`,
 		},
 		{
 			name: "Split filter with structs",
-			template: `// Split filter structure testing
+			tmpl: `// Split filter structure testing
 Address split: {{ address_str | split:"," }}`,
 			context: map[string]interface{}{
 				"address_str": "Shanghai,Pudong,Zhangjiang",
@@ -907,7 +907,7 @@ Address split: [Shanghai,Pudong,Zhangjiang]`,
 		},
 		{
 			name: "Trim filter with structs",
-			template: `// Trim filter structure testing
+			tmpl: `// Trim filter structure testing
 Trim name: {{ user.name | trim }}
 Trim city: {{ user.address.city | trim }}`,
 			context: map[string]interface{}{
@@ -924,7 +924,7 @@ Trim city: shanghai`,
 		},
 		{
 			name: "For loops with structs and conditions",
-			template: `// For loops with structs and conditions
+			tmpl: `// For loops with structs and conditions
 {% for item in items %}
 	{% if item.user.age > 18 %}
 		Name: {{ item.user.name }}
@@ -982,7 +982,7 @@ Trim city: shanghai`,
 		},
 		{
 			name: "Upper and lower filters with structs",
-			template: `// Upper and lower filters with structs
+			tmpl: `// Upper and lower filters with structs
 Upper name: {{ user.name | upper }}
 Lower city: {{ user.address.city | lower }}`,
 			context: map[string]interface{}{
@@ -999,15 +999,15 @@ Lower city: shanghai`,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
-					len(tc.expected), tc.expected, len(result), result)
+			if result != tt.expected {
+				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
+					len(tt.expected), len(result), tt.expected, result)
 			}
 		})
 	}
@@ -1517,15 +1517,15 @@ func TestComplexStructFields(t *testing.T) {
 		},
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Basic variable access",
-			template: `Hello, {{ name }}!
+			tmpl: `Hello, {{ name }}!
 Simple struct:
 User: {{ user }}
 Username: {{ user.name }}
@@ -1545,7 +1545,7 @@ User age: 30`,
 		},
 		{
 			name: "Nested struct access",
-			template: `Nested struct:
+			tmpl: `Nested struct:
 User address: {{ user.address }}
 Street: {{ user.address.street }}
 City: {{ user.address.city }}`,
@@ -1566,7 +1566,7 @@ City: New York`,
 		},
 		{
 			name: "Time formatting",
-			template: `Time test:
+			tmpl: `Time test:
 Time: {{ user.address.time }}`,
 			context: map[string]interface{}{
 				"user": User{
@@ -1580,7 +1580,7 @@ Time: ` + now.Format("2006-01-02 15:04:05"),
 		},
 		{
 			name: "Map access",
-			template: `Map test:
+			tmpl: `Map test:
 Map: {{ user.address.map }}
 Map key1: {{ user.address.map.key1 }}
 Map key2: {{ user.address.map.key2 }}`,
@@ -1599,7 +1599,7 @@ Map key2: value2`,
 		},
 		{
 			name: "Slice access",
-			template: `Slice test:
+			tmpl: `Slice test:
 Slice: {{ user.address.slice }}
 First element: {{ user.address.slice.0 }}
 Second element: {{ user.address.slice.1 }}`,
@@ -1617,7 +1617,7 @@ Second element: item2`,
 		},
 		{
 			name: "MapSlice access",
-			template: `MapSlice test:
+			tmpl: `MapSlice test:
 MapSlice: {{ user.address.mapSlice }}
 Level 1 key: {{ user.address.mapSlice.level1 }}
 Level 2 key: {{ user.address.mapSlice.level1.sublevel }}
@@ -1637,7 +1637,7 @@ Array in level 2: deepitem1`,
 		},
 		{
 			name: "SliceMap access",
-			template: `SliceMap test:
+			tmpl: `SliceMap test:
 SliceMap: {{ user.address.sliceMap }}
 First array: {{ user.address.sliceMap.0 }}
 First element of first array: {{ user.address.sliceMap.0.0 }}
@@ -1657,7 +1657,7 @@ key1 of first element of first array: nestedvalue1`,
 		},
 		{
 			name: "Team members access",
-			template: `Team test:
+			tmpl: `Team test:
 Team name: {{ team.name }}
 First member: {{ team.members.0.name }}
 Second member city: {{ team.members.1.address.city }}`,
@@ -1687,7 +1687,7 @@ Second member city: Boston`,
 		},
 		{
 			name: "Interface field access",
-			template: `Department test:
+			tmpl: `Department test:
 Department street: {{ user.address.department.street }}	
 Department city: {{ user.address.department.city }}
 Department Map: {{ user.address.department.map }}
@@ -1718,24 +1718,24 @@ Department SliceMap: [[{"key1":"nestedvalue1","key2":"nestedvalue2"},{"key1":"ne
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
 			// For tests with JSON output, check key content rather than exact string match
 			// due to map key ordering variations in go-json-experiment
-			if tc.name == "Interface_field_access" || tc.name == "SliceMap_access" {
+			if tt.name == "Interface_field_access" || tt.name == "SliceMap_access" {
 				// Verify key components are present
 				if !strings.Contains(result, "nestedvalue1") || !strings.Contains(result, "nestedvalue2") ||
 					!strings.Contains(result, "nestedvalue3") || !strings.Contains(result, "nestedvalue4") ||
 					!strings.Contains(result, "nestedvalue5") || !strings.Contains(result, "nestedvalue6") {
 					t.Errorf("Template output missing expected content.\nGot:\n%q", result)
 				}
-			} else if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
-					len(tc.expected), tc.expected, len(result), result)
+			} else if result != tt.expected {
+				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
+					len(tt.expected), len(result), tt.expected, result)
 			}
 		})
 	}
@@ -1768,15 +1768,15 @@ func TestIfConditionsWithComplexStructs(t *testing.T) {
 	now := time.Now()
 	testSlice := []string{"item1", "item2", "item3"}
 
-	testCases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Basic condition checks",
-			template: `// Basic condition tests
+			tmpl: `// Basic condition tests
 {% if user.name %}Username is: {{ user.name }}{% endif %}
 {% if user.age > 20 %}User is older than 20{% endif %}`,
 			context: map[string]interface{}{
@@ -1791,7 +1791,7 @@ User is older than 20`,
 		},
 		{
 			name: "Array and slice conditions",
-			template: `// Array and slice condition tests
+			tmpl: `// Array and slice condition tests
 {% if user.address.slice.0 %}First slice element: {{ user.address.slice.0 }}{% endif %}
 {% if user.address.sliceMap.0.0.key1 %}Value in nested structure: {{ user.address.sliceMap.0.0.key1 }}{% endif %}`,
 			context: map[string]interface{}{
@@ -1812,7 +1812,7 @@ Value in nested structure: nestedvalue1`,
 		},
 		{
 			name: "Complex structure conditions",
-			template: `// Complex structure condition tests
+			tmpl: `// Complex structure condition tests
 {% if team.members.0.name %}First team member: {{ team.members.0.name }}{% endif %}
 {% if team.members.1.address.city %}Second member's city: {{ team.members.1.address.city }}{% endif %}`,
 			context: map[string]interface{}{
@@ -1840,7 +1840,7 @@ Second member's city: Boston`,
 		},
 		{
 			name: "Interface type conditions",
-			template: `// Interface type condition tests
+			tmpl: `// Interface type condition tests
 {% if department.department.street %}Department street: {{ department.department.street }}{% endif %}
 {% if department.department.city %}Department city: {{ department.department.city }}{% endif %}`,
 			context: map[string]interface{}{
@@ -1857,7 +1857,7 @@ Department city: New York`,
 		},
 		{
 			name: "Time type conditions",
-			template: `// Time type condition tests
+			tmpl: `// Time type condition tests
 {% if user.address.time_str %}Time exists: {{ user.address.time_str }}{% endif %}`,
 			context: map[string]interface{}{
 				"user": map[string]interface{}{
@@ -1871,15 +1871,15 @@ Time exists: ` + now.Format(time.RFC3339),
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected (len=%d):\n%q\nGot (len=%d):\n%q",
-					len(tc.expected), tc.expected, len(result), result)
+			if result != tt.expected {
+				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
+					len(tt.expected), len(result), tt.expected, result)
 			}
 		})
 	}
@@ -1925,15 +1925,15 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 		},
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Basic loop test",
-			template: `// Basic loop tests
+			tmpl: `// Basic loop tests
 // Slice loop:
 // {% for item in user.address.slice %}
 // 		- {{ item }}
@@ -1957,7 +1957,7 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 		},
 		{
 			name: "Nested loop test with team members",
-			template: `// Nested loop tests
+			tmpl: `// Nested loop tests
 // Team members loop:
 // {% for member in team.members %}
 // 		Member name: {{ member.name }}, age: {{ member.age }}
@@ -1997,7 +1997,7 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 		},
 		{
 			name: "Complex SliceMap iteration",
-			template: `// Complex data structure loops
+			tmpl: `// Complex data structure loops
 // SliceMap loop:
 // {% for arr in user.address.sliceMap %}
 // 		Array index:
@@ -2030,7 +2030,7 @@ func TestForLoopsWithComplexStructs(t *testing.T) {
 		},
 		{
 			name: "MapSlice iteration",
-			template: `// MapSlice direct access (more reliable than iteration)
+			tmpl: `// MapSlice direct access (more reliable than iteration)
 MapSlice access:
 Level1 data: {{ user.address.mapSlice.level1 }}
 Sublevel data: {{ user.address.mapSlice.level1.sublevel }}
@@ -2050,7 +2050,7 @@ First item: deepitem1`,
 		},
 		{
 			name: "Map key iteration",
-			template: `// Map loops (Since key,value iteration is not supported, we need to know keys in advance)
+			tmpl: `// Map loops (Since key,value iteration is not supported, we need to know keys in advance)
 Map loop:
 key1: {{ user.address.map.key1 }}
 key2: {{ user.address.map.key2 }}`,
@@ -2071,14 +2071,14 @@ key2: value2`,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -2142,15 +2142,15 @@ func TestPointerTypesAndNesting(t *testing.T) {
 		Scores:   []*int{&score1, &score2},
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Basic pointer type access",
-			template: `ID: {{ person.id }}
+			tmpl: `ID: {{ person.id }}
 Name: {{ person.name }}
 Age: {{ person.age }}
 Status: {{ person.isActive }}`,
@@ -2164,7 +2164,7 @@ Status: true`,
 		},
 		{
 			name: "Nested pointer structure access",
-			template: `Contact Information:
+			tmpl: `Contact Information:
 Phone: {% if person.contact.phone %}{{ person.contact.phone }}{% else %}Not set{% endif %}
 Email: {% if person.contact.email %}{{ person.contact.email }}{% else %}Not set{% endif %}
 Fax: {% if person.contact.fax %}{{ person.contact.fax }}{% else %}Not set{% endif %}`,
@@ -2178,7 +2178,7 @@ Fax: Not set`,
 		},
 		{
 			name: "Pointer slice access",
-			template: `Tags: {{ person.tags }}
+			tmpl: `Tags: {{ person.tags }}
 First tag: {% if person.tags.0 %}{{ person.tags.0 }}{% else %}Empty{% endif %}
 Second tag: {% if person.tags.1 %}{{ person.tags.1 }}{% else %}Empty{% endif %}
 Third tag: {% if person.tags.2 %}{{ person.tags.2 }}{% else %}Empty{% endif %}`,
@@ -2192,7 +2192,7 @@ Third tag: Empty`,
 		},
 		{
 			name: "Fixed size pointer array access",
-			template: `Projects: {{ person.projects }}
+			tmpl: `Projects: {{ person.projects }}
 Project 1: {% if person.projects.0 %}{{ person.projects.0 }}{% else %}None{% endif %}
 Project 2: {% if person.projects.1 %}{{ person.projects.1 }}{% else %}None{% endif %}
 Project 3: {% if person.projects.2 %}{{ person.projects.2 }}{% else %}None{% endif %}`,
@@ -2206,7 +2206,7 @@ Project 3: None`,
 		},
 		{
 			name: "Map with pointer values access",
-			template: `Metadata:
+			tmpl: `Metadata:
 Department: {% if person.metaData.department %}{{ person.metaData.department }}{% else %}Not set{% endif %}
 Empty field: {% if person.metaData.empty %}{{ person.metaData.empty }}{% else %}Not set{% endif %}`,
 			context: map[string]interface{}{
@@ -2218,14 +2218,14 @@ Empty field: Not set`,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
 			}
 		})
 	}
@@ -2294,15 +2294,15 @@ func TestNestedTypesWithConditions(t *testing.T) {
 		Scores:   []*int{},
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Basic pointer condition checks",
-			template: `{% if user.name %}Name: {{ user.name }}{% else %}Name: Not set{% endif %}
+			tmpl: `{% if user.name %}Name: {{ user.name }}{% else %}Name: Not set{% endif %}
 {% if user.age %}Age: {{ user.age }}{% else %}Age: Unknown{% endif %}
 {% if user.isActive %}Status: Active{% else %}Status: Inactive{% endif %}`,
 			context: map[string]interface{}{
@@ -2314,7 +2314,7 @@ Status: Active`,
 		},
 		{
 			name: "Nested structure condition checks",
-			template: `{% if user.address %}
+			tmpl: `{% if user.address %}
 Address information exists:
 {% if user.address.street %}  Street: {{ user.address.street }}{% endif %}
 {% if user.address.city %}  City: {{ user.address.city }}{% endif %}
@@ -2334,7 +2334,7 @@ Address information exists:
 		},
 		{
 			name: "Pointer slice condition checks",
-			template: `{% if user.skills %}
+			tmpl: `{% if user.skills %}
 Skills list:
 {% if user.skills.0 %}  - {{ user.skills.0 }}{% endif %}
 {% if user.skills.1 %}  - {{ user.skills.1 }}{% endif %}
@@ -2354,7 +2354,7 @@ Skills list:
 		},
 		{
 			name: "Complex condition checks",
-			template: `{% if user.name && user.age && user.isActive %}
+			tmpl: `{% if user.name && user.age && user.isActive %}
 Complete user info: {{ user.name }} ({{ user.age }} years old)
 {% else %}
 User information incomplete
@@ -2378,7 +2378,7 @@ User is from: New York
 		},
 		{
 			name: "Nil value condition tests",
-			template: `{% if emptyUser.name %}Name: {{ emptyUser.name }}{% else %}Name: Not set{% endif %}
+			tmpl: `{% if emptyUser.name %}Name: {{ emptyUser.name }}{% else %}Name: Not set{% endif %}
 {% if emptyUser.address %}Has address info{% else %}No address info{% endif %}
 {% if emptyUser.skills %}Skill count: {{ emptyUser.skills | size }}{% else %}No skills recorded{% endif %}`,
 			context: map[string]interface{}{
@@ -2390,7 +2390,7 @@ No skills recorded`,
 		},
 		{
 			name: "Array length condition checks",
-			template: `{% if user.skills | size > 1 %}
+			tmpl: `{% if user.skills | size > 1 %}
 Multi-skill user: {{ user.skills | size }} skills
 {% else %}
 Single-skill or no-skill user
@@ -2414,14 +2414,14 @@ Sufficient scores: has 2 scores
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
 			}
 		})
 	}
@@ -2501,9 +2501,9 @@ func TestNestedTypesWithLoops(t *testing.T) {
 		},
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name                string
-		template            string
+		tmpl                string
 		context             map[string]interface{}
 		containsAll         []string // must contain all these strings
 		containsNone        []string // must not contain these strings
@@ -2512,7 +2512,7 @@ func TestNestedTypesWithLoops(t *testing.T) {
 	}{
 		{
 			name: "Pointer slice loops",
-			template: `Team Members:
+			tmpl: `Team Members:
 {% for team in company.teams %}
 Team: {% if team.name %}{{ team.name }}{% endif %}
 Lead: {% if team.lead %}{{ team.lead }}{% endif %}
@@ -2551,7 +2551,7 @@ Members:
 		},
 		{
 			name: "Pointer struct slice loops",
-			template: `Product List:
+			tmpl: `Product List:
 {% for product in company.products %}
 Product: {% if product.name %}{{ product.name }}{% endif %} - Price: {% if product.price %}${{ product.price }}{% endif %}
 {% endfor %}`,
@@ -2568,7 +2568,7 @@ Product: Product Beta - Price: $200
 		},
 		{
 			name: "Map iteration test (contains checking)",
-			template: `Company Settings:
+			tmpl: `Company Settings:
 {% for key, value in company.settings %}
 {{ key }}: {% if value %}{{ value }}{% else %}Not set{% endif %}
 {% endfor %}`,
@@ -2586,7 +2586,7 @@ Product: Product Beta - Price: $200
 		},
 		{
 			name: "Nested loop test",
-			template: `Detailed Team Information:
+			tmpl: `Detailed Team Information:
 {% for team in company.teams %}
 === {% if team.name %}{{ team.name }}{% endif %} ===
 {% for member in team.members %}
@@ -2616,7 +2616,7 @@ Member: Carol Brown
 		},
 		{
 			name: "Map with pointer values loop test",
-			template: `Budget Allocation:
+			tmpl: `Budget Allocation:
 {% for dept, budget in company.budgets %}
 {{ dept }}: {% if budget %}${{ budget }}{% else %}Not allocated{% endif %}
 {% endfor %}`,
@@ -2633,27 +2633,27 @@ Member: Carol Brown
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if tc.useContainsChecking {
+			if tt.useContainsChecking {
 				// Use contains checking to handle map iteration order uncertainty
-				for _, required := range tc.containsAll {
+				for _, required := range tt.containsAll {
 					if !strings.Contains(result, required) {
 						t.Errorf("Output does not contain required string: %s\nGot:\n%s", required, result)
 					}
 				}
-				for _, forbidden := range tc.containsNone {
+				for _, forbidden := range tt.containsNone {
 					if strings.Contains(result, forbidden) {
 						t.Errorf("Output contains forbidden string: %s\nGot:\n%s", forbidden, result)
 					}
 				}
-			} else if result != tc.exactMatch {
+			} else if result != tt.exactMatch {
 				// Exact match
-				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.exactMatch, result)
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.exactMatch, result)
 			}
 		})
 	}
@@ -3210,9 +3210,9 @@ func TestComplexNestedDataStructuresWithTemplateFeatures(t *testing.T) {
 	ctx["company"] = company
 
 	// Test cases - mixed exact match and contains checks
-	cases := []struct {
+	tests := []struct {
 		name         string
-		template     string
+		tmpl         string
 		expected     string
 		containsAll  []string // Must contain all these strings
 		containsNone []string // Must not contain these strings
@@ -3220,7 +3220,7 @@ func TestComplexNestedDataStructuresWithTemplateFeatures(t *testing.T) {
 	}{
 		{
 			name: "Basic company information",
-			template: `Company name: {{ company.name }}
+			tmpl: `Company name: {{ company.name }}
 Founded year: {{ company.founded }}
 Is public: {{ company.is_public }}
 Annual revenue: ${{ company.revenue }}`,
@@ -3232,7 +3232,7 @@ Annual revenue: $1000000.5`,
 		},
 		{
 			name: "Test if conditions with pointer fields",
-			template: `{% if company.is_public %}{{ company.name }} is a public company{% endif %}
+			tmpl: `{% if company.is_public %}{{ company.name }} is a public company{% endif %}
 {% if company.revenue > 500000 %}Company revenue exceeds 500,000 USD{% endif %}
 {% if company.founded < 2015 %}Company was founded early{% endif %}`,
 			expected: `TechCorp is a public company
@@ -3242,7 +3242,7 @@ Company was founded early`,
 		},
 		{
 			name: "for loop - single variable iteration over employees",
-			template: `Employee list:
+			tmpl: `Employee list:
 {% for employee in company.employees %}
 - {{ employee.name }} ({{ employee.age }} years, ${{ employee.salary }})
 {% endfor %}`,
@@ -3256,7 +3256,7 @@ Company was founded early`,
 		},
 		{
 			name: "for loop - double variable iteration over company settings (using contains check)",
-			template: `Company settings:
+			tmpl: `Company settings:
 {% for key, value in company.settings %}
 {{ key }}: {{ value }}
 {% endfor %}`,
@@ -3271,7 +3271,7 @@ Company was founded early`,
 		},
 		{
 			name: "for loop - double variable iteration over locations (using contains check)",
-			template: `Office locations:
+			tmpl: `Office locations:
 {% for location_name, location in company.locations %}
 {{ location_name }}: {{ location.city }}, {{ location.country }}
 Address: {{ location.street }}
@@ -3287,7 +3287,7 @@ Address: {{ location.street }}
 		},
 		{
 			name: "nested for loop - employee skills",
-			template: `Employee skill details:
+			tmpl: `Employee skill details:
 {% for employee in company.employees %}
 {{ employee.name }}'s skills:
 {% for skill in employee.skills %}
@@ -3314,7 +3314,7 @@ Bob Smith's skills:
 		},
 		{
 			name: "complex nested access - employee contact information (using contains check)",
-			template: `Employee contact information:
+			tmpl: `Employee contact information:
 {% for employee in company.employees %}
 {{ employee.name }}:
    Email: {{ employee.contact.email }}
@@ -3343,7 +3343,7 @@ Bob Smith's skills:
 		},
 		{
 			name: "fixed size array access",
-			template: `Employee ratings:
+			tmpl: `Employee ratings:
 {% for employee in company.employees %}
 {{ employee.name }} ratings: [{{ employee.scores.0 }}, {{ employee.scores.1 }}, {{ employee.scores.2 }}]
 {% endfor %}`,
@@ -3357,7 +3357,7 @@ Bob Smith ratings: [82, 90, 85]
 		},
 		{
 			name: "map value as complex structure (using contains check)",
-			template: `Project status report:
+			tmpl: `Project status report:
 {% for status, projects in company.projects %}
 {{ status }} project:
 {% for project in projects %}
@@ -3380,7 +3380,7 @@ Bob Smith ratings: [82, 90, 85]
 		},
 		{
 			name: "complex if condition nested access",
-			template: `Employee evaluation:
+			tmpl: `Employee evaluation:
 {% for employee in company.employees %}
 {% if employee.salary > 100000 %}
 High-salary employee {{ employee.name }}:
@@ -3421,7 +3421,7 @@ High-salary employee Alice Johnson:
 		},
 		{
 			name: "complex nested array and coordinate access (using contains check)",
-			template: `Office location coordinates:
+			tmpl: `Office location coordinates:
 {% for name, location in company.locations %}
 {{ name }} ({{ location.city }}):
    Coordinates: [{{ location.coords.0 }}, {{ location.coords.1 }}]
@@ -3448,7 +3448,7 @@ High-salary employee Alice Johnson:
 		},
 		{
 			name: "employee achievements record (using contains check)",
-			template: `Employee achievements:
+			tmpl: `Employee achievements:
 {% for employee in company.employees %}
 {{ employee.name }}:
 {% for year, achievements in employee.achievements %}
@@ -3475,7 +3475,7 @@ High-salary employee Alice Johnson:
 		},
 		{
 			name: "map value as pointer struct - department teams",
-			template: `Department team information:
+			tmpl: `Department team information:
 {% for dept in company.departments %}
 Department: {{ dept.name }}
 Team:
@@ -3494,7 +3494,7 @@ Team:
 		},
 		{
 			name: "deeply nested - team certification information",
-			template: `Team certification details:
+			tmpl: `Team certification details:
 {% for dept in company.departments %}
 {% for team_name, team in dept.teams %}
 {{ team.name }} certification:
@@ -3519,7 +3519,7 @@ Team:
 		},
 		{
 			name: "multi-level nested - department subsidiary addresses",
-			template: `Department subsidiary information:
+			tmpl: `Department subsidiary information:
 {% for dept in company.departments %}
 {{ dept.name }} subsidiary:
 {% for sub_name, address in dept.subsidiaries %}
@@ -3547,7 +3547,7 @@ Team:
 		},
 		{
 			name: "extremely deeply nested - organizational settings",
-			template: `Organizational settings details:
+			tmpl: `Organizational settings details:
 {% for org_name, org in company.organizations %}
 {{ org.name }}:
 {% for category, settings in org.settings %}
@@ -3571,7 +3571,7 @@ Team:
 		},
 		{
 			name: "three-level nested map - organizational teams",
-			template: `Organizational team structure:
+			tmpl: `Organizational team structure:
 {% for org_name, org in company.organizations %}
 {{ org.name }}:
 {% for dept_name, teams in org.teams %}
@@ -3593,28 +3593,28 @@ Team:
 	}
 
 	// Execute tests
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
-			if tc.useContains {
+			if tt.useContains {
 				// Use contains checking mode, suitable for map iteration order uncertainty
-				for _, required := range tc.containsAll {
+				for _, required := range tt.containsAll {
 					if !strings.Contains(result, required) {
 						t.Errorf("Missing required content: %s\nActual output:\n%s", required, result)
 					}
 				}
-				for _, forbidden := range tc.containsNone {
+				for _, forbidden := range tt.containsNone {
 					if strings.Contains(result, forbidden) {
 						t.Errorf("Output contains forbidden content: %s\nActual output:\n%s", forbidden, result)
 					}
 				}
-			} else if strings.TrimSpace(result) != strings.TrimSpace(tc.expected) {
+			} else if strings.TrimSpace(result) != strings.TrimSpace(tt.expected) {
 				// Exact match
-				t.Errorf("Template output mismatch\nExpected:\n%s\nActual:\n%s", tc.expected, result)
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
 			}
 		})
 	}
@@ -3739,15 +3739,15 @@ func TestAliasTypes(t *testing.T) {
 		},
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Basic alias type rendering",
-			template: `User Information:
+			tmpl: `User Information:
 ID: {{ user.id }}
 Name: {{ user.name }}
 Age: {{ user.age }}
@@ -3769,7 +3769,7 @@ Priority: 1`,
 		},
 		{
 			name: "Alias types in if conditions",
-			template: `User Status Report:
+			tmpl: `User Status Report:
 {% if user.is_active %}{{ user.name }} is active{% else %}{{ user.name }} is inactive{% endif %}
 {% if user.age >= 30 %}{{ user.name }} is senior ({{ user.age }} years old){% else %}{{ user.name }} is junior ({{ user.age }} years old){% endif %}
 {% if user.score > 90 %}{{ user.name }} has excellent score: {{ user.score }}{% endif %}
@@ -3787,7 +3787,7 @@ Alice Johnson has high priority: 1`,
 		},
 		{
 			name: "Alias types in for loops",
-			template: `All Users:
+			tmpl: `All Users:
 {% for user in users %}
 - {{ user.name }} ({{ user.id }}): Age {{ user.age }}, Score {{ user.score }}, Department {{ user.department }}
   {% if user.is_active %}Status: Active{% else %}Status: Inactive{% endif %}
@@ -3809,7 +3809,7 @@ Alice Johnson has high priority: 1`,
 		},
 		{
 			name: "Alias slice types in for loops",
-			template: `Tags:
+			tmpl: `Tags:
 {% for tag in tags %}
 - {{ tag }}
 {% endfor %}
@@ -3870,7 +3870,7 @@ Status List:
 		},
 		{
 			name: "Complex conditions with alias types",
-			template: `Active High-Performing Users:
+			tmpl: `Active High-Performing Users:
 {% for user in users %}
 {% if user.is_active && user.score > 90 && user.age >= 25 %}
 
@@ -3912,7 +3912,7 @@ Status List:
 		},
 		{
 			name: "Alias types with filters",
-			template: `User Summary:
+			tmpl: `User Summary:
 {% for user in users %}
 {{ user.name | upper }}:
   ID: {{ user.id | upper }}
@@ -3942,7 +3942,7 @@ CAROL BROWN:
 		},
 		{
 			name: "Alias types comparison and arithmetic",
-			template: `User Comparison:
+			tmpl: `User Comparison:
 {% for user in users %}
 {{ user.name }}:
   {% if user.age > 28 %}Age category: Senior{% else %}Age category: Junior{% endif %}
@@ -3972,7 +3972,7 @@ Carol Brown:
 		},
 		{
 			name: "Mixed alias and regular types",
-			template: `Department Statistics:
+			tmpl: `Department Statistics:
 {% for user in users %}
 {{ user.department }} Department:
   Employee: {{ user.name }} (ID: {{ user.id }})
@@ -4006,7 +4006,7 @@ HR Department:
 		},
 		{
 			name: "Pointer alias types basic rendering",
-			template: `User with Pointers:
+			tmpl: `User with Pointers:
 ID: {{ user.id }}
 Name: {{ user.name }}
 Age: {{ user.age }}
@@ -4028,7 +4028,7 @@ Manager: Alice Johnson`,
 		},
 		{
 			name: "Pointer alias types with nil values",
-			template: `User with Nil Pointers:
+			tmpl: `User with Nil Pointers:
 ID: {% if user.id %}{{ user.id }}{% else %}N/A{% endif %}
 Name: {{ user.name }}
 Age: {% if user.age %}{{ user.age }}{% else %}N/A{% endif %}
@@ -4050,7 +4050,7 @@ Manager: Carol Brown`,
 		},
 		{
 			name: "Pointer alias types in for loops",
-			template: `All Users with Pointers:
+			tmpl: `All Users with Pointers:
 {% for user in users %}
 - {{ user.name }}{% if user.id %} ({{ user.id }}){% endif %}
   Age: {% if user.age %}{{ user.age }}{% else %}N/A{% endif %}
@@ -4084,7 +4084,7 @@ Manager: Carol Brown`,
 		},
 		{
 			name: "Pointer alias types in conditions",
-			template: `Pointer Alias Conditions:
+			tmpl: `Pointer Alias Conditions:
 {% for user in users %}
 {{ user.name }}:
   {% if user.id %}Has ID: {{ user.id }}{% else %}No ID{% endif %}
@@ -4118,14 +4118,14 @@ Carol Pointer:
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := Render(tc.template, tc.context)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Template execution failed: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Template output mismatch.\nExpected:\n%s\nGot:\n%s", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
 			}
 		})
 	}
@@ -4134,49 +4134,49 @@ Carol Pointer:
 func TestBasicBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  Context
 		expected string
 	}{
 		{
 			name:     "Basic break in for loop",
-			template: `{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
 			name:     "Basic continue in for loop",
-			template: `{% for i in nums %}{% if i == 3 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 3 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1245",
 		},
 		{
 			name:     "Break at beginning",
-			template: `{% for i in nums %}{% break %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% break %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "",
 		},
 		{
 			name:     "Continue all iterations",
-			template: `{% for i in nums %}{% continue %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% continue %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "",
 		},
 		{
 			name:     "Multiple breaks (only first one executes)",
-			template: `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% if i == 4 %}{% break %}{% endif %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% if i == 4 %}{% break %}{% endif %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1",
 		},
 		{
 			name:     "Break in string iteration",
-			template: `{% for char in str %}{% if char == 'c' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
+			tmpl:     `{% for char in str %}{% if char == 'c' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
 			context:  Context{"str": "abcdef"},
 			expected: "ab",
 		},
 		{
 			name:     "Continue in string iteration",
-			template: `{% for char in str %}{% if char == 'c' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
+			tmpl:     `{% for char in str %}{% if char == 'c' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
 			context:  Context{"str": "abcdef"},
 			expected: "abdef",
 		},
@@ -4184,13 +4184,13 @@ func TestBasicBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.context)
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected %q, got %q", tt.expected, result)
+				t.Errorf("got %q, want %q", tt.expected, result)
 			}
 		})
 	}
@@ -4199,31 +4199,31 @@ func TestBasicBreakContinue(t *testing.T) {
 func TestNestedBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  Context
 		expected string
 	}{
 		{
 			name:     "Break in inner loop only",
-			template: `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "1-1|2-1|3-1|",
 		},
 		{
 			name:     "Continue in inner loop only",
-			template: `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "1-1|1-3|2-1|2-3|3-1|3-3|",
 		},
 		{
 			name:     "Break in outer loop",
-			template: `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "1-1|1-2|1-3|",
 		},
 		{
 			name:     "Continue in outer loop",
-			template: `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "1-1|1-2|1-3|3-1|3-2|3-3|",
 		},
@@ -4231,13 +4231,13 @@ func TestNestedBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.context)
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected %q, got %q", tt.expected, result)
+				t.Errorf("got %q, want %q", tt.expected, result)
 			}
 		})
 	}
@@ -4246,35 +4246,35 @@ func TestNestedBreakContinue(t *testing.T) {
 func TestBreakContinueErrors(t *testing.T) {
 	tests := []struct {
 		name        string
-		template    string
+		tmpl        string
 		context     Context
 		expectError bool
 		errorMsg    string
 	}{
 		{
 			name:        "Break outside of loop",
-			template:    `Hello {% break %} World`,
+			tmpl:        `Hello {% break %} World`,
 			context:     Context{},
 			expectError: true,
 			errorMsg:    "break statement outside of loop",
 		},
 		{
 			name:        "Continue outside of loop",
-			template:    `Hello {% continue %} World`,
+			tmpl:        `Hello {% continue %} World`,
 			context:     Context{},
 			expectError: true,
 			errorMsg:    "continue statement outside of loop",
 		},
 		{
 			name:        "Break in if condition outside loop",
-			template:    `{% if true %}{% break %}{% endif %}`,
+			tmpl:        `{% if true %}{% break %}{% endif %}`,
 			context:     Context{},
 			expectError: true,
 			errorMsg:    "break statement outside of loop",
 		},
 		{
 			name:        "Continue in if condition outside loop",
-			template:    `{% if true %}{% continue %}{% endif %}`,
+			tmpl:        `{% if true %}{% continue %}{% endif %}`,
 			context:     Context{},
 			expectError: true,
 			errorMsg:    "continue statement outside of loop",
@@ -4283,7 +4283,7 @@ func TestBreakContinueErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.context)
+			result, err := Render(tt.tmpl, tt.context)
 
 			if tt.expectError {
 				if err == nil {
@@ -4312,49 +4312,49 @@ func contains(s, substr string) bool {
 func TestAdvancedBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  Context
 		expected string
 	}{
 		{
 			name:     "Break and continue in same loop",
-			template: `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% if i == 4 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% if i == 4 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "13",
 		},
 		{
 			name:     "Break with complex condition",
-			template: `{% for i in nums %}{% if i > 2 && i < 5 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i > 2 && i < 5 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
 			name:     "Continue with complex condition",
-			template: `{% for i in nums %}{% if i > 1 && i < 4 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i > 1 && i < 4 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "145",
 		},
 		{
 			name:     "Break in empty array",
-			template: `{% for i in empty %}{% break %}{{ i }}{% endfor %}Done`,
+			tmpl:     `{% for i in empty %}{% break %}{{ i }}{% endfor %}Done`,
 			context:  Context{"empty": []int{}},
 			expected: "Done",
 		},
 		{
 			name:     "Continue in single element",
-			template: `{% for i in single %}{% continue %}{{ i }}{% endfor %}Done`,
+			tmpl:     `{% for i in single %}{% continue %}{{ i }}{% endfor %}Done`,
 			context:  Context{"single": []int{1}},
 			expected: "Done",
 		},
 		{
 			name:     "Break with filter",
-			template: `{% for item in items %}{% if item | length > 3 %}{% break %}{% endif %}{{ item }}|{% endfor %}`,
+			tmpl:     `{% for item in items %}{% if item | length > 3 %}{% break %}{% endif %}{{ item }}|{% endfor %}`,
 			context:  Context{"items": []string{"a", "bb", "ccc", "dddd", "eeeee"}},
 			expected: "a|bb|ccc|",
 		},
 		{
 			name:     "Continue with filter",
-			template: `{% for item in items %}{% if item | length == 2 %}{% continue %}{% endif %}{{ item }}|{% endfor %}`,
+			tmpl:     `{% for item in items %}{% if item | length == 2 %}{% continue %}{% endif %}{{ item }}|{% endfor %}`,
 			context:  Context{"items": []string{"a", "bb", "ccc", "dd", "e"}},
 			expected: "a|ccc|e|",
 		},
@@ -4362,13 +4362,13 @@ func TestAdvancedBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.context)
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected %q, got %q", tt.expected, result)
+				t.Errorf("got %q, want %q", tt.expected, result)
 			}
 		})
 	}
@@ -4377,25 +4377,25 @@ func TestAdvancedBreakContinue(t *testing.T) {
 func TestDeepNestedBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  Context
 		expected string
 	}{
 		{
 			name:     "Three level nested with break",
-			template: `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2}},
 			expected: "1-1-1|1-2-1|2-1-1|2-2-1|",
 		},
 		{
 			name:     "Three level nested with continue",
-			template: `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "1-1-1|1-1-3|1-2-1|1-2-3|1-3-1|1-3-3|2-1-1|2-1-3|2-2-1|2-2-3|2-3-1|2-3-3|3-1-1|3-1-3|3-2-1|3-2-3|3-3-1|3-3-3|",
 		},
 		{
 			name:     "Middle level break affects only that level",
-			template: `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{% for k in nums %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{% for k in nums %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "1-1-1|1-1-2|1-1-3|2-1-1|2-1-2|2-1-3|3-1-1|3-1-2|3-1-3|",
 		},
@@ -4403,13 +4403,13 @@ func TestDeepNestedBreakContinue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.context)
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected %q, got %q", tt.expected, result)
+				t.Errorf("got %q, want %q", tt.expected, result)
 			}
 		})
 	}
@@ -4418,49 +4418,49 @@ func TestDeepNestedBreakContinue(t *testing.T) {
 func TestComplexControlFlowScenarios(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  Context
 		expected string
 	}{
 		{
 			name:     "Break in nested if conditions",
-			template: `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% break %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% break %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1",
 		},
 		{
 			name:     "Continue in nested if conditions",
-			template: `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% continue %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% continue %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "145",
 		},
 		{
 			name:     "Break in if-else",
-			template: `{% for i in nums %}{% if i == 3 %}{% break %}{% else %}{{ i }}{% endif %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 3 %}{% break %}{% else %}{{ i }}{% endif %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
 			name:     "Continue in if-else",
-			template: `{% for i in nums %}{% if i == 3 %}{% continue %}{% else %}{{ i }}{% endif %}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 3 %}{% continue %}{% else %}{{ i }}{% endif %}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1245",
 		},
 		{
 			name:     "Multiple loops with different control flow",
-			template: `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% endfor %}-{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ j }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% endfor %}-{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ j }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "1-13",
 		},
 		{
 			name:     "Break in loop inside if",
-			template: `{% if true %}{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}{% endif %}`,
+			tmpl:     `{% if true %}{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}{% endif %}`,
 			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
-			name:     "Array of maps with break",
-			template: `{% for item in items %}{% if item.skip %}{% break %}{% endif %}{{ item.name }}|{% endfor %}`,
+			name: "Array of maps with break",
+			tmpl: `{% for item in items %}{% if item.skip %}{% break %}{% endif %}{{ item.name }}|{% endfor %}`,
 			context: Context{
 				"items": []map[string]interface{}{
 					{"name": "a", "skip": false},
@@ -4472,8 +4472,8 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 			expected: "a|b|",
 		},
 		{
-			name:     "Array of maps with continue",
-			template: `{% for item in items %}{% if item.skip %}{% continue %}{% endif %}{{ item.name }}|{% endfor %}`,
+			name: "Array of maps with continue",
+			tmpl: `{% for item in items %}{% if item.skip %}{% continue %}{% endif %}{{ item.name }}|{% endfor %}`,
 			context: Context{
 				"items": []map[string]interface{}{
 					{"name": "a", "skip": false},
@@ -4488,13 +4488,13 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.context)
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected %q, got %q", tt.expected, result)
+				t.Errorf("got %q, want %q", tt.expected, result)
 			}
 		})
 	}
@@ -4503,43 +4503,43 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 func TestBreakContinueEdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  Context
 		expected string
 	}{
 		{
 			name:     "Break immediately in nested loop",
-			template: `{% for i in nums %}{% for j in nums %}{% break %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% for j in nums %}{% break %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "123",
 		},
 		{
 			name:     "Continue immediately in nested loop",
-			template: `{% for i in nums %}{% for j in nums %}{% continue %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
+			tmpl:     `{% for i in nums %}{% for j in nums %}{% continue %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
 			context:  Context{"nums": []int{1, 2, 3}},
 			expected: "123",
 		},
 		{
 			name:     "Break with boolean array",
-			template: `{% for flag in flags %}{% if flag %}{% break %}{% endif %}{{ flag }}{% endfor %}`,
+			tmpl:     `{% for flag in flags %}{% if flag %}{% break %}{% endif %}{{ flag }}{% endfor %}`,
 			context:  Context{"flags": []bool{false, false, true, false}},
 			expected: "falsefalse",
 		},
 		{
 			name:     "Continue with boolean array",
-			template: `{% for flag in flags %}{% if flag %}{% continue %}{% endif %}{{ flag }}{% endfor %}`,
+			tmpl:     `{% for flag in flags %}{% if flag %}{% continue %}{% endif %}{{ flag }}{% endfor %}`,
 			context:  Context{"flags": []bool{false, true, false, true}},
 			expected: "falsefalse",
 		},
 		{
 			name:     "Break in string with unicode",
-			template: `{% for char in str %}{% if char == '界' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
+			tmpl:     `{% for char in str %}{% if char == '界' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
 			context:  Context{"str": "世界你好"},
 			expected: "世",
 		},
 		{
 			name:     "Continue in string with unicode",
-			template: `{% for char in str %}{% if char == '界' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
+			tmpl:     `{% for char in str %}{% if char == '界' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
 			context:  Context{"str": "世界你好"},
 			expected: "世你好",
 		},
@@ -4547,13 +4547,13 @@ func TestBreakContinueEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.template, tt.context)
+			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("Failed to execute template: %v", err)
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected %q, got %q", tt.expected, result)
+				t.Errorf("got %q, want %q", tt.expected, result)
 			}
 		})
 	}
@@ -4561,71 +4561,71 @@ func TestBreakContinueEdgeCases(t *testing.T) {
 
 // TestElifBasic tests basic elif functionality with different branch conditions
 func TestElifBasic(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
-			name:     "If true, elif ignored",
-			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			name: "If true, elif ignored",
+			tmpl: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
 			context: map[string]interface{}{
 				"score": 95,
 			},
 			expected: "Excellent",
 		},
 		{
-			name:     "If false, first elif true",
-			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			name: "If false, first elif true",
+			tmpl: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
 			context: map[string]interface{}{
 				"score": 85,
 			},
 			expected: "Good",
 		},
 		{
-			name:     "If false, first elif false, second elif true",
-			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			name: "If false, first elif false, second elif true",
+			tmpl: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
 			context: map[string]interface{}{
 				"score": 65,
 			},
 			expected: "Pass",
 		},
 		{
-			name:     "All conditions false, else branch",
-			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
+			name: "All conditions false, else branch",
+			tmpl: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% else %}Fail{% endif %}",
 			context: map[string]interface{}{
 				"score": 45,
 			},
 			expected: "Fail",
 		},
 		{
-			name:     "No else branch, all conditions false",
-			template: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% endif %}",
+			name: "No else branch, all conditions false",
+			tmpl: "{% if score >= 90 %}Excellent{% elif score >= 80 %}Good{% elif score >= 60 %}Pass{% endif %}",
 			context: map[string]interface{}{
 				"score": 45,
 			},
 			expected: "",
 		},
 		{
-			name:     "Single elif with variables",
-			template: "{% if age < 18 %}Minor{% elif age >= 65 %}Senior{% else %}Adult{% endif %}",
+			name: "Single elif with variables",
+			tmpl: "{% if age < 18 %}Minor{% elif age >= 65 %}Senior{% else %}Adult{% endif %}",
 			context: map[string]interface{}{
 				"age": 70,
 			},
 			expected: "Senior",
 		},
 		{
-			name:     "Complex conditions with filters",
-			template: "{% if name | length > 10 %}Long name{% elif name | length > 5 %}Medium name{% else %}Short name{% endif %}",
+			name: "Complex conditions with filters",
+			tmpl: "{% if name | length > 10 %}Long name{% elif name | length > 5 %}Medium name{% else %}Short name{% endif %}",
 			context: map[string]interface{}{
 				"name": "Alexander",
 			},
 			expected: "Medium name",
 		},
 		{
-			name:     "Nested variables in elif",
-			template: "{% if user.age < 18 %}Minor{% elif user.age >= 65 %}Senior{% else %}Adult{% endif %}",
+			name: "Nested variables in elif",
+			tmpl: "{% if user.age < 18 %}Minor{% elif user.age >= 65 %}Senior{% else %}Adult{% endif %}",
 			context: map[string]interface{}{
 				"user": map[string]interface{}{
 					"age": 25,
@@ -4634,16 +4634,16 @@ func TestElifBasic(t *testing.T) {
 			expected: "Adult",
 		},
 		{
-			name:     "String comparison in elif",
-			template: "{% if status == 'active' %}Active User{% elif status == 'inactive' %}Inactive User{% else %}Unknown Status{% endif %}",
+			name: "String comparison in elif",
+			tmpl: "{% if status == 'active' %}Active User{% elif status == 'inactive' %}Inactive User{% else %}Unknown Status{% endif %}",
 			context: map[string]interface{}{
 				"status": "inactive",
 			},
 			expected: "Inactive User",
 		},
 		{
-			name:     "Boolean conditions in elif",
-			template: "{% if is_admin %}Admin{% elif is_moderator %}Moderator{% else %}User{% endif %}",
+			name: "Boolean conditions in elif",
+			tmpl: "{% if is_admin %}Admin{% elif is_moderator %}Moderator{% else %}User{% endif %}",
 			context: map[string]interface{}{
 				"is_admin":     false,
 				"is_moderator": true,
@@ -4652,15 +4652,15 @@ func TestElifBasic(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := Context(tc.context)
-			result, err := Render(tc.template, ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := Context(tt.context)
+			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4668,15 +4668,15 @@ func TestElifBasic(t *testing.T) {
 
 // TestElifNested tests nested elif structures and if-elif-else combinations
 func TestElifNested(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
 			name: "Nested if-elif inside if",
-			template: `{% if category == 'student' %}
+			tmpl: `{% if category == 'student' %}
 				{% if age < 18 %}Child student{% elif age < 25 %}Young student{% else %}Adult student{% endif %}
 			{% else %}
 				Not a student
@@ -4689,7 +4689,7 @@ func TestElifNested(t *testing.T) {
 		},
 		{
 			name: "Nested if-elif inside elif",
-			template: `{% if role == 'admin' %}
+			tmpl: `{% if role == 'admin' %}
 				Administrator
 			{% elif role == 'user' %}
 				{% if level == 'premium' %}Premium user{% elif level == 'basic' %}Basic user{% else %}Guest user{% endif %}
@@ -4704,7 +4704,7 @@ func TestElifNested(t *testing.T) {
 		},
 		{
 			name: "Nested if-elif inside else",
-			template: `{% if type == 'vip' %}
+			tmpl: `{% if type == 'vip' %}
 				VIP member
 			{% else %}
 				{% if score >= 90 %}Excellent{% elif score >= 70 %}Good{% else %}Average{% endif %}
@@ -4717,7 +4717,7 @@ func TestElifNested(t *testing.T) {
 		},
 		{
 			name: "Multiple nested levels",
-			template: `{% if department == 'engineering' %}
+			tmpl: `{% if department == 'engineering' %}
 				{% if level == 'senior' %}
 					{% if experience >= 5 %}Senior Engineer{% elif experience >= 3 %}Mid-level Engineer{% else %}Junior Engineer{% endif %}
 				{% elif level == 'junior' %}
@@ -4737,7 +4737,7 @@ func TestElifNested(t *testing.T) {
 		},
 		{
 			name: "Nested with complex conditions",
-			template: `{% if user.type == 'premium' %}
+			tmpl: `{% if user.type == 'premium' %}
 				{% if user.subscription.active %}
 					{% if user.subscription.plan == 'pro' %}Pro subscriber{% elif user.subscription.plan == 'basic' %}Basic subscriber{% else %}Unknown plan{% endif %}
 				{% else %}
@@ -4761,15 +4761,15 @@ func TestElifNested(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := Context(tc.context)
-			result, err := Render(tc.template, ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := Context(tt.context)
+			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4777,15 +4777,15 @@ func TestElifNested(t *testing.T) {
 
 // TestElifComplexExpressions tests elif with complex condition expressions
 func TestElifComplexExpressions(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		context  map[string]interface{}
 		expected string
 	}{
 		{
-			name:     "Multiple AND conditions in elif",
-			template: "{% if score < 50 %}Fail{% elif score >= 80 && grade == 'A' %}Excellent{% elif score >= 60 && grade == 'B' %}Good{% else %}Average{% endif %}",
+			name: "Multiple AND conditions in elif",
+			tmpl: "{% if score < 50 %}Fail{% elif score >= 80 && grade == 'A' %}Excellent{% elif score >= 60 && grade == 'B' %}Good{% else %}Average{% endif %}",
 			context: map[string]interface{}{
 				"score": 85,
 				"grade": "A",
@@ -4793,8 +4793,8 @@ func TestElifComplexExpressions(t *testing.T) {
 			expected: "Excellent",
 		},
 		{
-			name:     "Multiple OR conditions in elif",
-			template: "{% if age < 18 %}Minor{% elif status == 'vip' || points >= 1000 %}Premium{% elif status == 'member' || points >= 500 %}Regular{% else %}Guest{% endif %}",
+			name: "Multiple OR conditions in elif",
+			tmpl: "{% if age < 18 %}Minor{% elif status == 'vip' || points >= 1000 %}Premium{% elif status == 'member' || points >= 500 %}Regular{% else %}Guest{% endif %}",
 			context: map[string]interface{}{
 				"age":    25,
 				"status": "member",
@@ -4803,8 +4803,8 @@ func TestElifComplexExpressions(t *testing.T) {
 			expected: "Regular",
 		},
 		{
-			name:     "Complex logical expressions",
-			template: "{% if (age >= 18 && age <= 65) && (income > 50000 || education == 'college') %}Qualified{% elif age > 65 && savings >= 100000 %}Senior qualified{% else %}Not qualified{% endif %}",
+			name: "Complex logical expressions",
+			tmpl: "{% if (age >= 18 && age <= 65) && (income > 50000 || education == 'college') %}Qualified{% elif age > 65 && savings >= 100000 %}Senior qualified{% else %}Not qualified{% endif %}",
 			context: map[string]interface{}{
 				"age":       30,
 				"income":    45000,
@@ -4814,24 +4814,24 @@ func TestElifComplexExpressions(t *testing.T) {
 			expected: "Qualified",
 		},
 		{
-			name:     "Filter expressions in elif",
-			template: "{% if name | length < 3 %}Too short{% elif name | length > 10 %}Too long{% elif name | upper == 'ADMIN' %}Administrator{% else %}Valid name{% endif %}",
+			name: "Filter expressions in elif",
+			tmpl: "{% if name | length < 3 %}Too short{% elif name | length > 10 %}Too long{% elif name | upper == 'ADMIN' %}Administrator{% else %}Valid name{% endif %}",
 			context: map[string]interface{}{
 				"name": "admin",
 			},
 			expected: "Administrator",
 		},
 		{
-			name:     "Multiple filters in elif",
-			template: "{% if text | trim | length == 0 %}Empty{% elif text | trim | upper | length > 5 %}Long text{% elif text | trim | lower == 'hello' %}Greeting{% else %}Regular text{% endif %}",
+			name: "Multiple filters in elif",
+			tmpl: "{% if text | trim | length == 0 %}Empty{% elif text | trim | upper | length > 5 %}Long text{% elif text | trim | lower == 'hello' %}Greeting{% else %}Regular text{% endif %}",
 			context: map[string]interface{}{
 				"text": "  HELLO  ",
 			},
 			expected: "Greeting",
 		},
 		{
-			name:     "Nested object access in elif",
-			template: "{% if user.profile.level == 'admin' %}Admin{% elif user.profile.level == 'moderator' && user.profile.permissions.write %}Moderator{% elif user.profile.active %}Active user{% else %}Inactive user{% endif %}",
+			name: "Nested object access in elif",
+			tmpl: "{% if user.profile.level == 'admin' %}Admin{% elif user.profile.level == 'moderator' && user.profile.permissions.write %}Moderator{% elif user.profile.active %}Active user{% else %}Inactive user{% endif %}",
 			context: map[string]interface{}{
 				"user": map[string]interface{}{
 					"profile": map[string]interface{}{
@@ -4846,16 +4846,16 @@ func TestElifComplexExpressions(t *testing.T) {
 			expected: "Moderator",
 		},
 		{
-			name:     "Array operations in elif",
-			template: "{% if items | size == 0 %}Empty list{% elif items | size > 10 %}Large list{% elif items | size > 5 %}Medium list{% else %}Small list{% endif %}",
+			name: "Array operations in elif",
+			tmpl: "{% if items | size == 0 %}Empty list{% elif items | size > 10 %}Large list{% elif items | size > 5 %}Medium list{% else %}Small list{% endif %}",
 			context: map[string]interface{}{
 				"items": []string{"a", "b", "c", "d", "e", "f", "g"},
 			},
 			expected: "Medium list",
 		},
 		{
-			name:     "Mixed arithmetic and comparison in elif",
-			template: "{% if score * 2 < 100 %}Low{% elif score + bonus >= 150 %}High{% elif score - penalty > 80 %}Medium{% else %}Average{% endif %}",
+			name: "Mixed arithmetic and comparison in elif",
+			tmpl: "{% if score * 2 < 100 %}Low{% elif score + bonus >= 150 %}High{% elif score - penalty > 80 %}Medium{% else %}Average{% endif %}",
 			context: map[string]interface{}{
 				"score":   90,
 				"bonus":   70,
@@ -4864,16 +4864,16 @@ func TestElifComplexExpressions(t *testing.T) {
 			expected: "High",
 		},
 		{
-			name:     "String comparison with filters",
-			template: "{% if status | lower == 'active' %}Active{% elif status | lower == 'pending' %}Pending{% elif status | lower == 'inactive' %}Inactive{% else %}Unknown{% endif %}",
+			name: "String comparison with filters",
+			tmpl: "{% if status | lower == 'active' %}Active{% elif status | lower == 'pending' %}Pending{% elif status | lower == 'inactive' %}Inactive{% else %}Unknown{% endif %}",
 			context: map[string]interface{}{
 				"status": "PENDING",
 			},
 			expected: "Pending",
 		},
 		{
-			name:     "Complex boolean expressions",
-			template: "{% if (is_admin || is_moderator) && is_active %}Privileged{% elif is_user && (has_subscription || trial_active) %}Subscriber{% elif is_guest %}Guest{% else %}Unknown{% endif %}",
+			name: "Complex boolean expressions",
+			tmpl: "{% if (is_admin || is_moderator) && is_active %}Privileged{% elif is_user && (has_subscription || trial_active) %}Subscriber{% elif is_guest %}Guest{% else %}Unknown{% endif %}",
 			context: map[string]interface{}{
 				"is_admin":         false,
 				"is_moderator":     false,
@@ -4887,15 +4887,15 @@ func TestElifComplexExpressions(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := Context(tc.context)
-			result, err := Render(tc.template, ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := Context(tt.context)
+			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4903,16 +4903,16 @@ func TestElifComplexExpressions(t *testing.T) {
 
 // TestElifComplexNestedWithLoops tests complex nested if-elif-else structures with for loops and control flow
 func TestElifComplexNestedWithLoops(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name        string
-		template    string
+		tmpl        string
 		context     map[string]interface{}
 		expected    string
 		expectError bool
 	}{
 		{
 			name: "Complex nested if-elif-else with for loops and break/continue",
-			template: `{% for user in users %}
+			tmpl: `{% for user in users %}
 User: {{ user.name }}
 {% if user.role == 'admin' %}
   Admin Level: {% if user.level >= 3 %}Senior Admin{% elif user.level >= 2 %}Mid Admin{% else %}Junior Admin{% endif %}
@@ -4994,7 +4994,7 @@ User: Charlie
 		},
 		{
 			name: "Nested elif with complex conditions and loops",
-			template: `{% for item in items %}
+			tmpl: `{% for item in items %}
 Item: {{ item.name }}
 {% if item.category == 'electronics' %}
   {% if item.price >= 1000 %}
@@ -5072,7 +5072,7 @@ Item: Shirt
 		},
 		{
 			name: "Deep nested if-elif-else with multiple conditions",
-			template: `{% for company in companies %}
+			tmpl: `{% for company in companies %}
 Company: {{ company.name }}
 {% if company.size == 'large' %}
   Large Company
@@ -5149,7 +5149,7 @@ Company: TechCorp
 		},
 		{
 			name: "Multiple nested loops with complex elif chains",
-			template: `{% for category in categories %}
+			tmpl: `{% for category in categories %}
 Category: {{ category.name }}
 {% for product in category.products %}
   Product: {{ product.name }}
@@ -5231,7 +5231,7 @@ Category: Electronics
 		},
 		{
 			name: "Error case: elif without matching if",
-			template: `{% for item in items %}
+			tmpl: `{% for item in items %}
   Item: {{ item.name }}
   {% elif item.active %}
     Active item
@@ -5247,7 +5247,7 @@ Category: Electronics
 		},
 		{
 			name: "Error case: else without matching if",
-			template: `{% for user in users %}
+			tmpl: `{% for user in users %}
   User: {{ user.name }}
   {% else %}
     No users
@@ -5263,7 +5263,7 @@ Category: Electronics
 		},
 		{
 			name: "Error case: nested elif without matching if",
-			template: `{% for category in categories %}
+			tmpl: `{% for category in categories %}
   Category: {{ category.name }}
   {% for product in category.products %}
     Product: {{ product.name }}
@@ -5287,7 +5287,7 @@ Category: Electronics
 		},
 		{
 			name: "Error case: multiple else statements",
-			template: `{% for item in items %}
+			tmpl: `{% for item in items %}
   {% if item.active %}
     Active
   {% else %}
@@ -5306,7 +5306,7 @@ Category: Electronics
 		},
 		{
 			name: "Error case: multiple else statements in nested if",
-			template: `{% if condition1 %}
+			tmpl: `{% if condition1 %}
   {% if condition2 %}
     Inner if
   {% else %}
@@ -5324,7 +5324,7 @@ Category: Electronics
 		},
 		{
 			name: "Error case: three else statements",
-			template: `{% if condition %}
+			tmpl: `{% if condition %}
   If branch
 {% else %}
   First else
@@ -5341,7 +5341,7 @@ Category: Electronics
 		},
 		{
 			name: "Valid case: single else with multiple elif",
-			template: `{% if score >= 90 %}
+			tmpl: `{% if score >= 90 %}
   Excellent
 {% elif score >= 80 %}
   Good
@@ -5360,12 +5360,12 @@ Category: Electronics
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := Context(tc.context)
-			result, err := Render(tc.template, ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := Context(tt.context)
+			result, err := Render(tt.tmpl, ctx)
 
-			if tc.expectError {
+			if tt.expectError {
 				if err == nil {
 					t.Fatalf("Expected error but got none. Result: %s", result)
 				}
@@ -5375,8 +5375,8 @@ Category: Electronics
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -5401,10 +5401,10 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		Operation Operation `json:"operation"`
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name        string
 		context     map[string]interface{}
-		template    string
+		tmpl        string
 		expected    string
 		expectError bool
 	}{
@@ -5423,7 +5423,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
 			// Apply {{ paramName }} parameter ({{ param.in }})
     {% if param.schema.type == "string" %}
     if r.{{ paramName }} != "" {
@@ -5479,7 +5479,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
 			// Apply {{ paramName }} parameter ({{ param.in }})
     {% if param.schema.type == "string" %}
     if r.{{ paramName }} != "" {
@@ -5532,7 +5532,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
 			// Apply {{ paramName }} parameter ({{ param.in }})
     {% if param.schema.type == "string" %}
     if r.{{ paramName }} != "" {
@@ -5585,7 +5585,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
 			// Apply {{ paramName }} parameter ({{ param.in }})
     {% if param.schema.type == "string" %}
     if r.{{ paramName }} != "" {
@@ -5638,7 +5638,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
 			// Apply {{ paramName }} parameter ({{ param.in }})
     {% if param.schema.type == "string" %}
     if r.{{ paramName }} != "" {
@@ -5694,7 +5694,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
 {% if param.schema.type == "string" %}
 String param: {{ paramName }}
 {% elif param.schema.type == "integer" %}
@@ -5724,7 +5724,7 @@ String param: username
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
 {% if param.schema.type == "string" %}
 String param: {{ paramName }}
 {% elif param.schema.type == "integer" %}
@@ -5749,7 +5749,7 @@ Integer param: count
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
     // Process {{ paramName }}
 {% endfor %}    
     // No request body
@@ -5773,7 +5773,7 @@ Integer param: count
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
     {% if param.in == "query" %}
         {% if param.schema.type == "string" %}
             // String query param
@@ -5825,7 +5825,7 @@ Integer param: count
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
     // Process {{ paramName }}
     {% elif param.schema.type == "string" %}
     String parameter
@@ -5849,7 +5849,7 @@ Integer param: count
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
     // Process {{ paramName }}
     {% else %}
     No parameters
@@ -5873,7 +5873,7 @@ Integer param: count
 					},
 				},
 			},
-			template: `{% for paramName, param in data.operation.parameters %}
+			tmpl: `{% for paramName, param in data.operation.parameters %}
     {% if param.schema.type == "string" %}
         String type
     {% else %}
@@ -5903,7 +5903,7 @@ Integer param: count
 					},
 				},
 			},
-			template: `Category: {{ category.name }}
+			tmpl: `Category: {{ category.name }}
 {% for operation in category.operations %}
   Operation: {{ operation.name }}
   {% for paramName, param in operation.parameters %}
@@ -5959,7 +5959,7 @@ Integer param: count
 					"debugMode":      false,
 				},
 			},
-			template: `{% if config.debugMode %}
+			tmpl: `{% if config.debugMode %}
 // Debug mode enabled
 {% endif %}
 
@@ -6014,12 +6014,12 @@ req = req.JSONBody(r.Body)
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := Context(tc.context)
-			result, err := Render(tc.template, ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := Context(tt.context)
+			result, err := Render(tt.tmpl, ctx)
 
-			if tc.expectError {
+			if tt.expectError {
 				if err == nil {
 					t.Fatalf("Expected error but got none. Result: %s", result)
 				}
@@ -6029,8 +6029,8 @@ req = req.JSONBody(r.Body)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -6038,16 +6038,16 @@ req = req.JSONBody(r.Body)
 
 // TestLoopContextFeatures tests the comprehensive loop context functionality
 func TestLoopContextFeatures(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		name        string
-		template    string
+		tmpl        string
 		context     map[string]interface{}
 		expected    string
 		expectError bool
 	}{
 		{
 			name: "Basic loop context properties",
-			template: `{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}
+			tmpl: `{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}
 {% endfor %}`,
 			context: map[string]interface{}{
 				"items": []string{"apple", "banana", "cherry"},
@@ -6058,16 +6058,16 @@ func TestLoopContextFeatures(t *testing.T) {
 `,
 		},
 		{
-			name:     "Loop context with string iteration",
-			template: `{% for char in word %}[{{ loop.Index }}:{{ char }}]{% if loop.Last == false %}-{% endif %}{% endfor %}`,
+			name: "Loop context with string iteration",
+			tmpl: `{% for char in word %}[{{ loop.Index }}:{{ char }}]{% if loop.Last == false %}-{% endif %}{% endfor %}`,
 			context: map[string]interface{}{
 				"word": "hello",
 			},
 			expected: `[0:h]-[1:e]-[2:l]-[3:l]-[4:o]`,
 		},
 		{
-			name:     "Loop context with map iteration",
-			template: `{% for key, value in data %}{{ loop.Index }}: {{ key }}={{ value }}{% if loop.Last == false %}, {% endif %}{% endfor %}`,
+			name: "Loop context with map iteration",
+			tmpl: `{% for key, value in data %}{{ loop.Index }}: {{ key }}={{ value }}{% if loop.Last == false %}, {% endif %}{% endfor %}`,
 			context: map[string]interface{}{
 				"data": map[string]string{"a": "1", "b": "2", "c": "3"},
 			},
@@ -6075,7 +6075,7 @@ func TestLoopContextFeatures(t *testing.T) {
 		},
 		{
 			name: "Simple nested loops with loop context",
-			template: `{% for outer in outers %}Outer[{{ loop.Index }}]:
+			tmpl: `{% for outer in outers %}Outer[{{ loop.Index }}]:
 {% for inner in inners %}  Inner[{{ loop.Index }}]: {{ outer }}-{{ inner }}
 {% endfor %}{% endfor %}`,
 			context: map[string]interface{}{
@@ -6092,12 +6092,12 @@ Outer[1]:
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := Context(tc.context)
-			result, err := Render(tc.template, ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := Context(tt.context)
+			result, err := Render(tt.tmpl, ctx)
 
-			if tc.expectError {
+			if tt.expectError {
 				if err == nil {
 					t.Fatalf("Expected error but got none. Result: %s", result)
 				}
@@ -6107,8 +6107,8 @@ Outer[1]:
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if result != tc.expected {
-				t.Errorf("Expected:\n%s\n\nGot:\n%s", tc.expected, result)
+			if result != tt.expected {
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
 			}
 		})
 	}
@@ -6117,37 +6117,37 @@ Outer[1]:
 func TestLoopContext(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		ctx      Context
 		expected string
 	}{
 		{
 			name:     "Simple loop with loop.Index",
-			template: "{% for item in items %}{{ loop.Index }}: {{ item }}\n{% endfor %}",
+			tmpl:     "{% for item in items %}{{ loop.Index }}: {{ item }}\n{% endfor %}",
 			ctx:      Context{"items": []string{"a", "b", "c"}},
 			expected: "0: a\n1: b\n2: c\n",
 		},
 		{
 			name:     "Loop with all loop properties",
-			template: "{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}\n{% endfor %}",
+			tmpl:     "{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}\n{% endfor %}",
 			ctx:      Context{"items": []string{"x", "y"}},
 			expected: "0-1-true-false-2: x\n1-0-false-true-2: y\n",
 		},
 		{
 			name:     "Nested loops",
-			template: "{% for outer in outers %}Outer {{ loop.Index }}:\n{% for inner in inners %}  Inner {{ loop.Index }} (outer was {{ outer }})\n{% endfor %}{% endfor %}",
+			tmpl:     "{% for outer in outers %}Outer {{ loop.Index }}:\n{% for inner in inners %}  Inner {{ loop.Index }} (outer was {{ outer }})\n{% endfor %}{% endfor %}",
 			ctx:      Context{"outers": []string{"A", "B"}, "inners": []string{"1", "2"}},
 			expected: "Outer 0:\n  Inner 0 (outer was A)\n  Inner 1 (outer was A)\nOuter 1:\n  Inner 0 (outer was B)\n  Inner 1 (outer was B)\n",
 		},
 		{
 			name:     "String iteration with loop",
-			template: "{% for char in word %}{{ loop.Index }}: {{ char }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
+			tmpl:     "{% for char in word %}{{ loop.Index }}: {{ char }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
 			ctx:      Context{"word": "hello"},
 			expected: "0: h, 1: e, 2: l, 3: l, 4: o",
 		},
 		{
 			name:     "Map iteration with loop",
-			template: "{% for k, v in map %}{{ loop.Index }}: {{ k }}={{ v }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
+			tmpl:     "{% for k, v in map %}{{ loop.Index }}: {{ k }}={{ v }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
 			ctx:      Context{"map": map[string]string{"a": "1", "b": "2"}},
 			expected: "0: a=1, 1: b=2",
 		},
@@ -6155,7 +6155,7 @@ func TestLoopContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
+			tmpl, err := Compile(tt.tmpl)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
@@ -6166,14 +6166,14 @@ func TestLoopContext(t *testing.T) {
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected:\n%s\nGot:\n%s", tt.expected, result)
+				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
 			}
 		})
 	}
 }
 
 func TestNestedLoopContext(t *testing.T) {
-	template := `{% for outer in outers %}
+	tmpl := `{% for outer in outers %}
 Outer loop {{ loop.Index }} (first: {{ loop.First }}, last: {{ loop.Last }}):
 {% for inner in inners %}
   Inner loop {{ loop.Index }} (first: {{ loop.First }}, last: {{ loop.Last }})
@@ -6205,31 +6205,31 @@ Outer loop 1 (first: false, last: true):
 
 `
 
-	tmpl, err := Compile(template)
+	compiled, err := Compile(tmpl)
 	if err != nil {
 		t.Fatalf("Failed to parse template: %v", err)
 	}
 
-	result, err := tmpl.Render(ctx)
+	result, err := compiled.Render(ctx)
 	if err != nil {
 		t.Fatalf("Failed to execute template: %v", err)
 	}
 
 	if result != expected {
-		t.Errorf("Expected:\n%q\nGot:\n%q", expected, result)
+		t.Errorf("got %q, want %q", result, expected)
 	}
 }
 
 func TestHighlyComplexNestedLoops(t *testing.T) {
 	tests := []struct {
 		name     string
-		template string
+		tmpl     string
 		ctx      Context
 		expected string
 	}{
 		{
 			name: "5-level nested for loops with conditional logic",
-			template: `{% for level1 in data.level1 %}L1[{{ loop.Index }}/{{ loop.Length }}]{% if loop.First %}:FIRST{% endif %}
+			tmpl: `{% for level1 in data.level1 %}L1[{{ loop.Index }}/{{ loop.Length }}]{% if loop.First %}:FIRST{% endif %}
 {% for level2 in data.level2 %}  L2[{{ loop.Index }}/{{ loop.Length }}]{% if loop.Last %}:LAST{% endif %}
 {% if loop.Index < 2 %}{% for level3 in data.level3 %}    L3[{{ loop.Index }}/{{ loop.Length }}]{% if loop.First %}{% if loop.Last %}:ONLY{% endif %}{% endif %}
 {% if loop.Revindex > 0 %}{% for level4 in data.level4 %}      L4[{{ loop.Index }}/{{ loop.Length }}]
@@ -6258,7 +6258,7 @@ L1[1/2]
 		},
 		{
 			name: "6-level ultra-complex nested loops",
-			template: `{% for a in arrays.a %}A{{ loop.Index }}{% if loop.First %}(start){% endif %}{% if loop.Last %}(end){% endif %}
+			tmpl: `{% for a in arrays.a %}A{{ loop.Index }}{% if loop.First %}(start){% endif %}{% if loop.Last %}(end){% endif %}
 {% for b in arrays.b %}  B{{ loop.Index }}/{{ loop.Revindex }}
 {% for c in arrays.c %}    C{{ loop.Index }}-{{ loop.First }}-{{ loop.Last }}
 {% for d in arrays.d %}      D{{ loop.Index }}:{{ loop.Length }}
@@ -6373,7 +6373,7 @@ A1(end)
 		},
 		{
 			name: "Complex matrix iteration with all loop properties",
-			template: `{% for row in matrix %}ROW[{{ loop.Index }}]{% if loop.First %}:HEADER{% endif %}{% if loop.Last %}:FOOTER{% endif %} (rev:{{ loop.Revindex }})
+			tmpl: `{% for row in matrix %}ROW[{{ loop.Index }}]{% if loop.First %}:HEADER{% endif %}{% if loop.Last %}:FOOTER{% endif %} (rev:{{ loop.Revindex }})
 {% for col in row %}  COL[{{ loop.Index }}]{% if loop.First %}:LEFT{% endif %}{% if loop.Last %}:RIGHT{% endif %}
 {% if loop.Index == 1 %}{% for item in col %}    ITEM[{{ loop.Index }}/{{ loop.Length }}] = {{ item }}
 {% if loop.Revindex == 1 %}{% for detail in details %}      DETAIL[{{ loop.Index }}]{% if loop.First %}:START{% endif %}{% if loop.Last %}:END{% endif %}
@@ -6422,7 +6422,7 @@ ROW[1]:FOOTER (rev:0)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
+			tmpl, err := Compile(tt.tmpl)
 			if err != nil {
 				t.Fatalf("Failed to parse template: %v", err)
 			}
@@ -6433,7 +6433,7 @@ ROW[1]:FOOTER (rev:0)
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected:\n%q\nGot:\n%q", tt.expected, result)
+				t.Errorf("output mismatch:\nwant: %q\ngot:  %q", tt.expected, result)
 			}
 		})
 	}
@@ -6514,7 +6514,7 @@ func TestLoopContextFullFeatures(t *testing.T) {
 			}
 
 			if result != tt.expected {
-				t.Errorf("Output mismatch\nExpected: %q\nGot:      %q", tt.expected, result)
+				t.Errorf("output mismatch:\nwant: %q\ngot:  %q", tt.expected, result)
 			}
 		})
 	}

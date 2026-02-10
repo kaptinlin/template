@@ -991,7 +991,7 @@ func TestValue_Index(t *testing.T) {
 	}
 }
 
-func TestValue_GetKey(t *testing.T) {
+func TestValue_Key(t *testing.T) {
 	tests := []struct {
 		name        string
 		value       interface{}
@@ -1067,7 +1067,7 @@ func TestValue_GetKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := NewValue(tt.value)
-			result, err := v.GetKey(tt.key)
+			result, err := v.Key(tt.key)
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -1078,7 +1078,7 @@ func TestValue_GetKey(t *testing.T) {
 	}
 }
 
-func TestValue_GetField(t *testing.T) {
+func TestValue_Field(t *testing.T) {
 	type TestStruct struct {
 		Name  string
 		Age   int
@@ -1160,7 +1160,7 @@ func TestValue_GetField(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := NewValue(tt.value)
-			result, err := v.GetField(tt.field)
+			result, err := v.Field(tt.field)
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -1672,6 +1672,175 @@ func TestValue_NewValue(t *testing.T) {
 			if !reflect.DeepEqual(tt.input, v.Interface()) {
 				t.Errorf("NewValue did not preserve input value")
 			}
+		})
+	}
+}
+
+func TestFormatFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    float64
+		expected string
+	}{
+		{name: "whole number", value: 42.0, expected: "42"},
+		{name: "zero", value: 0.0, expected: "0"},
+		{name: "negative whole", value: -10.0, expected: "-10"},
+		{name: "decimal", value: 3.14, expected: "3.14"},
+		{name: "negative decimal", value: -2.5, expected: "-2.5"},
+		{name: "small decimal", value: 0.001, expected: "0.001"},
+		{name: "large whole", value: 1000000.0, expected: "1000000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValue(tt.value)
+			assert.Equal(t, tt.expected, v.String())
+		})
+	}
+}
+
+func TestValue_String_Uint(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    interface{}
+		expected string
+	}{
+		{name: "uint", value: uint(100), expected: "100"},
+		{name: "uint8", value: uint8(255), expected: "255"},
+		{name: "uint16", value: uint16(1000), expected: "1000"},
+		{name: "uint32", value: uint32(70000), expected: "70000"},
+		{name: "uint64", value: uint64(99999), expected: "99999"},
+		{name: "uint zero", value: uint(0), expected: "0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValue(tt.value)
+			assert.Equal(t, tt.expected, v.String())
+		})
+	}
+}
+
+func TestValue_Field_JSONTag(t *testing.T) {
+	type Tagged struct {
+		FullName string `json:"name"`
+		Age      int    `json:"age,omitempty"`
+		Hidden   string `json:"-"`
+		NoTag    string
+	}
+
+	val := Tagged{
+		FullName: "Alice",
+		Age:      30,
+		Hidden:   "secret",
+		NoTag:    "visible",
+	}
+
+	tests := []struct {
+		name        string
+		field       string
+		expected    interface{}
+		expectError bool
+	}{
+		{
+			name:     "json tag name",
+			field:    "name",
+			expected: "Alice",
+		},
+		{
+			name:     "json tag with omitempty",
+			field:    "age",
+			expected: 30,
+		},
+		{
+			name:        "hidden field via json tag dash",
+			field:       "-",
+			expectError: true,
+		},
+		{
+			name:     "field by exported name",
+			field:    "NoTag",
+			expected: "visible",
+		},
+		{
+			name:     "field by exported name FullName",
+			field:    "FullName",
+			expected: "Alice",
+		},
+		{
+			name:        "nonexistent field",
+			field:       "missing",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValue(val)
+			result, err := v.Field(tt.field)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result.Interface())
+			}
+		})
+	}
+}
+
+func TestValue_String_NestedSlice(t *testing.T) {
+	v := NewValue([][]int{{1, 2}, {3, 4}})
+	assert.Equal(t, "[[1,2],[3,4]]", v.String())
+}
+
+func TestValue_String_EmptySlice(t *testing.T) {
+	v := NewValue([]int{})
+	assert.Equal(t, "[]", v.String())
+}
+
+func TestValue_String_BoolSlice(t *testing.T) {
+	v := NewValue([]bool{true, false, true})
+	assert.Equal(t, "[true,false,true]", v.String())
+}
+
+func TestValue_Equals_CrossNumericTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        interface{}
+		b        interface{}
+		expected bool
+	}{
+		{
+			name:     "int and float64 equal",
+			a:        42,
+			b:        float64(42),
+			expected: true,
+		},
+		{
+			name:     "int and float64 not equal",
+			a:        42,
+			b:        float64(42.5),
+			expected: false,
+		},
+		{
+			name:     "int64 and uint equal",
+			a:        int64(100),
+			b:        uint(100),
+			expected: true,
+		},
+		{
+			name:     "int32 and float32 equal",
+			a:        int32(7),
+			b:        float32(7),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			va := NewValue(tt.a)
+			vb := NewValue(tt.b)
+			assert.Equal(t, tt.expected, va.Equals(vb))
 		})
 	}
 }

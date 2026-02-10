@@ -1,6 +1,6 @@
 package template
 
-import "fmt"
+import "strconv"
 
 // TokenType represents the type of a token.
 type TokenType int
@@ -40,109 +40,111 @@ const (
 	TokenSymbol
 )
 
+// tokenTypeNames maps token types to their string representations.
+var tokenTypeNames = [...]string{
+	TokenError:      "ERROR",
+	TokenEOF:        "EOF",
+	TokenText:       "TEXT",
+	TokenVarBegin:   "VAR_BEGIN",
+	TokenVarEnd:     "VAR_END",
+	TokenTagBegin:   "TAG_BEGIN",
+	TokenTagEnd:     "TAG_END",
+	TokenIdentifier: "IDENTIFIER",
+	TokenString:     "STRING",
+	TokenNumber:     "NUMBER",
+	TokenSymbol:     "SYMBOL",
+}
+
 // Token represents a single lexical token.
 type Token struct {
-	Type  TokenType // Token type
-	Value string    // Token text content
-	Line  int       // Line number (1-based)
-	Col   int       // Column number (1-based)
+	Type  TokenType
+	Value string
+	Line  int // 1-based
+	Col   int // 1-based
 }
 
 // String returns a string representation of the token type.
 func (t TokenType) String() string {
-	switch t {
-	case TokenError:
-		return "ERROR"
-	case TokenEOF:
-		return "EOF"
-	case TokenText:
-		return "TEXT"
-	case TokenVarBegin:
-		return "VAR_BEGIN"
-	case TokenVarEnd:
-		return "VAR_END"
-	case TokenTagBegin:
-		return "TAG_BEGIN"
-	case TokenTagEnd:
-		return "TAG_END"
-	case TokenIdentifier:
-		return "IDENTIFIER"
-	case TokenString:
-		return "STRING"
-	case TokenNumber:
-		return "NUMBER"
-	case TokenSymbol:
-		return "SYMBOL"
-	default:
-		return fmt.Sprintf("UNKNOWN(%d)", t)
+	if int(t) >= 0 && int(t) < len(tokenTypeNames) {
+		return tokenTypeNames[t]
 	}
+	return "UNKNOWN(" + strconv.Itoa(int(t)) + ")"
 }
 
-// String returns a string representation of the token.
+// String returns a human-readable representation of the token.
 func (t *Token) String() string {
+	pos := " at line " + strconv.Itoa(t.Line) + ", col " + strconv.Itoa(t.Col)
+	name := t.Type.String()
+
 	if t.Type == TokenEOF {
-		return fmt.Sprintf("%s at line %d, col %d", t.Type, t.Line, t.Col)
+		return name + pos
 	}
-	if len(t.Value) > 20 {
-		return fmt.Sprintf("%s(%q...) at line %d, col %d", t.Type, t.Value[:20], t.Line, t.Col)
+
+	v := t.Value
+	if len(v) > 20 {
+		return name + "(" + strconv.Quote(v[:20]) + "...)" + pos
 	}
-	return fmt.Sprintf("%s(%q) at line %d, col %d", t.Type, t.Value, t.Line, t.Col)
+	return name + "(" + strconv.Quote(v) + ")" + pos
+}
+
+// keywords is the set of reserved keywords.
+var keywords = map[string]bool{
+	"in":       true,
+	"and":      true,
+	"or":       true,
+	"not":      true,
+	"true":     true,
+	"false":    true,
+	"if":       true,
+	"elif":     true,
+	"else":     true,
+	"endif":    true,
+	"for":      true,
+	"endfor":   true,
+	"break":    true,
+	"continue": true,
 }
 
 // IsKeyword checks if an identifier is a reserved keyword.
 func IsKeyword(ident string) bool {
-	keywords := map[string]bool{
-		"in":       true,
-		"and":      true,
-		"or":       true,
-		"not":      true,
-		"true":     true,
-		"false":    true,
-		"if":       true,
-		"elif":     true,
-		"else":     true,
-		"endif":    true,
-		"for":      true,
-		"endfor":   true,
-		"break":    true,
-		"continue": true,
-	}
 	return keywords[ident]
+}
+
+// symbols is the set of valid operator and punctuation symbols.
+var symbols = map[string]bool{
+	// Comparison operators
+	"==": true,
+	"!=": true,
+	"<":  true,
+	">":  true,
+	"<=": true,
+	">=": true,
+
+	// Arithmetic operators
+	"+": true,
+	"-": true,
+	"*": true,
+	"/": true,
+	"%": true,
+
+	// Logical operators
+	"&&": true,
+	"||": true,
+	"!":  true,
+
+	// Other symbols
+	"|": true, // Filter pipe
+	":": true, // Filter argument separator
+	",": true, // Argument separator
+	".": true, // Property access
+	"(": true, // Parenthesis
+	")": true,
+	"[": true, // Bracket
+	"]": true,
+	"=": true, // Assignment (for {% set %})
 }
 
 // IsSymbol checks if a string is a valid symbol.
 func IsSymbol(s string) bool {
-	symbols := map[string]bool{
-		// Comparison operators
-		"==": true,
-		"!=": true,
-		"<":  true,
-		">":  true,
-		"<=": true,
-		">=": true,
-
-		// Arithmetic operators
-		"+": true,
-		"-": true,
-		"*": true,
-		"/": true,
-		"%": true,
-
-		// Logical operators
-		"&&": true,
-		"||": true,
-		"!":  true,
-
-		// Other symbols
-		"|": true, // Filter pipe
-		":": true, // Filter argument separator
-		",": true, // Argument separator
-		".": true, // Property access
-		"(": true, // Parenthesis
-		")": true,
-		"[": true, // Bracket
-		"]": true,
-		"=": true, // Assignment (for {% set %})
-	}
 	return symbols[s]
 }

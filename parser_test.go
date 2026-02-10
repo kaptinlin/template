@@ -1251,3 +1251,167 @@ func TestParserParseExpression(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// Test Group 13: Parser Boundary and Optimization Tests
+// =============================================================================
+
+func TestParserBoundary(t *testing.T) {
+	t.Run("Current returns nil past end", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenEOF, Value: "", Line: 1, Col: 1},
+		}
+		parser := NewParser(tokens)
+		parser.Advance() // Move past EOF.
+		assert.Nil(t, parser.Current())
+	})
+
+	t.Run("Advance past end is safe", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenEOF, Value: "", Line: 1, Col: 1},
+		}
+		parser := NewParser(tokens)
+		parser.Advance()
+		parser.Advance() // Double advance past end.
+		parser.Advance() // Triple advance.
+		assert.Nil(t, parser.Current())
+		assert.Equal(t, 0, parser.Remaining())
+	})
+
+	t.Run("Remaining decreases with Advance", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenText, Value: "a", Line: 1, Col: 1},
+			{Type: TokenText, Value: "b", Line: 1, Col: 2},
+			{Type: TokenEOF, Value: "", Line: 1, Col: 3},
+		}
+		parser := NewParser(tokens)
+		assert.Equal(t, 3, parser.Remaining())
+		parser.Advance()
+		assert.Equal(t, 2, parser.Remaining())
+		parser.Advance()
+		assert.Equal(t, 1, parser.Remaining())
+		parser.Advance()
+		assert.Equal(t, 0, parser.Remaining())
+	})
+
+	t.Run("Error at end of tokens uses zero position", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenEOF, Value: "", Line: 1, Col: 1},
+		}
+		parser := NewParser(tokens)
+		parser.Advance() // Move past all tokens.
+
+		err := parser.Error("past end")
+		var parseErr *ParseError
+		require.True(t, errors.As(err, &parseErr))
+		assert.Equal(t, "past end", parseErr.Message)
+		assert.Equal(t, 0, parseErr.Line)
+		assert.Equal(t, 0, parseErr.Col)
+	})
+
+	t.Run("Errorf formats with any types", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenText, Value: "x", Line: 3, Col: 7},
+			{Type: TokenEOF, Value: "", Line: 3, Col: 8},
+		}
+		parser := NewParser(tokens)
+
+		err := parser.Errorf("got %d items of type %s", 42, "widget")
+		var parseErr *ParseError
+		require.True(t, errors.As(err, &parseErr))
+		assert.Equal(t, "got 42 items of type widget", parseErr.Message)
+		assert.Equal(t, 3, parseErr.Line)
+		assert.Equal(t, 7, parseErr.Col)
+	})
+
+	t.Run("Match does not advance on mismatch", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 1},
+			{Type: TokenEOF, Value: "", Line: 1, Col: 2},
+		}
+		parser := NewParser(tokens)
+
+		// Wrong type.
+		tok := parser.Match(TokenSymbol, "x")
+		assert.Nil(t, tok)
+		assert.Equal(t, "x", parser.Current().Value)
+
+		// Wrong value.
+		tok = parser.Match(TokenIdentifier, "y")
+		assert.Nil(t, tok)
+		assert.Equal(t, "x", parser.Current().Value)
+
+		// Correct match.
+		tok = parser.Match(TokenIdentifier, "x")
+		assert.NotNil(t, tok)
+		assert.Equal(t, TokenEOF, parser.Current().Type)
+	})
+
+	t.Run("ExpectIdentifier at end of input", func(t *testing.T) {
+		parser := NewParser([]*Token{})
+		_, err := parser.ExpectIdentifier()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unexpected end of input")
+	})
+
+	t.Run("Parse returns nil for EOF-only input", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenEOF, Value: "", Line: 1, Col: 1},
+		}
+		parser := NewParser(tokens)
+		nodes, err := parser.Parse()
+		require.NoError(t, err)
+		assert.Nil(t, nodes)
+	})
+}
+
+// =============================================================================
+// Test Group 14: Error Message Quality
+// =============================================================================
+
+func TestParserErrorMessages(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		errContains string
+	}{
+		{
+			name:        "Standalone elif",
+			input:       "{% elif x %}",
+			errContains: "elif must be used inside an if block",
+		},
+		{
+			name:        "Standalone else",
+			input:       "{% else %}",
+			errContains: "else must be used inside an if block",
+		},
+		{
+			name:        "Standalone endif",
+			input:       "{% endif %}",
+			errContains: "endif must match a corresponding if tag",
+		},
+		{
+			name:        "Standalone endfor",
+			input:       "{% endfor %}",
+			errContains: "endfor must match a corresponding for tag",
+		},
+		{
+			name:        "Unknown tag name",
+			input:       "{% foobar %}",
+			errContains: "unknown tag: foobar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens)
+			_, err = parser.Parse()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
+}

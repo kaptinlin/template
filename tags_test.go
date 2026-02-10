@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestRegisterTag(t *testing.T) {
-	// Save original registry and restore after test
+	// Save original registry and restore after test.
 	originalRegistry := tagRegistry
 	defer func() { tagRegistry = originalRegistry }()
 
@@ -20,7 +21,7 @@ func TestRegisterTag(t *testing.T) {
 		tagName       string
 		parser        TagParser
 		expectedError bool
-		errorMessage  string
+		wantErr       error
 	}{
 		{
 			name: "register new tag successfully",
@@ -28,7 +29,7 @@ func TestRegisterTag(t *testing.T) {
 				tagRegistry = make(map[string]TagParser)
 			},
 			tagName:       "customtag",
-			parser:        parseIfTag, // Use existing parser as dummy
+			parser:        parseIfTag,
 			expectedError: false,
 		},
 		{
@@ -40,7 +41,7 @@ func TestRegisterTag(t *testing.T) {
 			tagName:       "duplicate",
 			parser:        parseForTag,
 			expectedError: true,
-			errorMessage:  fmt.Sprintf("%s: %q", ErrTagAlreadyRegistered, "duplicate"),
+			wantErr:       ErrTagAlreadyRegistered,
 		},
 		{
 			name: "register multiple different tags",
@@ -59,10 +60,9 @@ func TestRegisterTag(t *testing.T) {
 			err := RegisterTag(tt.tagName, tt.parser)
 			if tt.expectedError {
 				assert.Error(t, err)
-				assert.Equal(t, tt.errorMessage, err.Error())
+				assert.True(t, errors.Is(err, tt.wantErr))
 			} else {
 				assert.NoError(t, err)
-				// Verify tag was registered
 				parser, exists := tagRegistry[tt.tagName]
 				assert.True(t, exists)
 				assert.NotNil(t, parser)
@@ -71,8 +71,8 @@ func TestRegisterTag(t *testing.T) {
 	}
 }
 
-func TestGetTagParser(t *testing.T) {
-	// Save original registry and restore after test
+func TestTag(t *testing.T) {
+	// Save original registry and restore after test.
 	originalRegistry := tagRegistry
 	defer func() { tagRegistry = originalRegistry }()
 
@@ -113,7 +113,7 @@ func TestGetTagParser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupFunc()
-			parser, exists := GetTagParser(tt.tagName)
+			parser, exists := Tag(tt.tagName)
 			assert.Equal(t, tt.expectedExists, exists)
 			if tt.expectedExists {
 				assert.NotNil(t, parser)
@@ -227,19 +227,19 @@ func TestParseIfTag(t *testing.T) {
 			name:          "extra tokens after condition",
 			template:      "{% if x y %}yes{% endif %}",
 			expectedError: true,
-			errorContains: "unexpected tokens after condition",
+			errorContains: ErrUnexpectedTokensAfterCondition.Error(),
 		},
 		{
 			name:          "else with arguments",
 			template:      "{% if x %}yes{% else x %}no{% endif %}",
 			expectedError: true,
-			errorContains: "else does not take arguments",
+			errorContains: ErrElseNoArgs.Error(),
 		},
 		{
 			name:          "endif with arguments",
 			template:      "{% if x %}yes{% endif x %}",
 			expectedError: true,
-			errorContains: "endif does not take arguments",
+			errorContains: ErrEndifNoArgs.Error(),
 		},
 		{
 			name:          "missing endif",
@@ -348,31 +348,31 @@ func TestParseForTag(t *testing.T) {
 			name:          "missing variable name",
 			template:      "{% for in items %}{% endfor %}",
 			expectedError: true,
-			errorContains: "expected 'in' keyword",
+			errorContains: ErrExpectedInKeyword.Error(),
 		},
 		{
 			name:          "missing in keyword",
 			template:      "{% for item items %}{% endfor %}",
 			expectedError: true,
-			errorContains: "expected 'in' keyword",
+			errorContains: ErrExpectedInKeyword.Error(),
 		},
 		{
 			name:          "missing second variable after comma",
 			template:      "{% for item, in items %}{% endfor %}",
 			expectedError: true,
-			errorContains: "expected 'in' keyword",
+			errorContains: ErrExpectedInKeyword.Error(),
 		},
 		{
 			name:          "extra tokens after collection",
 			template:      "{% for item in items extra %}{% endfor %}",
 			expectedError: true,
-			errorContains: "unexpected tokens after collection",
+			errorContains: ErrUnexpectedTokensAfterCollection.Error(),
 		},
 		{
 			name:          "endfor with arguments",
 			template:      "{% for item in items %}{% endfor x %}",
 			expectedError: true,
-			errorContains: "endfor does not take arguments",
+			errorContains: ErrEndforNoArgs.Error(),
 		},
 		{
 			name:          "missing endfor",
@@ -419,7 +419,7 @@ func TestParseBreakTag(t *testing.T) {
 			name:          "break with arguments should fail",
 			template:      "{% for item in items %}{% break now %}{% endfor %}",
 			expectedError: true,
-			errorContains: "break does not take arguments",
+			errorContains: ErrBreakNoArgs.Error(),
 		},
 		{
 			name:          "multiple breaks in loop",
@@ -486,7 +486,7 @@ func TestParseContinueTag(t *testing.T) {
 			name:          "continue with arguments should fail",
 			template:      "{% for item in items %}{% continue now %}{% endfor %}",
 			expectedError: true,
-			errorContains: "continue does not take arguments",
+			errorContains: ErrContinueNoArgs.Error(),
 		},
 		{
 			name:          "multiple continues in loop",
@@ -1491,7 +1491,7 @@ func TestRegisterTagExternalStatement(t *testing.T) {
 	// Register a "set" tag demonstrating that external packages
 	// can now implement Statement directly.
 	UnregisterTag("set")
-	err := RegisterTag("set", func(doc *Parser, start *Token, arguments *Parser) (Statement, error) {
+	err := RegisterTag("set", func(_ *Parser, start *Token, arguments *Parser) (Statement, error) {
 		varToken, err := arguments.ExpectIdentifier()
 		if err != nil {
 			return nil, arguments.Error("expected variable name after 'set'")
@@ -1589,11 +1589,11 @@ func TestDuplicateRegistration(t *testing.T) {
 	// Registering a tag with the same name as a built-in should fail.
 	err := RegisterTag("if", parseIfTag)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), ErrTagAlreadyRegistered.Error())
+	assert.True(t, errors.Is(err, ErrTagAlreadyRegistered))
 
 	err = RegisterTag("for", parseForTag)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), ErrTagAlreadyRegistered.Error())
+	assert.True(t, errors.Is(err, ErrTagAlreadyRegistered))
 }
 
 func TestTagRegistrySaveRestore(t *testing.T) {
@@ -1601,7 +1601,7 @@ func TestTagRegistrySaveRestore(t *testing.T) {
 	saved := saveTagRegistry()
 
 	// Add a custom tag.
-	err := RegisterTag("mytesttag", func(doc *Parser, start *Token, arguments *Parser) (Statement, error) {
+	err := RegisterTag("mytesttag", func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
 		return NewTextNode("", start.Line, start.Col), nil
 	})
 	assert.NoError(t, err)

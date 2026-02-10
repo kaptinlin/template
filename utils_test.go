@@ -280,4 +280,3 @@ func TestDereferenceIfNeeded(t *testing.T) {
 		})
 	}
 }
-

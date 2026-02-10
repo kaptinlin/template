@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/kaptinlin/template"
@@ -15,7 +16,9 @@ func main() {
 		s := fmt.Sprintf("%v", value)
 		n := 2
 		if len(args) > 0 {
-			fmt.Sscanf(args[0], "%d", &n)
+			if parsed, err := strconv.Atoi(args[0]); err == nil {
+				n = parsed
+			}
 		}
 		return strings.Repeat(s, n), nil
 	})

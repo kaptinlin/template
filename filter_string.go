@@ -8,32 +8,26 @@ import (
 
 // registerStringFilters registers all string-related filters.
 func registerStringFilters() {
-	filters := map[string]FilterFunc{
-		"default":       defaultFilter,
-		"trim":          trimFilter,
-		"split":         splitFilter,
-		"replace":       replaceFilter,
-		"remove":        removeFilter,
-		"append":        appendFilter,
-		"prepend":       prependFilter,
-		"length":        lengthFilter,
-		"upper":         upperFilter,
-		"lower":         lowerFilter,
-		"titleize":      titleizeFilter,
-		"capitalize":    capitalizeFilter,
-		"camelize":      camelizeFilter,
-		"pascalize":     pascalizeFilter,
-		"dasherize":     dasherizeFilter,
-		"slugify":       slugifyFilter,
-		"pluralize":     pluralizeFilter,
-		"ordinalize":    ordinalizeFilter,
-		"truncate":      truncateFilter,
-		"truncateWords": truncateWordsFilter,
-	}
-
-	for name, fn := range filters {
-		RegisterFilter(name, fn)
-	}
+	RegisterFilter("default", defaultFilter)
+	RegisterFilter("trim", trimFilter)
+	RegisterFilter("split", splitFilter)
+	RegisterFilter("replace", replaceFilter)
+	RegisterFilter("remove", removeFilter)
+	RegisterFilter("append", appendFilter)
+	RegisterFilter("prepend", prependFilter)
+	RegisterFilter("length", lengthFilter)
+	RegisterFilter("upper", upperFilter)
+	RegisterFilter("lower", lowerFilter)
+	RegisterFilter("titleize", titleizeFilter)
+	RegisterFilter("capitalize", capitalizeFilter)
+	RegisterFilter("camelize", camelizeFilter)
+	RegisterFilter("pascalize", pascalizeFilter)
+	RegisterFilter("dasherize", dasherizeFilter)
+	RegisterFilter("slugify", slugifyFilter)
+	RegisterFilter("pluralize", pluralizeFilter)
+	RegisterFilter("ordinalize", ordinalizeFilter)
+	RegisterFilter("truncate", truncateFilter)
+	RegisterFilter("truncateWords", truncateWordsFilter)
 }
 
 // defaultFilter returns a default value if the input value is falsy (empty, nil, false, 0, etc).
@@ -59,7 +53,7 @@ func trimFilter(value interface{}, _ ...string) (interface{}, error) {
 // splitFilter divides a string into a slice of strings based on a specified delimiter.
 func splitFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: split filter requires a delimiter argument", ErrInsufficientArgs)
+		return nil, fmt.Errorf("split requires a delimiter: %w", ErrInsufficientArgs)
 	}
 	delimiter := args[0]
 	return filter.Split(toString(value), delimiter), nil
@@ -68,7 +62,7 @@ func splitFilter(value interface{}, args ...string) (interface{}, error) {
 // replaceFilter substitutes all instances of a specified substring with another string.
 func replaceFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 2 {
-		return nil, fmt.Errorf("%w: replace filter requires two arguments (old and new substrings)", ErrInsufficientArgs)
+		return nil, fmt.Errorf("replace requires old and new substrings: %w", ErrInsufficientArgs)
 	}
 	oldStr, newStr := args[0], args[1]
 	return filter.Replace(toString(value), oldStr, newStr), nil
@@ -77,7 +71,7 @@ func replaceFilter(value interface{}, args ...string) (interface{}, error) {
 // removeFilter eliminates all occurrences of a specified substring.
 func removeFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: remove filter requires a substring argument", ErrInsufficientArgs)
+		return nil, fmt.Errorf("remove requires a substring: %w", ErrInsufficientArgs)
 	}
 	toRemove := args[0]
 	return filter.Remove(toString(value), toRemove), nil
@@ -86,7 +80,7 @@ func removeFilter(value interface{}, args ...string) (interface{}, error) {
 // appendFilter adds characters to the end of a string.
 func appendFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: append filter requires a string to append", ErrInsufficientArgs)
+		return nil, fmt.Errorf("append requires a string argument: %w", ErrInsufficientArgs)
 	}
 	toAppend := args[0]
 	return filter.Append(toString(value), toAppend), nil
@@ -95,7 +89,7 @@ func appendFilter(value interface{}, args ...string) (interface{}, error) {
 // prependFilter adds characters to the beginning of a string.
 func prependFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: prepend filter requires a string to prepend", ErrInsufficientArgs)
+		return nil, fmt.Errorf("prepend requires a string argument: %w", ErrInsufficientArgs)
 	}
 	toPrepend := args[0]
 	return filter.Prepend(toString(value), toPrepend), nil
@@ -154,7 +148,7 @@ func slugifyFilter(value interface{}, _ ...string) (interface{}, error) {
 // pluralizeFilter determines the singular or plural form of a word based on a numeric value.
 func pluralizeFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 2 {
-		return nil, fmt.Errorf("%w: pluralize filter requires two arguments (singular and plural forms)", ErrInsufficientArgs)
+		return nil, fmt.Errorf("pluralize requires singular and plural forms: %w", ErrInsufficientArgs)
 	}
 	count, err := toInteger(value)
 	if err != nil {
@@ -176,7 +170,7 @@ func ordinalizeFilter(value interface{}, _ ...string) (interface{}, error) {
 // truncateFilter shortens a string to a specified length and appends "..." if it exceeds that length.
 func truncateFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: truncate filter requires a length argument", ErrInsufficientArgs)
+		return nil, fmt.Errorf("truncate requires a length argument: %w", ErrInsufficientArgs)
 	}
 	maxLength, err := toInteger(args[0])
 	if err != nil {
@@ -188,7 +182,7 @@ func truncateFilter(value interface{}, args ...string) (interface{}, error) {
 // truncateWordsFilter truncates a string to a specified number of words, appending "..." if it exceeds that limit.
 func truncateWordsFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: truncateWords filter requires a word count argument", ErrInsufficientArgs)
+		return nil, fmt.Errorf("truncateWords requires a word count: %w", ErrInsufficientArgs)
 	}
 	maxWords, err := toInteger(args[0])
 	if err != nil {

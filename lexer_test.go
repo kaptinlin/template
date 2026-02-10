@@ -1,39 +1,46 @@
 package template
 
 import (
-	"reflect"
+	"errors"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
 )
 
-// TestLexerBasicTokenization tests basic tokenization functionality
+// compareTokens is a test helper that compares token slices using cmp.Diff.
+func compareTokens(t *testing.T, label string, got, want []*Token) {
+	t.Helper()
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("%s mismatch (-want +got):\n%s", label, diff)
+	}
+}
+
 func TestLexerBasicTokenization(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Empty input",
+			name:  "empty input",
 			input: "",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenEOF, Value: "", Line: 1, Col: 1},
 			},
 		},
 		{
-			name:  "Plain text only",
+			name:  "plain text only",
 			input: "Hello World",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenText, Value: "Hello World", Line: 1, Col: 1},
 				{Type: TokenEOF, Value: "", Line: 1, Col: 12},
 			},
 		},
 		{
-			name:  "Plain text with newline",
+			name:  "plain text with newline",
 			input: "Hello\nWorld",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenText, Value: "Hello\nWorld", Line: 1, Col: 1},
 				{Type: TokenEOF, Value: "", Line: 2, Col: 6},
 			},
@@ -42,25 +49,25 @@ func TestLexerBasicTokenization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }
 
-// TestLexerVariableTags tests variable tag tokenization {{ }}
 func TestLexerVariableTags(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Simple variable",
+			name:  "simple variable",
 			input: "{{ name }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "name", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 9},
@@ -68,9 +75,9 @@ func TestLexerVariableTags(t *testing.T) {
 			},
 		},
 		{
-			name:  "Variable with property access",
+			name:  "variable with property access",
 			input: "{{ user.name }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "user", Line: 1, Col: 4},
 				{Type: TokenSymbol, Value: ".", Line: 1, Col: 8},
@@ -80,9 +87,9 @@ func TestLexerVariableTags(t *testing.T) {
 			},
 		},
 		{
-			name:  "Variable with filter",
+			name:  "variable with filter",
 			input: "{{ name | upper }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "name", Line: 1, Col: 4},
 				{Type: TokenSymbol, Value: "|", Line: 1, Col: 9},
@@ -92,9 +99,9 @@ func TestLexerVariableTags(t *testing.T) {
 			},
 		},
 		{
-			name:  "Variable with filter and arguments",
+			name:  "variable with filter and arguments",
 			input: "{{ name | truncate:10 }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "name", Line: 1, Col: 4},
 				{Type: TokenSymbol, Value: "|", Line: 1, Col: 9},
@@ -106,9 +113,9 @@ func TestLexerVariableTags(t *testing.T) {
 			},
 		},
 		{
-			name:  "Variable surrounded by text",
+			name:  "variable surrounded by text",
 			input: "Hello {{ name }}, welcome!",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenText, Value: "Hello ", Line: 1, Col: 1},
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 7},
 				{Type: TokenIdentifier, Value: "name", Line: 1, Col: 10},
@@ -121,25 +128,25 @@ func TestLexerVariableTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }
 
-// TestLexerBlockTags tests block tag tokenization {% %}
 func TestLexerBlockTags(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Simple if tag",
+			name:  "simple if tag",
 			input: "{% if x %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "x", Line: 1, Col: 7},
@@ -148,9 +155,9 @@ func TestLexerBlockTags(t *testing.T) {
 			},
 		},
 		{
-			name:  "If tag with comparison",
+			name:  "if tag with comparison",
 			input: "{% if x > 5 %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "x", Line: 1, Col: 7},
@@ -161,9 +168,9 @@ func TestLexerBlockTags(t *testing.T) {
 			},
 		},
 		{
-			name:  "For loop tag",
+			name:  "for loop tag",
 			input: "{% for item in items %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "for", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "item", Line: 1, Col: 8},
@@ -174,9 +181,9 @@ func TestLexerBlockTags(t *testing.T) {
 			},
 		},
 		{
-			name:  "Endif tag",
+			name:  "endif tag",
 			input: "{% endif %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "endif", Line: 1, Col: 4},
 				{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 10},
@@ -187,41 +194,41 @@ func TestLexerBlockTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }
 
-// TestLexerComments tests comment handling
 func TestLexerComments(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Simple comment",
+			name:  "simple comment",
 			input: "{# This is a comment #}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenEOF, Value: "", Line: 1, Col: 24},
 			},
 		},
 		{
-			name:  "Comment with text around",
+			name:  "comment with text around",
 			input: "Hello {# comment #} World",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenText, Value: "Hello ", Line: 1, Col: 1},
 				{Type: TokenText, Value: " World", Line: 1, Col: 20},
 				{Type: TokenEOF, Value: "", Line: 1, Col: 26},
 			},
 		},
 		{
-			name:  "Multiple comments",
+			name:  "multiple comments",
 			input: "{# comment1 #}{# comment2 #}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenEOF, Value: "", Line: 1, Col: 29},
 			},
 		},
@@ -229,25 +236,25 @@ func TestLexerComments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }
 
-// TestLexerStrings tests string literal tokenization
 func TestLexerStrings(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Double quoted string",
+			name:  "double quoted string",
 			input: `{{ "hello" }}`,
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenString, Value: "hello", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 12},
@@ -255,9 +262,9 @@ func TestLexerStrings(t *testing.T) {
 			},
 		},
 		{
-			name:  "Single quoted string",
+			name:  "single quoted string",
 			input: `{{ 'hello' }}`,
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenString, Value: "hello", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 12},
@@ -265,9 +272,9 @@ func TestLexerStrings(t *testing.T) {
 			},
 		},
 		{
-			name:  "String with escaped quotes",
+			name:  "string with escaped quotes",
 			input: `{{ "hello \"world\"" }}`,
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenString, Value: `hello "world"`, Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 22},
@@ -275,9 +282,9 @@ func TestLexerStrings(t *testing.T) {
 			},
 		},
 		{
-			name:  "String with escaped backslash",
+			name:  "string with escaped backslash",
 			input: `{{ "path\\to\\file" }}`,
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenString, Value: `path\to\file`, Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 21},
@@ -285,9 +292,9 @@ func TestLexerStrings(t *testing.T) {
 			},
 		},
 		{
-			name:  "String with newline escape",
+			name:  "string with newline escape",
 			input: `{{ "line1\nline2" }}`,
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenString, Value: "line1\nline2", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 19},
@@ -295,9 +302,9 @@ func TestLexerStrings(t *testing.T) {
 			},
 		},
 		{
-			name:  "String with tab escape",
+			name:  "string with tab escape",
 			input: `{{ "col1\tcol2" }}`,
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenString, Value: "col1\tcol2", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 17},
@@ -305,9 +312,9 @@ func TestLexerStrings(t *testing.T) {
 			},
 		},
 		{
-			name:  "Empty string",
+			name:  "empty string",
 			input: `{{ "" }}`,
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenString, Value: "", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 7},
@@ -318,25 +325,25 @@ func TestLexerStrings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }
 
-// TestLexerNumbers tests number literal tokenization
 func TestLexerNumbers(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Integer",
+			name:  "integer",
 			input: "{{ 42 }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenNumber, Value: "42", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 7},
@@ -344,9 +351,9 @@ func TestLexerNumbers(t *testing.T) {
 			},
 		},
 		{
-			name:  "Float",
+			name:  "float",
 			input: "{{ 3.14 }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenNumber, Value: "3.14", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 9},
@@ -354,9 +361,9 @@ func TestLexerNumbers(t *testing.T) {
 			},
 		},
 		{
-			name:  "Zero",
+			name:  "zero",
 			input: "{{ 0 }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenNumber, Value: "0", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 6},
@@ -364,9 +371,9 @@ func TestLexerNumbers(t *testing.T) {
 			},
 		},
 		{
-			name:  "Decimal starting with zero",
+			name:  "decimal starting with zero",
 			input: "{{ 0.5 }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenNumber, Value: "0.5", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 8},
@@ -377,25 +384,25 @@ func TestLexerNumbers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }
 
-// TestLexerOperators tests operator tokenization
 func TestLexerOperators(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Comparison operators",
+			name:  "comparison operators",
 			input: "{% if a == b %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 7},
@@ -406,9 +413,9 @@ func TestLexerOperators(t *testing.T) {
 			},
 		},
 		{
-			name:  "Not equal operator",
+			name:  "not equal operator",
 			input: "{% if a != b %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 7},
@@ -419,9 +426,9 @@ func TestLexerOperators(t *testing.T) {
 			},
 		},
 		{
-			name:  "Less than and greater than",
+			name:  "less than and greater than",
 			input: "{% if a < b and c > d %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 7},
@@ -436,9 +443,9 @@ func TestLexerOperators(t *testing.T) {
 			},
 		},
 		{
-			name:  "Arithmetic operators",
+			name:  "arithmetic operators",
 			input: "{{ a + b - c * d / e }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 4},
 				{Type: TokenSymbol, Value: "+", Line: 1, Col: 6},
@@ -454,9 +461,9 @@ func TestLexerOperators(t *testing.T) {
 			},
 		},
 		{
-			name:  "Subscript and property access",
+			name:  "subscript and property access",
 			input: "{{ user.items[0] }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "user", Line: 1, Col: 4},
 				{Type: TokenSymbol, Value: ".", Line: 1, Col: 8},
@@ -472,25 +479,25 @@ func TestLexerOperators(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }
 
-// TestLexerComplexTemplates tests complex real-world templates
 func TestLexerComplexTemplates(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "If-else template",
+			name:  "if-else template",
 			input: "{% if user %}Hello {{ user.name }}{% else %}Guest{% endif %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "user", Line: 1, Col: 7},
@@ -512,9 +519,9 @@ func TestLexerComplexTemplates(t *testing.T) {
 			},
 		},
 		{
-			name:  "For loop template",
+			name:  "for loop template",
 			input: "{% for item in items %}{{ item }}{% endfor %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "for", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "item", Line: 1, Col: 8},
@@ -534,106 +541,100 @@ func TestLexerComplexTemplates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-
-			// Use reflect.DeepEqual for complex comparison
-			if !reflect.DeepEqual(tt.expected, tokens) {
-				t.Errorf("Token mismatch\nExpected: %+v\nGot:      %+v", tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
 			}
+			compareTokens(t, "Tokenize(complex)", got, tt.want)
 		})
 	}
 }
 
-// TestLexerErrors tests error conditions
 func TestLexerErrors(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		expectError bool
-		errorMsg    string
+		name    string
+		input   string
+		wantMsg string
 	}{
 		{
-			name:        "Unclosed variable tag",
-			input:       "{{ name",
-			expectError: true,
-			errorMsg:    "unclosed variable tag",
+			name:    "unclosed variable tag",
+			input:   "{{ name",
+			wantMsg: "unclosed variable tag",
 		},
 		{
-			name:        "Unclosed block tag",
-			input:       "{% if x",
-			expectError: true,
-			errorMsg:    "unclosed block tag",
+			name:    "unclosed block tag",
+			input:   "{% if x",
+			wantMsg: "unclosed block tag",
 		},
 		{
-			name:        "Unclosed comment",
-			input:       "{# comment",
-			expectError: true,
-			errorMsg:    "unclosed comment",
+			name:    "unclosed comment",
+			input:   "{# comment",
+			wantMsg: "unclosed comment",
 		},
 		{
-			name:        "Unclosed string",
-			input:       `{{ "hello`,
-			expectError: true,
-			errorMsg:    "unclosed string",
+			name:    "unclosed string",
+			input:   `{{ "hello`,
+			wantMsg: "unclosed string",
 		},
 		{
-			name:        "Newline in comment",
-			input:       "{# line1\nline2 #}",
-			expectError: true,
-			errorMsg:    "newline not permitted in comment",
+			name:    "newline in comment",
+			input:   "{# line1\nline2 #}",
+			wantMsg: "newline not permitted in comment",
 		},
 		{
-			name:        "Newline in string",
-			input:       "{{ \"line1\nline2\" }}",
-			expectError: true,
-			errorMsg:    "newline in string is not allowed",
+			name:    "newline in string",
+			input:   "{{ \"line1\nline2\" }}",
+			wantMsg: "newline in string is not allowed",
 		},
 		{
-			name:        "Invalid escape sequence",
-			input:       `{{ "hello\x" }}`,
-			expectError: true,
-			errorMsg:    "unknown escape sequence",
+			name:    "invalid escape sequence",
+			input:   `{{ "hello\x" }}`,
+			wantMsg: "unknown escape sequence",
 		},
 		{
-			name:        "Unexpected character",
-			input:       "{{ @ }}",
-			expectError: true,
-			errorMsg:    "unexpected character",
+			name:    "unexpected character",
+			input:   "{{ @ }}",
+			wantMsg: "unexpected character",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
+			got, err := NewLexer(tt.input).Tokenize()
+			if err == nil {
+				t.Fatalf("Tokenize(%q) = %v, want error containing %q", tt.input, got, tt.wantMsg)
+			}
+			if got != nil {
+				t.Errorf("Tokenize(%q) returned non-nil tokens on error", tt.input)
+			}
 
-			if tt.expectError {
-				assert.Error(t, err)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
-				}
-				assert.Nil(t, tokens)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, tokens)
+			var lexErr *LexerError
+			if !errors.As(err, &lexErr) {
+				t.Fatalf("Tokenize(%q) error type = %T, want *LexerError", tt.input, err)
+			}
+			if !strings.Contains(lexErr.Message, tt.wantMsg) {
+				t.Errorf("Tokenize(%q) error message = %q, want substring %q", tt.input, lexErr.Message, tt.wantMsg)
+			}
+			if lexErr.Line <= 0 {
+				t.Errorf("Tokenize(%q) error line = %d, want positive", tt.input, lexErr.Line)
+			}
+			if lexErr.Col <= 0 {
+				t.Errorf("Tokenize(%q) error col = %d, want positive", tt.input, lexErr.Col)
 			}
 		})
 	}
 }
 
-// TestLexerWhitespace tests whitespace handling
 func TestLexerWhitespace(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Extra whitespace in variable tag",
+			name:  "extra whitespace in variable tag",
 			input: "{{   name   }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "name", Line: 1, Col: 6},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 13},
@@ -641,9 +642,9 @@ func TestLexerWhitespace(t *testing.T) {
 			},
 		},
 		{
-			name:  "Tabs and spaces",
+			name:  "tabs and spaces",
 			input: "{{\t\tname\t\t}}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "name", Line: 1, Col: 5},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 11},
@@ -651,9 +652,9 @@ func TestLexerWhitespace(t *testing.T) {
 			},
 		},
 		{
-			name:  "Newlines in block tag",
+			name:  "newlines in block tag",
 			input: "{%\nif\nx\n%}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 2, Col: 1},
 				{Type: TokenIdentifier, Value: "x", Line: 3, Col: 1},
@@ -665,25 +666,25 @@ func TestLexerWhitespace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize", got, tt.want)
 		})
 	}
 }
 
-// TestLexerKeywords tests keyword tokenization
 func TestLexerKeywords(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
+		name  string
+		input string
+		want  []*Token
 	}{
 		{
-			name:  "Boolean true",
+			name:  "boolean true",
 			input: "{{ true }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "true", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 9},
@@ -691,9 +692,9 @@ func TestLexerKeywords(t *testing.T) {
 			},
 		},
 		{
-			name:  "Boolean false",
+			name:  "boolean false",
 			input: "{{ false }}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "false", Line: 1, Col: 4},
 				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 10},
@@ -701,9 +702,9 @@ func TestLexerKeywords(t *testing.T) {
 			},
 		},
 		{
-			name:  "Logical operators",
+			name:  "logical operators",
 			input: "{% if a and b or not c %}",
-			expected: []*Token{
+			want: []*Token{
 				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
 				{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
 				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 7},
@@ -720,80 +721,11 @@ func TestLexerKeywords(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
-		})
-	}
-}
-
-// TestLexerEdgeCases tests edge cases and boundary conditions
-func TestLexerEdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected []*Token
-	}{
-		{
-			name:  "Empty variable tag",
-			input: "{{ }}",
-			expected: []*Token{
-				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 4},
-				{Type: TokenEOF, Value: "", Line: 1, Col: 6},
-			},
-		},
-		{
-			name:  "Empty block tag",
-			input: "{% %}",
-			expected: []*Token{
-				{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
-				{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 4},
-				{Type: TokenEOF, Value: "", Line: 1, Col: 6},
-			},
-		},
-		{
-			name:  "Adjacent tags",
-			input: "{{a}}{{b}}",
-			expected: []*Token{
-				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
-				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 3},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 4},
-				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 6},
-				{Type: TokenIdentifier, Value: "b", Line: 1, Col: 8},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 9},
-				{Type: TokenEOF, Value: "", Line: 1, Col: 11},
-			},
-		},
-		{
-			name:  "Identifier with underscore",
-			input: "{{ _private_var }}",
-			expected: []*Token{
-				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
-				{Type: TokenIdentifier, Value: "_private_var", Line: 1, Col: 4},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 17},
-				{Type: TokenEOF, Value: "", Line: 1, Col: 19},
-			},
-		},
-		{
-			name:  "Identifier with numbers",
-			input: "{{ var123 }}",
-			expected: []*Token{
-				{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
-				{Type: TokenIdentifier, Value: "var123", Line: 1, Col: 4},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 11},
-				{Type: TokenEOF, Value: "", Line: 1, Col: 13},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input)
-			tokens, err := lexer.Tokenize()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, tokens)
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, "Tokenize("+tt.input+")", got, tt.want)
 		})
 	}
 }

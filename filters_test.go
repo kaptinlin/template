@@ -7,27 +7,24 @@ import (
 )
 
 // dummyFilter is a no-op filter used in registry tests.
-func dummyFilter(value interface{}, args ...string) (interface{}, error) {
+func dummyFilter(value interface{}, _ ...string) (interface{}, error) {
 	return value, nil
 }
 
-func TestRegisterFilterAndGetFilter(t *testing.T) {
-	originalRegistry := filterRegistry
-	defer func() { filterRegistry = originalRegistry }()
+// --- Registry type tests ---
 
+func TestRegistryRegisterAndFilter(t *testing.T) {
 	tests := []struct {
 		name         string
-		setup        func()
+		setup        func(r *Registry)
 		registerName string
 		registerFunc FilterFunc
 		queryName    string
 		expectFound  bool
 	}{
 		{
-			name: "register and retrieve new filter",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-			},
+			name:         "register and retrieve new filter",
+			setup:        func(_ *Registry) {},
 			registerName: "testfilter",
 			registerFunc: dummyFilter,
 			queryName:    "testfilter",
@@ -35,9 +32,8 @@ func TestRegisterFilterAndGetFilter(t *testing.T) {
 		},
 		{
 			name: "overwrite existing filter",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["existing"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("existing", dummyFilter)
 			},
 			registerName: "existing",
 			registerFunc: dummyFilter,
@@ -45,10 +41,8 @@ func TestRegisterFilterAndGetFilter(t *testing.T) {
 			expectFound:  true,
 		},
 		{
-			name: "query non-existing filter returns nil",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-			},
+			name:         "query non-existing filter returns nil",
+			setup:        func(_ *Registry) {},
 			registerName: "registered",
 			registerFunc: dummyFilter,
 			queryName:    "nonexistent",
@@ -56,9 +50,8 @@ func TestRegisterFilterAndGetFilter(t *testing.T) {
 		},
 		{
 			name: "register multiple filters independently",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["alpha"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("alpha", dummyFilter)
 			},
 			registerName: "bravo",
 			registerFunc: dummyFilter,
@@ -69,10 +62,11 @@ func TestRegisterFilterAndGetFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			RegisterFilter(tt.registerName, tt.registerFunc)
+			r := NewRegistry()
+			tt.setup(r)
+			r.Register(tt.registerName, tt.registerFunc)
 
-			fn, ok := GetFilter(tt.queryName)
+			fn, ok := r.Filter(tt.queryName)
 			assert.Equal(t, tt.expectFound, ok)
 			if tt.expectFound {
 				assert.NotNil(t, fn)
@@ -81,57 +75,46 @@ func TestRegisterFilterAndGetFilter(t *testing.T) {
 	}
 }
 
-func TestRegisterFilterNilPanics(t *testing.T) {
-	originalRegistry := filterRegistry
-	defer func() { filterRegistry = originalRegistry }()
-	filterRegistry = make(map[string]FilterFunc)
-
+func TestRegistryRegisterNilPanics(t *testing.T) {
+	r := NewRegistry()
 	assert.Panics(t, func() {
-		RegisterFilter("nilfilter", nil)
+		r.Register("nilfilter", nil)
 	})
 }
 
-func TestListFilters(t *testing.T) {
-	originalRegistry := filterRegistry
-	defer func() { filterRegistry = originalRegistry }()
-
+func TestRegistryList(t *testing.T) {
 	tests := []struct {
 		name     string
-		setup    func()
+		setup    func(r *Registry)
 		expected []string
 	}{
 		{
-			name: "empty registry returns empty list",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-			},
+			name:     "empty registry returns empty list",
+			setup:    func(_ *Registry) {},
 			expected: []string{},
 		},
 		{
 			name: "single filter",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["alpha"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("alpha", dummyFilter)
 			},
 			expected: []string{"alpha"},
 		},
 		{
 			name: "multiple filters returned in sorted order",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["charlie"] = dummyFilter
-				filterRegistry["alpha"] = dummyFilter
-				filterRegistry["bravo"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("charlie", dummyFilter)
+				r.Register("alpha", dummyFilter)
+				r.Register("bravo", dummyFilter)
 			},
 			expected: []string{"alpha", "bravo", "charlie"},
 		},
 		{
 			name: "numeric-prefixed names sort lexicographically",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["2nd"] = dummyFilter
-				filterRegistry["10th"] = dummyFilter
-				filterRegistry["1st"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("2nd", dummyFilter)
+				r.Register("10th", dummyFilter)
+				r.Register("1st", dummyFilter)
 			},
 			expected: []string{"10th", "1st", "2nd"},
 		},
@@ -139,53 +122,44 @@ func TestListFilters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			result := ListFilters()
-			assert.Equal(t, tt.expected, result)
+			r := NewRegistry()
+			tt.setup(r)
+			assert.Equal(t, tt.expected, r.List())
 		})
 	}
 }
 
-func TestHasFilter(t *testing.T) {
-	originalRegistry := filterRegistry
-	defer func() { filterRegistry = originalRegistry }()
-
+func TestRegistryHas(t *testing.T) {
 	tests := []struct {
 		name     string
-		setup    func()
+		setup    func(r *Registry)
 		filter   string
 		expected bool
 	}{
 		{
 			name: "existing filter returns true",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["myfilter"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("myfilter", dummyFilter)
 			},
 			filter:   "myfilter",
 			expected: true,
 		},
 		{
-			name: "non-existing filter returns false",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-			},
+			name:     "non-existing filter returns false",
+			setup:    func(_ *Registry) {},
 			filter:   "nonexistent",
 			expected: false,
 		},
 		{
-			name: "empty name returns false",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-			},
+			name:     "empty name returns false",
+			setup:    func(_ *Registry) {},
 			filter:   "",
 			expected: false,
 		},
 		{
 			name: "case sensitive lookup",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["Upper"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("Upper", dummyFilter)
 			},
 			filter:   "upper",
 			expected: false,
@@ -194,29 +168,25 @@ func TestHasFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			result := HasFilter(tt.filter)
-			assert.Equal(t, tt.expected, result)
+			r := NewRegistry()
+			tt.setup(r)
+			assert.Equal(t, tt.expected, r.Has(tt.filter))
 		})
 	}
 }
 
-func TestUnregisterFilter(t *testing.T) {
-	originalRegistry := filterRegistry
-	defer func() { filterRegistry = originalRegistry }()
-
+func TestRegistryUnregister(t *testing.T) {
 	tests := []struct {
 		name               string
-		setup              func()
+		setup              func(r *Registry)
 		unregisterName     string
 		expectAfterRemoval map[string]bool
 	}{
 		{
 			name: "unregister existing filter removes it",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["removeme"] = dummyFilter
-				filterRegistry["keepme"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("removeme", dummyFilter)
+				r.Register("keepme", dummyFilter)
 			},
 			unregisterName: "removeme",
 			expectAfterRemoval: map[string]bool{
@@ -226,9 +196,8 @@ func TestUnregisterFilter(t *testing.T) {
 		},
 		{
 			name: "unregister non-existing filter is no-op",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-				filterRegistry["keep"] = dummyFilter
+			setup: func(r *Registry) {
+				r.Register("keep", dummyFilter)
 			},
 			unregisterName: "nonexistent",
 			expectAfterRemoval: map[string]bool{
@@ -237,10 +206,8 @@ func TestUnregisterFilter(t *testing.T) {
 			},
 		},
 		{
-			name: "unregister from empty registry is no-op",
-			setup: func() {
-				filterRegistry = make(map[string]FilterFunc)
-			},
+			name:               "unregister from empty registry is no-op",
+			setup:              func(_ *Registry) {},
 			unregisterName:     "anything",
 			expectAfterRemoval: map[string]bool{"anything": false},
 		},
@@ -248,59 +215,97 @@ func TestUnregisterFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			UnregisterFilter(tt.unregisterName)
+			r := NewRegistry()
+			tt.setup(r)
+			r.Unregister(tt.unregisterName)
 
 			for name, expectExists := range tt.expectAfterRemoval {
-				_, exists := GetFilter(name)
-				assert.Equal(t, expectExists, exists, "filter %q existence mismatch", name)
+				_, exists := r.Filter(name)
+				assert.Equal(t, expectExists, exists,
+					"filter %q existence mismatch", name)
 			}
 		})
 	}
 }
 
+// --- Package-level convenience function tests ---
+
+func TestRegisterFilterAndGetFilter(t *testing.T) {
+	saved := defaultRegistry
+	defer func() { defaultRegistry = saved }()
+	defaultRegistry = NewRegistry()
+
+	RegisterFilter("testfilter", dummyFilter)
+
+	fn, ok := GetFilter("testfilter")
+	assert.True(t, ok)
+	assert.NotNil(t, fn)
+
+	_, ok = GetFilter("nonexistent")
+	assert.False(t, ok)
+}
+
+func TestRegisterFilterNilPanics(t *testing.T) {
+	saved := defaultRegistry
+	defer func() { defaultRegistry = saved }()
+	defaultRegistry = NewRegistry()
+
+	assert.Panics(t, func() {
+		RegisterFilter("nilfilter", nil)
+	})
+}
+
+func TestListFilters(t *testing.T) {
+	saved := defaultRegistry
+	defer func() { defaultRegistry = saved }()
+	defaultRegistry = NewRegistry()
+
+	RegisterFilter("charlie", dummyFilter)
+	RegisterFilter("alpha", dummyFilter)
+	RegisterFilter("bravo", dummyFilter)
+
+	assert.Equal(t, []string{"alpha", "bravo", "charlie"}, ListFilters())
+}
+
+func TestHasFilter(t *testing.T) {
+	saved := defaultRegistry
+	defer func() { defaultRegistry = saved }()
+	defaultRegistry = NewRegistry()
+
+	RegisterFilter("myfilter", dummyFilter)
+
+	assert.True(t, HasFilter("myfilter"))
+	assert.False(t, HasFilter("nonexistent"))
+}
+
+func TestUnregisterFilter(t *testing.T) {
+	saved := defaultRegistry
+	defer func() { defaultRegistry = saved }()
+	defaultRegistry = NewRegistry()
+
+	RegisterFilter("removeme", dummyFilter)
+	RegisterFilter("keepme", dummyFilter)
+	UnregisterFilter("removeme")
+
+	assert.False(t, HasFilter("removeme"))
+	assert.True(t, HasFilter("keepme"))
+}
+
 func TestBuiltinFiltersRegistered(t *testing.T) {
-	expectedFilters := []struct {
-		name   string
-		exists bool
-	}{
-		{name: "upper", exists: true},
-		{name: "lower", exists: true},
-		{name: "capitalize", exists: true},
-		{name: "length", exists: true},
-		{name: "default", exists: true},
-		{name: "trim", exists: true},
-		{name: "join", exists: true},
-		{name: "first", exists: true},
-		{name: "last", exists: true},
-		{name: "reverse", exists: true},
-		{name: "abs", exists: true},
-		{name: "round", exists: true},
-		{name: "floor", exists: true},
-		{name: "ceil", exists: true},
-		{name: "plus", exists: true},
-		{name: "minus", exists: true},
-		{name: "times", exists: true},
-		{name: "divide", exists: true},
-		{name: "modulo", exists: true},
-		{name: "date", exists: true},
-		{name: "json", exists: true},
-		{name: "number", exists: true},
-		{name: "bytes", exists: true},
-		{name: "unique", exists: true},
-		{name: "shuffle", exists: true},
-		{name: "size", exists: true},
-		{name: "max", exists: true},
-		{name: "min", exists: true},
-		{name: "sum", exists: true},
-		{name: "average", exists: true},
-		{name: "extract", exists: true},
+	expectedFilters := []string{
+		"upper", "lower", "capitalize", "length",
+		"default", "trim", "join", "first", "last",
+		"reverse", "abs", "round", "floor", "ceil",
+		"plus", "minus", "times", "divide", "modulo",
+		"date", "json", "number", "bytes",
+		"unique", "shuffle", "size",
+		"max", "min", "sum", "average", "extract",
 	}
 
-	for _, tt := range expectedFilters {
-		t.Run(tt.name, func(t *testing.T) {
-			_, ok := GetFilter(tt.name)
-			assert.Equal(t, tt.exists, ok)
+	for _, name := range expectedFilters {
+		t.Run(name, func(t *testing.T) {
+			_, ok := GetFilter(name)
+			assert.True(t, ok, "built-in filter %q not registered", name)
 		})
 	}
 }

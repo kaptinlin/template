@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,10 +28,22 @@ func TestMathFilters(t *testing.T) {
 			expected: "10",
 		},
 		{
+			name:     "AtLeastFilterNoClamp",
+			template: "{{ value | atLeast:3 }}",
+			context:  map[string]interface{}{"value": 5},
+			expected: "5",
+		},
+		{
 			name:     "AtMostFilter",
 			template: "{{ value | atMost:10 }}",
 			context:  map[string]interface{}{"value": 15},
 			expected: "10",
+		},
+		{
+			name:     "AtMostFilterNoClamp",
+			template: "{{ value | atMost:20 }}",
+			context:  map[string]interface{}{"value": 15},
+			expected: "15",
 		},
 		{
 			name:     "RoundFilter",
@@ -84,22 +97,67 @@ func TestMathFilters(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Parse the template
 			tpl, err := Compile(tc.template)
-			require.NoError(t, err, "Failed to parse template")
+			require.NoError(t, err)
 
-			// Create a context and add variables
 			context := NewContext()
 			for k, v := range tc.context {
 				context.Set(k, v)
 			}
 
-			// Execute the template
 			output, err := tpl.Render(map[string]interface{}(context))
-			require.NoError(t, err, "Failed to execute template")
-
-			// Verify the output matches the expected result
-			assert.Equal(t, tc.expected, output, "Test case '%s'", tc.name)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, output)
 		})
 	}
+}
+
+func TestMathFilterErrors(t *testing.T) {
+	t.Run("AtLeastMissingArg", func(t *testing.T) {
+		_, err := atLeastFilter(5)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("AtMostMissingArg", func(t *testing.T) {
+		_, err := atMostFilter(5)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("RoundMissingArg", func(t *testing.T) {
+		_, err := roundFilter(3.14)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("PlusMissingArg", func(t *testing.T) {
+		_, err := plusFilter(5)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("MinusMissingArg", func(t *testing.T) {
+		_, err := minusFilter(5)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("TimesMissingArg", func(t *testing.T) {
+		_, err := timesFilter(5)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("DivideMissingArg", func(t *testing.T) {
+		_, err := divideFilter(5)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("ModuloMissingArg", func(t *testing.T) {
+		_, err := moduloFilter(5)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
 }

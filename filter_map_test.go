@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,7 +56,7 @@ func TestExtractFilter(t *testing.T) {
 					"exists": "This exists",
 				},
 			},
-			expected: "", // Returns empty value for backward compatibility
+			expected: "",
 		},
 		{
 			name:     "IndexOutOfRange",
@@ -63,28 +64,31 @@ func TestExtractFilter(t *testing.T) {
 			context: map[string]interface{}{
 				"data": []interface{}{"First", "Second"},
 			},
-			expected: "", // Returns empty value for backward compatibility
+			expected: "",
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Parse the template
 			tpl, err := Compile(tc.template)
-			require.NoError(t, err, "Failed to parse template")
+			require.NoError(t, err)
 
-			// Create a context and add variables
 			context := NewContext()
 			for k, v := range tc.context {
 				context.Set(k, v)
 			}
 
-			// Execute the template
 			output, err := tpl.Render(map[string]interface{}(context))
-			require.NoError(t, err, "Failed to execute template")
-
-			// Verify the output matches the expected result
-			assert.Equal(t, tc.expected, output, "Test case '%s'", tc.name)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, output)
 		})
 	}
+}
+
+func TestExtractFilterErrors(t *testing.T) {
+	t.Run("MissingKeyPath", func(t *testing.T) {
+		_, err := extractFilter(map[string]interface{}{"key": "value"})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
 }

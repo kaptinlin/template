@@ -32,7 +32,7 @@ func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
 
 func main() {
 	// Register a {% set varname = expr %} tag.
-	err := template.RegisterTag("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
+	err := template.RegisterTag("set", func(_ *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
 		varToken, err := arguments.ExpectIdentifier()
 		if err != nil {
 			return nil, arguments.Error("expected variable name after 'set'")

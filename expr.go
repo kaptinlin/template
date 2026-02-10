@@ -5,6 +5,13 @@ import (
 	"strconv"
 )
 
+// comparisonOps is the set of comparison operators for fast lookup.
+var comparisonOps = map[string]bool{
+	"==": true, "!=": true,
+	"<": true, ">": true,
+	"<=": true, ">=": true,
+}
+
 // ExprParser parses expressions from a token stream.
 // It handles operator precedence, filters, property access, etc.
 type ExprParser struct {
@@ -14,191 +21,166 @@ type ExprParser struct {
 
 // NewExprParser creates a new expression parser.
 func NewExprParser(tokens []*Token) *ExprParser {
-	return &ExprParser{
-		tokens: tokens,
-		pos:    0,
-	}
+	return &ExprParser{tokens: tokens}
 }
 
 // ParseExpression parses a complete expression.
 // This is the entry point for expression parsing.
 func (p *ExprParser) ParseExpression() (Expression, error) {
-	return p.parseOrExpression()
+	return p.parseOr()
 }
 
 // Operator precedence (lowest to highest):
-// 1. or
-// 2. and
-// 3. comparison (==, !=, <, >, <=, >=)
-// 4. addition/subtraction (+, -)
-// 5. multiplication/division (*, /, %)
-// 6. unary (not, -, +)
-// 7. postfix (filter |, property ., subscript [])
-// 8. primary (literals, variables, parentheses)
+//  1. or
+//  2. and
+//  3. comparison (==, !=, <, >, <=, >=)
+//  4. addition/subtraction (+, -)
+//  5. multiplication/division (*, /, %)
+//  6. unary (not, -, +)
+//  7. postfix (filter |, property ., subscript [])
+//  8. primary (literals, variables, parentheses)
 
-// parseOrExpression parses "or" expressions (lowest precedence).
+// parseOr parses "or" expressions (lowest precedence).
 // Example: a or b or c, a || b || c
-func (p *ExprParser) parseOrExpression() (Expression, error) {
-	left, err := p.parseAndExpression()
+func (p *ExprParser) parseOr() (Expression, error) {
+	left, err := p.parseAnd()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.current() != nil {
-		tok := p.current()
-		// Support both "or" keyword and "||" symbol
-		isOr := (tok.Type == TokenIdentifier && tok.Value == "or") ||
-			(tok.Type == TokenSymbol && tok.Value == "||")
-
-		if !isOr {
+	for tok := p.current(); tok != nil; tok = p.current() {
+		if !p.isOr(tok) {
 			break
 		}
+		p.advance()
 
-		opToken := tok
-		p.advance() // consume "or" or "||"
-
-		right, err := p.parseAndExpression()
+		right, err := p.parseAnd()
 		if err != nil {
 			return nil, err
 		}
 
-		left = NewBinaryOpNode("or", left, right, opToken.Line, opToken.Col)
+		left = NewBinaryOpNode("or", left, right, tok.Line, tok.Col)
 	}
 
 	return left, nil
 }
 
-// parseAndExpression parses "and" expressions.
+// parseAnd parses "and" expressions.
 // Example: a and b and c, a && b && c
-func (p *ExprParser) parseAndExpression() (Expression, error) {
-	left, err := p.parseComparisonExpression()
+func (p *ExprParser) parseAnd() (Expression, error) {
+	left, err := p.parseComparison()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.current() != nil {
-		tok := p.current()
-		// Support both "and" keyword and "&&" symbol
-		isAnd := (tok.Type == TokenIdentifier && tok.Value == "and") ||
-			(tok.Type == TokenSymbol && tok.Value == "&&")
-
-		if !isAnd {
+	for tok := p.current(); tok != nil; tok = p.current() {
+		if !p.isAnd(tok) {
 			break
 		}
+		p.advance()
 
-		opToken := tok
-		p.advance() // consume "and" or "&&"
-
-		right, err := p.parseComparisonExpression()
+		right, err := p.parseComparison()
 		if err != nil {
 			return nil, err
 		}
 
-		left = NewBinaryOpNode("and", left, right, opToken.Line, opToken.Col)
+		left = NewBinaryOpNode("and", left, right, tok.Line, tok.Col)
 	}
 
 	return left, nil
 }
 
-// parseComparisonExpression parses comparison expressions.
+// parseComparison parses comparison expressions.
 // Example: a == b, x > 10, count <= 100
-func (p *ExprParser) parseComparisonExpression() (Expression, error) {
-	left, err := p.parseAdditionExpression()
+func (p *ExprParser) parseComparison() (Expression, error) {
+	left, err := p.parseAddition()
 	if err != nil {
 		return nil, err
 	}
 
-	// Comparison operators
-	for p.current() != nil && p.current().Type == TokenSymbol {
-		op := p.current().Value
-		if op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=" {
-			opToken := p.current()
-			p.advance() // consume operator
-
-			right, err := p.parseAdditionExpression()
-			if err != nil {
-				return nil, err
-			}
-
-			left = NewBinaryOpNode(op, left, right, opToken.Line, opToken.Col)
-		} else {
+	for tok := p.current(); tok != nil && tok.Type == TokenSymbol; tok = p.current() {
+		if !comparisonOps[tok.Value] {
 			break
 		}
+		op := tok.Value
+		p.advance()
+
+		right, err := p.parseAddition()
+		if err != nil {
+			return nil, err
+		}
+
+		left = NewBinaryOpNode(op, left, right, tok.Line, tok.Col)
 	}
 
 	return left, nil
 }
 
-// parseAdditionExpression parses addition and subtraction.
+// parseAddition parses addition and subtraction.
 // Example: a + b - c
-func (p *ExprParser) parseAdditionExpression() (Expression, error) {
-	left, err := p.parseMultiplicationExpression()
+func (p *ExprParser) parseAddition() (Expression, error) {
+	left, err := p.parseMultiplication()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.current() != nil && p.current().Type == TokenSymbol {
-		op := p.current().Value
-		if op == "+" || op == "-" {
-			opToken := p.current()
-			p.advance() // consume operator
-
-			right, err := p.parseMultiplicationExpression()
-			if err != nil {
-				return nil, err
-			}
-
-			left = NewBinaryOpNode(op, left, right, opToken.Line, opToken.Col)
-		} else {
+	for tok := p.current(); tok != nil && tok.Type == TokenSymbol; tok = p.current() {
+		op := tok.Value
+		if op != "+" && op != "-" {
 			break
 		}
+		p.advance()
+
+		right, err := p.parseMultiplication()
+		if err != nil {
+			return nil, err
+		}
+
+		left = NewBinaryOpNode(op, left, right, tok.Line, tok.Col)
 	}
 
 	return left, nil
 }
 
-// parseMultiplicationExpression parses multiplication, division, and modulo.
+// parseMultiplication parses multiplication, division, and modulo.
 // Example: a * b / c % d
-func (p *ExprParser) parseMultiplicationExpression() (Expression, error) {
-	left, err := p.parseUnaryExpression()
+func (p *ExprParser) parseMultiplication() (Expression, error) {
+	left, err := p.parseUnary()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.current() != nil && p.current().Type == TokenSymbol {
-		op := p.current().Value
-		if op == "*" || op == "/" || op == "%" {
-			opToken := p.current()
-			p.advance() // consume operator
-
-			right, err := p.parseUnaryExpression()
-			if err != nil {
-				return nil, err
-			}
-
-			left = NewBinaryOpNode(op, left, right, opToken.Line, opToken.Col)
-		} else {
+	for tok := p.current(); tok != nil && tok.Type == TokenSymbol; tok = p.current() {
+		op := tok.Value
+		if op != "*" && op != "/" && op != "%" {
 			break
 		}
+		p.advance()
+
+		right, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+
+		left = NewBinaryOpNode(op, left, right, tok.Line, tok.Col)
 	}
 
 	return left, nil
 }
 
-// parseUnaryExpression parses unary expressions.
+// parseUnary parses unary expressions.
 // Example: not flag, !flag, -value, +value
-func (p *ExprParser) parseUnaryExpression() (Expression, error) {
+func (p *ExprParser) parseUnary() (Expression, error) {
 	tok := p.current()
 	if tok == nil {
-		return nil, p.error("unexpected end of expression")
+		return nil, p.parseErr("unexpected end of expression")
 	}
 
-	// Check for unary operators
 	// Support both "not" keyword and "!" symbol
 	if (tok.Type == TokenIdentifier && tok.Value == "not") ||
 		(tok.Type == TokenSymbol && tok.Value == "!") {
-		p.advance() // consume "not" or "!"
-		operand, err := p.parseUnaryExpression()
+		p.advance()
+		operand, err := p.parseUnary()
 		if err != nil {
 			return nil, err
 		}
@@ -206,58 +188,39 @@ func (p *ExprParser) parseUnaryExpression() (Expression, error) {
 	}
 
 	if tok.Type == TokenSymbol && (tok.Value == "-" || tok.Value == "+") {
-		p.advance() // consume operator
-		operand, err := p.parseUnaryExpression()
+		p.advance()
+		operand, err := p.parseUnary()
 		if err != nil {
 			return nil, err
 		}
 		return NewUnaryOpNode(tok.Value, operand, tok.Line, tok.Col), nil
 	}
 
-	// Not a unary operator, parse postfix expression
-	return p.parsePostfixExpression()
+	return p.parsePostfix()
 }
 
-// parsePostfixExpression parses postfix expressions.
+// parsePostfix parses postfix expressions.
 // Handles: property access (.), subscript ([]), and filters (|)
 // Example: user.name[0]|upper
-func (p *ExprParser) parsePostfixExpression() (Expression, error) {
-	expr, err := p.parsePrimaryExpression()
+func (p *ExprParser) parsePostfix() (Expression, error) {
+	expr, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
 	}
 
-	for {
-		tok := p.current()
-		if tok == nil {
-			break
-		}
-
-		switch {
-		case tok.Type == TokenSymbol && tok.Value == ".":
-			// Property access: user.name
+	for tok := p.current(); tok != nil && tok.Type == TokenSymbol; tok = p.current() {
+		switch tok.Value {
+		case ".":
 			expr, err = p.parsePropertyAccess(expr)
-			if err != nil {
-				return nil, err
-			}
-
-		case tok.Type == TokenSymbol && tok.Value == "[":
-			// Subscript: items[0]
+		case "[":
 			expr, err = p.parseSubscript(expr)
-			if err != nil {
-				return nil, err
-			}
-
-		case tok.Type == TokenSymbol && tok.Value == "|":
-			// Filter: name|upper
+		case "|":
 			expr, err = p.parseFilter(expr)
-			if err != nil {
-				return nil, err
-			}
-
 		default:
-			// No more postfix operators
 			return expr, nil
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -271,42 +234,35 @@ func (p *ExprParser) parsePropertyAccess(object Expression) (Expression, error) 
 
 	tok := p.current()
 	if tok == nil {
-		return nil, p.error("expected property name or numeric index after '.'")
+		return nil, p.parseErr("expected property name or numeric index after '.'")
 	}
 
-	// Check if it's a numeric index (e.g., .0, .1)
-	// This supports the syntax: user.items.0.name
+	// Numeric index (e.g., .0, .1) converts to subscript access.
 	if tok.Type == TokenNumber {
-		// Convert to subscript access: user.items[0].name
 		indexStr := tok.Value
-		p.advance() // consume number
+		p.advance()
 
-		// Parse as integer for array index
-		// strconv.ParseInt(s, base, bitSize) - base 10, int type
 		indexValue, err := strconv.ParseInt(indexStr, 10, 0)
 		if err != nil {
-			// If it's not a valid integer, try as float (though unusual for array index)
-			floatValue, err := strconv.ParseFloat(indexStr, 64)
-			if err != nil {
-				return nil, p.errorAt(tok, fmt.Sprintf("invalid numeric index: %s", indexStr))
+			// Try as float (unusual for array index).
+			floatValue, fErr := strconv.ParseFloat(indexStr, 64)
+			if fErr != nil {
+				return nil, p.errAtTok(tok, "invalid numeric index: "+indexStr)
 			}
-			// Use float as index (will be converted to int during evaluation)
 			indexExpr := NewLiteralNode(floatValue, dotToken.Line, dotToken.Col)
 			return NewSubscriptNode(object, indexExpr, dotToken.Line, dotToken.Col), nil
 		}
 
-		// Create a literal node for the integer index
 		indexExpr := NewLiteralNode(int(indexValue), dotToken.Line, dotToken.Col)
 		return NewSubscriptNode(object, indexExpr, dotToken.Line, dotToken.Col), nil
 	}
 
-	// Regular property access
 	if tok.Type != TokenIdentifier {
-		return nil, p.error("expected property name after '.'")
+		return nil, p.parseErr("expected property name after '.'")
 	}
 
 	property := tok.Value
-	p.advance() // consume property name
+	p.advance()
 
 	return NewPropertyAccessNode(object, property, dotToken.Line, dotToken.Col), nil
 }
@@ -316,55 +272,50 @@ func (p *ExprParser) parseSubscript(object Expression) (Expression, error) {
 	bracketToken := p.current()
 	p.advance() // consume "["
 
-	// Parse the index expression
 	index, err := p.ParseExpression()
 	if err != nil {
 		return nil, err
 	}
 
-	// Expect closing bracket
 	tok := p.current()
 	if tok == nil || tok.Type != TokenSymbol || tok.Value != "]" {
-		return nil, p.error("expected ']' after subscript index")
+		return nil, p.parseErr("expected ']' after subscript index")
 	}
 	p.advance() // consume "]"
 
 	return NewSubscriptNode(object, index, bracketToken.Line, bracketToken.Col), nil
 }
 
-// parseFilter parses filter application: expression|filter or expression|filter:arg1:arg2
+// parseFilter parses filter application: expression|filter or expression|filter:arg1,arg2
 func (p *ExprParser) parseFilter(expr Expression) (Expression, error) {
 	pipeToken := p.current()
 	p.advance() // consume "|"
 
-	// Parse filter name
 	tok := p.current()
 	if tok == nil || tok.Type != TokenIdentifier {
-		return nil, p.error("expected filter name after '|'")
+		return nil, p.parseErr("expected filter name after '|'")
 	}
 
 	filterName := tok.Value
-	p.advance() // consume filter name
+	p.advance()
 
-	// Parse filter arguments (if any)
 	var args []Expression
 
-	// Check for filter arguments (must start with ":")
+	// Parse filter arguments starting with ":"
 	if p.current() != nil && p.current().Type == TokenSymbol && p.current().Value == ":" {
 		p.advance() // consume ":"
 
-		// Parse first argument
-		arg, err := p.parseFilterArgument()
+		arg, err := p.parseFilterArg()
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, arg)
 
-		// Parse additional arguments (separated by ",")
+		// Additional arguments separated by ","
 		for p.current() != nil && p.current().Type == TokenSymbol && p.current().Value == "," {
 			p.advance() // consume ","
 
-			arg, err := p.parseFilterArgument()
+			arg, err := p.parseFilterArg()
 			if err != nil {
 				return nil, err
 			}
@@ -375,12 +326,12 @@ func (p *ExprParser) parseFilter(expr Expression) (Expression, error) {
 	return NewFilterNode(expr, filterName, args, pipeToken.Line, pipeToken.Col), nil
 }
 
-// parseFilterArgument parses a single filter argument.
-// Filter arguments are simpler - just literals or variables, no complex expressions.
-func (p *ExprParser) parseFilterArgument() (Expression, error) {
+// parseFilterArg parses a single filter argument.
+// Filter arguments are simpler — just literals or variables, no complex expressions.
+func (p *ExprParser) parseFilterArg() (Expression, error) {
 	tok := p.current()
 	if tok == nil {
-		return nil, p.error("expected filter argument")
+		return nil, p.parseErr("expected filter argument")
 	}
 
 	switch tok.Type {
@@ -392,72 +343,63 @@ func (p *ExprParser) parseFilterArgument() (Expression, error) {
 		p.advance()
 		num, err := strconv.ParseFloat(tok.Value, 64)
 		if err != nil {
-			return nil, p.errorAt(tok, fmt.Sprintf("invalid number: %s", tok.Value))
+			return nil, p.errAtTok(tok, "invalid number: "+tok.Value)
 		}
 		return NewLiteralNode(num, tok.Line, tok.Col), nil
 
 	case TokenIdentifier:
-		// Could be a variable or a boolean literal
-		if tok.Value == "true" {
-			p.advance()
-			return NewLiteralNode(true, tok.Line, tok.Col), nil
-		}
-		if tok.Value == "false" {
-			p.advance()
-			return NewLiteralNode(false, tok.Line, tok.Col), nil
-		}
-		// It's a variable reference
 		p.advance()
-		return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
+		switch tok.Value {
+		case "true":
+			return NewLiteralNode(true, tok.Line, tok.Col), nil
+		case "false":
+			return NewLiteralNode(false, tok.Line, tok.Col), nil
+		default:
+			return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
+		}
 
-	case TokenError, TokenEOF, TokenText, TokenVarBegin, TokenVarEnd, TokenTagBegin, TokenTagEnd, TokenSymbol:
-		return nil, p.errorAt(tok, "expected literal or variable as filter argument")
+	case TokenError, TokenEOF, TokenText, TokenVarBegin, TokenVarEnd,
+		TokenTagBegin, TokenTagEnd, TokenSymbol:
+		return nil, p.errAtTok(tok, "expected literal or variable as filter argument")
 	}
 
-	return nil, p.errorAt(tok, "expected literal or variable as filter argument")
+	return nil, p.errAtTok(tok, "expected literal or variable as filter argument")
 }
 
-// parsePrimaryExpression parses primary expressions.
+// parsePrimary parses primary expressions.
 // These are the building blocks: literals, variables, and parenthesized expressions.
-func (p *ExprParser) parsePrimaryExpression() (Expression, error) {
+func (p *ExprParser) parsePrimary() (Expression, error) {
 	tok := p.current()
 	if tok == nil {
-		return nil, p.error("unexpected end of expression")
+		return nil, p.parseErr("unexpected end of expression")
 	}
 
 	switch tok.Type {
 	case TokenString:
-		// String literal
 		p.advance()
 		return NewLiteralNode(tok.Value, tok.Line, tok.Col), nil
 
 	case TokenNumber:
-		// Number literal
 		p.advance()
 		num, err := strconv.ParseFloat(tok.Value, 64)
 		if err != nil {
-			return nil, p.errorAt(tok, fmt.Sprintf("invalid number: %s", tok.Value))
+			return nil, p.errAtTok(tok, "invalid number: "+tok.Value)
 		}
 		return NewLiteralNode(num, tok.Line, tok.Col), nil
 
 	case TokenIdentifier:
-		// Could be a variable, keyword (true/false), or in
-		if tok.Value == "true" {
-			p.advance()
-			return NewLiteralNode(true, tok.Line, tok.Col), nil
-		}
-		if tok.Value == "false" {
-			p.advance()
-			return NewLiteralNode(false, tok.Line, tok.Col), nil
-		}
-
-		// Variable reference
 		p.advance()
-		return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
+		switch tok.Value {
+		case "true":
+			return NewLiteralNode(true, tok.Line, tok.Col), nil
+		case "false":
+			return NewLiteralNode(false, tok.Line, tok.Col), nil
+		default:
+			return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
+		}
 
 	case TokenSymbol:
 		if tok.Value == "(" {
-			// Parenthesized expression
 			p.advance() // consume "("
 
 			expr, err := p.ParseExpression()
@@ -465,23 +407,23 @@ func (p *ExprParser) parsePrimaryExpression() (Expression, error) {
 				return nil, err
 			}
 
-			// Expect closing parenthesis
 			closeTok := p.current()
 			if closeTok == nil || closeTok.Type != TokenSymbol || closeTok.Value != ")" {
-				return nil, p.error("expected ')' after expression")
+				return nil, p.parseErr("expected ')' after expression")
 			}
 			p.advance() // consume ")"
 
 			return expr, nil
 		}
 
-		return nil, p.errorAt(tok, fmt.Sprintf("unexpected token: %s", tok.Value))
+		return nil, p.errAtTok(tok, "unexpected symbol: "+tok.Value)
 
-	case TokenError, TokenEOF, TokenText, TokenVarBegin, TokenVarEnd, TokenTagBegin, TokenTagEnd:
-		return nil, p.errorAt(tok, fmt.Sprintf("unexpected token: %s", tok.Value))
+	case TokenError, TokenEOF, TokenText, TokenVarBegin, TokenVarEnd,
+		TokenTagBegin, TokenTagEnd:
+		return nil, p.errAtTok(tok, "unexpected token: "+tok.Value)
 	}
 
-	return nil, p.errorAt(tok, fmt.Sprintf("unexpected token: %s", tok.Value))
+	return nil, p.errAtTok(tok, "unexpected token: "+tok.Value)
 }
 
 // Helper methods
@@ -510,8 +452,20 @@ func (p *ExprParser) peek(offset int) *Token {
 	return p.tokens[pos]
 }
 
-// error creates a parser error with the current position.
-func (p *ExprParser) error(msg string) error {
+// isOr reports whether tok represents an "or" operator.
+func (p *ExprParser) isOr(tok *Token) bool {
+	return (tok.Type == TokenIdentifier && tok.Value == "or") ||
+		(tok.Type == TokenSymbol && tok.Value == "||")
+}
+
+// isAnd reports whether tok represents an "and" operator.
+func (p *ExprParser) isAnd(tok *Token) bool {
+	return (tok.Type == TokenIdentifier && tok.Value == "and") ||
+		(tok.Type == TokenSymbol && tok.Value == "&&")
+}
+
+// parseErr creates a parse error at the current token position.
+func (p *ExprParser) parseErr(msg string) error {
 	tok := p.current()
 	if tok != nil {
 		return &ParseError{
@@ -520,15 +474,11 @@ func (p *ExprParser) error(msg string) error {
 			Col:     tok.Col,
 		}
 	}
-	return &ParseError{
-		Message: msg,
-		Line:    0,
-		Col:     0,
-	}
+	return &ParseError{Message: msg}
 }
 
-// errorAt creates a parser error at the given token's position.
-func (p *ExprParser) errorAt(tok *Token, msg string) error {
+// errAtTok creates a parse error at the given token's position.
+func (p *ExprParser) errAtTok(tok *Token, msg string) error {
 	return &ParseError{
 		Message: msg,
 		Line:    tok.Line,
@@ -536,7 +486,7 @@ func (p *ExprParser) errorAt(tok *Token, msg string) error {
 	}
 }
 
-// ParseError represents a parsing error.
+// ParseError represents a parsing error with source location.
 type ParseError struct {
 	Message string
 	Line    int

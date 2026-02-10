@@ -171,15 +171,15 @@ func TestContextBuilderChaining(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		build    func() (*ContextBuilder, error)
+		build    func() *ContextBuilder
 		expected Context
 	}{
 		{
 			name: "KeyValue then Struct merges both",
-			build: func() (*ContextBuilder, error) {
+			build: func() *ContextBuilder {
 				return NewContextBuilder().
 					KeyValue("extra", "value").
-					Struct(User{Name: "Alice"}), nil
+					Struct(User{Name: "Alice"})
 			},
 			expected: Context{
 				"extra": "value",
@@ -188,10 +188,10 @@ func TestContextBuilderChaining(t *testing.T) {
 		},
 		{
 			name: "Struct then KeyValue overrides struct field",
-			build: func() (*ContextBuilder, error) {
+			build: func() *ContextBuilder {
 				return NewContextBuilder().
 					Struct(User{Name: "Alice"}).
-					KeyValue("name", "Bob"), nil
+					KeyValue("name", "Bob")
 			},
 			expected: Context{
 				"name": "Bob",
@@ -199,11 +199,11 @@ func TestContextBuilderChaining(t *testing.T) {
 		},
 		{
 			name: "multiple KeyValue calls",
-			build: func() (*ContextBuilder, error) {
+			build: func() *ContextBuilder {
 				return NewContextBuilder().
 					KeyValue("a", 1).
 					KeyValue("b", 2).
-					KeyValue("c", 3), nil
+					KeyValue("c", 3)
 			},
 			expected: Context{
 				"a": 1,
@@ -215,7 +215,7 @@ func TestContextBuilderChaining(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			builder, _ := tt.build()
+			builder := tt.build()
 			ctx, err := builder.Build()
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, ctx)
@@ -380,43 +380,43 @@ func TestNewChildContextSharesPublic(t *testing.T) {
 
 func TestExecutionContextGetPriority(t *testing.T) {
 	tests := []struct {
-		name         string
-		publicData   map[string]interface{}
-		privateData  map[string]interface{}
-		queryKey     string
-		expectedVal  interface{}
+		name          string
+		publicData    map[string]interface{}
+		privateData   map[string]interface{}
+		queryKey      string
+		expectedVal   interface{}
 		expectedFound bool
 	}{
 		{
-			name:         "private takes precedence over public",
-			publicData:   map[string]interface{}{"key": "public_value"},
-			privateData:  map[string]interface{}{"key": "private_value"},
-			queryKey:     "key",
-			expectedVal:  "private_value",
+			name:          "private takes precedence over public",
+			publicData:    map[string]interface{}{"key": "public_value"},
+			privateData:   map[string]interface{}{"key": "private_value"},
+			queryKey:      "key",
+			expectedVal:   "private_value",
 			expectedFound: true,
 		},
 		{
-			name:         "falls back to public when not in private",
-			publicData:   map[string]interface{}{"public_only": "found"},
-			privateData:  map[string]interface{}{},
-			queryKey:     "public_only",
-			expectedVal:  "found",
+			name:          "falls back to public when not in private",
+			publicData:    map[string]interface{}{"public_only": "found"},
+			privateData:   map[string]interface{}{},
+			queryKey:      "public_only",
+			expectedVal:   "found",
 			expectedFound: true,
 		},
 		{
-			name:         "not found in either returns false",
-			publicData:   map[string]interface{}{"a": 1},
-			privateData:  map[string]interface{}{"b": 2},
-			queryKey:     "missing",
-			expectedVal:  nil,
+			name:          "not found in either returns false",
+			publicData:    map[string]interface{}{"a": 1},
+			privateData:   map[string]interface{}{"b": 2},
+			queryKey:      "missing",
+			expectedVal:   nil,
 			expectedFound: false,
 		},
 		{
-			name:         "private only key found",
-			publicData:   map[string]interface{}{},
-			privateData:  map[string]interface{}{"private_only": 42},
-			queryKey:     "private_only",
-			expectedVal:  42,
+			name:          "private only key found",
+			publicData:    map[string]interface{}{},
+			privateData:   map[string]interface{}{"private_only": 42},
+			queryKey:      "private_only",
+			expectedVal:   42,
 			expectedFound: true,
 		},
 	}

@@ -1,25 +1,23 @@
 package template
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
-	"unicode"
 )
 
 // Lexer performs lexical analysis on template input.
 type Lexer struct {
-	input  string   // Input template string
-	pos    int      // Current position in input
-	line   int      // Current line number (1-based)
-	col    int      // Current column number (1-based)
-	tokens []*Token // Collected tokens
+	input  string
+	pos    int
+	line   int // 1-based
+	col    int // 1-based
+	tokens []*Token
 }
 
-// NewLexer creates a new lexer for the given input.
+// NewLexer creates a new Lexer for the given input.
 func NewLexer(input string) *Lexer {
 	return &Lexer{
 		input:  input,
-		pos:    0,
 		line:   1,
 		col:    1,
 		tokens: make([]*Token, 0, 100),
@@ -29,7 +27,6 @@ func NewLexer(input string) *Lexer {
 // Tokenize performs lexical analysis and returns all tokens.
 func (l *Lexer) Tokenize() ([]*Token, error) {
 	for l.pos < len(l.input) {
-		// Check for comment {# #}
 		if l.peek("{#") {
 			if err := l.scanComment(); err != nil {
 				return nil, err
@@ -37,7 +34,6 @@ func (l *Lexer) Tokenize() ([]*Token, error) {
 			continue
 		}
 
-		// Check for variable tag {{ }}
 		if l.peek("{{") {
 			if err := l.scanVarTag(); err != nil {
 				return nil, err
@@ -45,7 +41,6 @@ func (l *Lexer) Tokenize() ([]*Token, error) {
 			continue
 		}
 
-		// Check for block tag {% %}
 		if l.peek("{%") {
 			if err := l.scanBlockTag(); err != nil {
 				return nil, err
@@ -53,31 +48,31 @@ func (l *Lexer) Tokenize() ([]*Token, error) {
 			continue
 		}
 
-		// Otherwise, scan plain text
 		if err := l.scanText(); err != nil {
 			return nil, err
 		}
 	}
 
-	// Add EOF token
 	l.emit(TokenEOF, "")
-
 	return l.tokens, nil
 }
 
-// scanText scans plain text until {{ or {% or {# is encountered.
+// scanText scans plain text until a tag opener is encountered.
 func (l *Lexer) scanText() error {
 	start := l.pos
 	startLine, startCol := l.line, l.col
 
 	for l.pos < len(l.input) {
-		// Stop if we encounter a tag start or comment
-		if l.peek("{{") || l.peek("{%") || l.peek("{#") {
-			break
+		ch := l.input[l.pos]
+
+		if ch == '{' && l.pos+1 < len(l.input) {
+			next := l.input[l.pos+1]
+			if next == '{' || next == '%' || next == '#' {
+				break
+			}
 		}
 
-		// Track line and column
-		if l.input[l.pos] == '\n' {
+		if ch == '\n' {
 			l.line++
 			l.col = 1
 		} else {
@@ -87,39 +82,30 @@ func (l *Lexer) scanText() error {
 		l.pos++
 	}
 
-	// Only emit if we scanned some text
 	if l.pos > start {
-		text := l.input[start:l.pos]
-		l.emitAt(TokenText, text, startLine, startCol)
+		l.emitAt(TokenText, l.input[start:l.pos], startLine, startCol)
 	}
 
 	return nil
 }
 
-// scanComment scans a comment {# ... #}.
-// Comments are ignored and do not produce tokens.
+// scanComment scans and discards a comment {# ... #}.
 func (l *Lexer) scanComment() error {
 	startLine, startCol := l.line, l.col
-
-	l.advance(2) // Skip {#
+	l.advance(2) // skip {#
 
 	for !l.peek("#}") {
 		if l.pos >= len(l.input) {
 			return l.errorAt(startLine, startCol, "unclosed comment, expected '#}'")
 		}
-
-		// Newlines are not allowed in comments (Django spec)
 		if l.input[l.pos] == '\n' {
 			return l.errorAt(l.line, l.col, "newline not permitted in comment")
 		}
-
 		l.pos++
 		l.col++
 	}
 
-	l.advance(2) // Skip #}
-
-	// Comments are ignored, no token is emitted
+	l.advance(2) // skip #}
 	return nil
 }
 
@@ -127,11 +113,9 @@ func (l *Lexer) scanComment() error {
 func (l *Lexer) scanVarTag() error {
 	startLine, startCol := l.line, l.col
 
-	// Emit {{
 	l.emit(TokenVarBegin, "{{")
 	l.advance(2)
 
-	// Scan contents until }}
 	for !l.peek("}}") {
 		if l.pos >= len(l.input) {
 			return l.errorAt(startLine, startCol, "unclosed variable tag, expected '}}'")
@@ -143,13 +127,11 @@ func (l *Lexer) scanVarTag() error {
 			break
 		}
 
-		// Scan token inside the tag
 		if err := l.scanInsideTag(); err != nil {
 			return err
 		}
 	}
 
-	// Emit }}
 	l.emit(TokenVarEnd, "}}")
 	l.advance(2)
 
@@ -160,11 +142,9 @@ func (l *Lexer) scanVarTag() error {
 func (l *Lexer) scanBlockTag() error {
 	startLine, startCol := l.line, l.col
 
-	// Emit {%
 	l.emit(TokenTagBegin, "{%")
 	l.advance(2)
 
-	// Scan contents until %}
 	for !l.peek("%}") {
 		if l.pos >= len(l.input) {
 			return l.errorAt(startLine, startCol, "unclosed block tag, expected '%}'")
@@ -176,13 +156,11 @@ func (l *Lexer) scanBlockTag() error {
 			break
 		}
 
-		// Scan token inside the tag
 		if err := l.scanInsideTag(); err != nil {
 			return err
 		}
 	}
 
-	// Emit %}
 	l.emit(TokenTagEnd, "%}")
 	l.advance(2)
 
@@ -191,7 +169,6 @@ func (l *Lexer) scanBlockTag() error {
 
 // scanInsideTag scans a single token inside {{ }} or {% %}.
 func (l *Lexer) scanInsideTag() error {
-	// Skip whitespace first
 	l.skipWhitespace()
 
 	if l.pos >= len(l.input) {
@@ -200,124 +177,100 @@ func (l *Lexer) scanInsideTag() error {
 
 	ch := l.input[l.pos]
 
-	// String literal
-	if ch == '"' || ch == '\'' {
+	switch {
+	case ch == '"' || ch == '\'':
 		return l.scanString()
-	}
-
-	// Number literal
-	if unicode.IsDigit(rune(ch)) {
+	case isDigit(ch):
 		return l.scanNumber()
-	}
-
-	// Identifier or keyword
-	if unicode.IsLetter(rune(ch)) || ch == '_' {
+	case isLetter(ch) || ch == '_':
 		return l.scanIdentifier()
+	default:
+		return l.scanSymbol()
 	}
-
-	// Symbol (operators and punctuation)
-	return l.scanSymbol()
 }
 
-// scanIdentifier scans an identifier (variable name, keyword, etc).
+// scanIdentifier scans an identifier or keyword.
 func (l *Lexer) scanIdentifier() error {
 	start := l.pos
 	startLine, startCol := l.line, l.col
 
-	// First character is letter or underscore (already checked)
 	l.pos++
 	l.col++
 
-	// Continue with letters, digits, or underscores
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]
-		if unicode.IsLetter(rune(ch)) || unicode.IsDigit(rune(ch)) || ch == '_' {
-			l.pos++
-			l.col++
-		} else {
+		if !isLetter(ch) && !isDigit(ch) && ch != '_' {
 			break
 		}
-	}
-
-	value := l.input[start:l.pos]
-	l.emitAt(TokenIdentifier, value, startLine, startCol)
-
-	return nil
-}
-
-// scanNumber scans a number literal.
-func (l *Lexer) scanNumber() error {
-	start := l.pos
-	startLine, startCol := l.line, l.col
-
-	// Check if this number is part of a property access chain (e.g., "items.0.0")
-	// If the character before this number is '.', then this is an array index,
-	// and we should NOT treat subsequent '.' as a decimal point.
-	isPropAccess := start > 0 && l.input[start-1] == '.'
-
-	// Scan digits
-	for l.pos < len(l.input) && unicode.IsDigit(rune(l.input[l.pos])) {
 		l.pos++
 		l.col++
 	}
 
-	// Check for decimal point followed by a digit
-	// Don't consume '.' if:
-	// 1. It's not followed by a digit (e.g., "0.name" should be "0" and ".name")
-	// 2. This number is part of a property access chain (e.g., ".0.0" should be ".0" and ".0")
-	if !isPropAccess && l.pos < len(l.input) && l.input[l.pos] == '.' {
-		// Peek ahead to check if there's a digit after '.'
-		if l.pos+1 < len(l.input) && unicode.IsDigit(rune(l.input[l.pos+1])) {
-			l.pos++ // consume '.'
-			l.col++
+	l.emitAt(TokenIdentifier, l.input[start:l.pos], startLine, startCol)
+	return nil
+}
 
-			// Scan fractional part
-			for l.pos < len(l.input) && unicode.IsDigit(rune(l.input[l.pos])) {
+// scanNumber scans a number literal (integer or float).
+func (l *Lexer) scanNumber() error {
+	start := l.pos
+	startLine, startCol := l.line, l.col
+
+	// If preceded by '.', treat as array index — don't consume decimal point.
+	propAccess := start > 0 && l.input[start-1] == '.'
+
+	for l.pos < len(l.input) && isDigit(l.input[l.pos]) {
+		l.pos++
+		l.col++
+	}
+
+	// Consume decimal point only if not in a property access chain
+	// and the '.' is followed by a digit.
+	if !propAccess && l.pos < len(l.input) && l.input[l.pos] == '.' {
+		if l.pos+1 < len(l.input) && isDigit(l.input[l.pos+1]) {
+			l.pos++
+			l.col++
+			for l.pos < len(l.input) && isDigit(l.input[l.pos]) {
 				l.pos++
 				l.col++
 			}
 		}
-		// If '.' is not followed by a digit, don't consume it - leave it for the next token
 	}
 
-	value := l.input[start:l.pos]
-	l.emitAt(TokenNumber, value, startLine, startCol)
-
+	l.emitAt(TokenNumber, l.input[start:l.pos], startLine, startCol)
 	return nil
 }
 
-// scanString scans a string literal ("..." or '...').
+// scanString scans a quoted string literal ("..." or '...').
 func (l *Lexer) scanString() error {
 	startLine, startCol := l.line, l.col
-	quote := l.input[l.pos] // " or '
+	quote := l.input[l.pos]
 
-	l.pos++ // Skip opening quote
+	l.pos++
 	l.col++
 
-	var value strings.Builder
+	var buf strings.Builder
+	buf.Grow(16)
 	escaped := false
 
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]
 
-		// Handle escape sequences
 		if escaped {
-			// Process escape sequence
 			switch ch {
 			case '"':
-				value.WriteByte('"')
+				buf.WriteByte('"')
 			case '\'':
-				value.WriteByte('\'')
+				buf.WriteByte('\'')
 			case '\\':
-				value.WriteByte('\\')
+				buf.WriteByte('\\')
 			case 'n':
-				value.WriteByte('\n')
+				buf.WriteByte('\n')
 			case 't':
-				value.WriteByte('\t')
+				buf.WriteByte('\t')
 			case 'r':
-				value.WriteByte('\r')
+				buf.WriteByte('\r')
 			default:
-				return l.errorAt(l.line, l.col-1, fmt.Sprintf("unknown escape sequence: \\%c", ch))
+				return l.errorAt(l.line, l.col-1, "unknown escape sequence: \\"+string(ch))
 			}
 			escaped = false
 			l.pos++
@@ -332,84 +285,75 @@ func (l *Lexer) scanString() error {
 			continue
 		}
 
-		// End of string
 		if ch == quote {
-			l.emitAt(TokenString, value.String(), startLine, startCol)
-
-			l.pos++ // Skip closing quote
+			l.emitAt(TokenString, buf.String(), startLine, startCol)
+			l.pos++
 			l.col++
 			return nil
 		}
 
-		// Newlines are not allowed in strings (Django spec)
 		if ch == '\n' {
 			return l.errorAt(startLine, startCol, "newline in string is not allowed")
 		}
 
-		value.WriteByte(ch)
+		buf.WriteByte(ch)
 		l.col++
 		l.pos++
 	}
 
-	return l.errorAt(startLine, startCol, fmt.Sprintf("unclosed string, expected %c", quote))
+	return l.errorAt(startLine, startCol, "unclosed string, expected "+string(quote))
 }
 
 // scanSymbol scans an operator or punctuation symbol.
 func (l *Lexer) scanSymbol() error {
-	// Try to match 2-character symbols first
+	// Try two-character symbols first.
 	if l.pos+1 < len(l.input) {
-		twoChar := l.input[l.pos : l.pos+2]
-		if IsSymbol(twoChar) {
-			l.emit(TokenSymbol, twoChar)
+		two := l.input[l.pos : l.pos+2]
+		if IsSymbol(two) {
+			l.emit(TokenSymbol, two)
 			l.pos += 2
 			l.col += 2
 			return nil
 		}
 	}
 
-	// Try 1-character symbol
-	oneChar := string(l.input[l.pos])
-	if IsSymbol(oneChar) {
-		l.emit(TokenSymbol, oneChar)
+	one := l.input[l.pos : l.pos+1]
+	if IsSymbol(one) {
+		l.emit(TokenSymbol, one)
 		l.pos++
 		l.col++
 		return nil
 	}
 
-	return l.errorAt(l.line, l.col, fmt.Sprintf("unexpected character: %c", l.input[l.pos]))
+	return l.errorAt(l.line, l.col, "unexpected character: "+one)
 }
 
-// emit creates and appends a token to the token list.
+// emit appends a token at the current position.
 func (l *Lexer) emit(typ TokenType, value string) {
-	token := &Token{
+	l.tokens = append(l.tokens, &Token{
 		Type:  typ,
 		Value: value,
 		Line:  l.line,
 		Col:   l.col,
-	}
-	l.tokens = append(l.tokens, token)
+	})
 }
 
-// emitAt creates and appends a token with explicit line/col position.
+// emitAt appends a token with an explicit position.
 func (l *Lexer) emitAt(typ TokenType, value string, line, col int) {
-	token := &Token{
+	l.tokens = append(l.tokens, &Token{
 		Type:  typ,
 		Value: value,
 		Line:  line,
 		Col:   col,
-	}
-	l.tokens = append(l.tokens, token)
+	})
 }
 
-// peek checks if the input starts with the given string at the current position.
+// peek reports whether the input at the current position starts with s.
 func (l *Lexer) peek(s string) bool {
-	if l.pos+len(s) > len(l.input) {
-		return false
-	}
-	return l.input[l.pos:l.pos+len(s)] == s
+	return l.pos+len(s) <= len(l.input) && l.input[l.pos:l.pos+len(s)] == s
 }
 
-// advance moves the position forward by n characters.
+// advance moves the position forward by n characters, tracking lines.
 func (l *Lexer) advance(n int) {
 	for i := 0; i < n && l.pos < len(l.input); i++ {
 		if l.input[l.pos] == '\n' {
@@ -422,25 +366,24 @@ func (l *Lexer) advance(n int) {
 	}
 }
 
-// skipWhitespace skips whitespace characters.
+// skipWhitespace advances past any whitespace characters.
 func (l *Lexer) skipWhitespace() {
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]
-		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
-			if ch == '\n' {
-				l.line++
-				l.col = 1
-			} else {
-				l.col++
-			}
-			l.pos++
-		} else {
+		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
 			break
 		}
+		if ch == '\n' {
+			l.line++
+			l.col = 1
+		} else {
+			l.col++
+		}
+		l.pos++
 	}
 }
 
-// errorAt creates a lexer error at the specified position.
+// errorAt returns a LexerError at the given position.
 func (l *Lexer) errorAt(line, col int, msg string) error {
 	return &LexerError{
 		Message: msg,
@@ -449,7 +392,7 @@ func (l *Lexer) errorAt(line, col int, msg string) error {
 	}
 }
 
-// LexerError represents a lexical analysis error.
+// LexerError represents a lexical analysis error with position information.
 type LexerError struct {
 	Message string
 	Line    int
@@ -458,5 +401,15 @@ type LexerError struct {
 
 // Error implements the error interface.
 func (e *LexerError) Error() string {
-	return fmt.Sprintf("lexer error at line %d, col %d: %s", e.Line, e.Col, e.Message)
+	return "lexer error at line " + strconv.Itoa(e.Line) + ", col " + strconv.Itoa(e.Col) + ": " + e.Message
+}
+
+// isLetter reports whether the byte is an ASCII letter.
+func isLetter(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+
+// isDigit reports whether the byte is an ASCII digit.
+func isDigit(ch byte) bool {
+	return ch >= '0' && ch <= '9'
 }

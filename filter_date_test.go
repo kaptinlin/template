@@ -8,16 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Helper function to create a test time for consistency across tests.
+// testTime creates a fixed time for consistent testing.
 func testTime() time.Time {
 	return time.Date(2024, 3, 30, 15, 4, 5, 0, time.UTC)
 }
 
 func TestDateFilters(t *testing.T) {
-	// Mock current time for consistent testing
 	currentTime := testTime()
 
-	// Define test cases with template string and expected output
 	cases := []struct {
 		name     string
 		template string
@@ -81,6 +79,12 @@ func TestDateFilters(t *testing.T) {
 			expected: "Current month: March",
 		},
 		{
+			name:     "FullMonthNameCamelCase",
+			template: "Current month: {{ current | monthFull }}",
+			context:  map[string]interface{}{"current": currentTime},
+			expected: "Current month: March",
+		},
+		{
 			name:     "Year",
 			template: "Current year: {{ current | year }}",
 			context:  map[string]interface{}{"current": currentTime},
@@ -98,25 +102,28 @@ func TestDateFilters(t *testing.T) {
 			context:  map[string]interface{}{"current": currentTime},
 			expected: "Current day of the week: Saturday",
 		},
+		{
+			name:     "TimeAgoCamelCase",
+			template: "Time ago: {{ past | timeAgo }}",
+			context: map[string]interface{}{
+				"past": time.Now().Add(-5 * 24 * time.Hour),
+			},
+			expected: "Time ago: 5 days ago",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Parse the template
 			tpl, err := Compile(tc.template)
-			require.NoError(t, err, "Failed to parse template")
+			require.NoError(t, err)
 
-			// Create a context and add variables
 			context := NewContext()
 			for k, v := range tc.context {
 				context.Set(k, v)
 			}
 
-			// Execute the template
 			output, err := tpl.Render(map[string]interface{}(context))
-			require.NoError(t, err, "Failed to execute template")
-
-			// Verify the output
+			require.NoError(t, err)
 			assert.Equal(t, tc.expected, output)
 		})
 	}

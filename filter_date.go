@@ -6,22 +6,16 @@ import (
 
 // registerDateFilters registers all date-related filters.
 func registerDateFilters() {
-	filters := map[string]FilterFunc{
-		"date":       dateFilter,
-		"month":      monthFilter,
-		"monthFull":  monthFullFilter,
-		"month_full": monthFullFilter, // Alias for backward compatibility
-		"year":       yearFilter,
-		"day":        dayFilter,
-		"week":       weekFilter,
-		"weekday":    weekdayFilter,
-		"timeAgo":    timeAgoFilter,
-		"timeago":    timeAgoFilter, // Alias for backward compatibility
-	}
-
-	for name, fn := range filters {
-		RegisterFilter(name, fn)
-	}
+	RegisterFilter("date", dateFilter)
+	RegisterFilter("month", monthFilter)
+	RegisterFilter("monthFull", monthFullFilter)
+	RegisterFilter("month_full", monthFullFilter) // Alias for backward compatibility
+	RegisterFilter("year", yearFilter)
+	RegisterFilter("day", dayFilter)
+	RegisterFilter("week", weekFilter)
+	RegisterFilter("weekday", weekdayFilter)
+	RegisterFilter("timeAgo", timeAgoFilter)
+	RegisterFilter("timeago", timeAgoFilter) // Alias for backward compatibility
 }
 
 // dateFilter formats a timestamp into a specified format using PHP-style format strings.

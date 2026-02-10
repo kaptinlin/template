@@ -8,15 +8,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Helper function to create tokens from a string expression
-func tokenizeExpression(t *testing.T, expr string) []*Token {
-	// Wrap expression in {{ }} to make it valid for lexer
+// mustTokenize creates tokens from a string expression for testing.
+// It wraps the expression in {{ }} and extracts the inner tokens.
+func mustTokenize(t *testing.T, expr string) []*Token {
+	t.Helper()
 	source := "{{ " + expr + " }}"
 	lexer := NewLexer(source)
 	tokens, err := lexer.Tokenize()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatalf("Failed to tokenize %q: %v", expr, err)
+	}
 
-	// Extract tokens between {{ and }}
 	var exprTokens []*Token
 	inExpr := false
 	for _, tok := range tokens {
@@ -116,7 +118,7 @@ func TestParseLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -161,7 +163,7 @@ func TestParseVariables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -203,7 +205,7 @@ func TestParseUnaryOperators(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -293,7 +295,7 @@ func TestParseBinaryOperators(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -384,7 +386,7 @@ func TestParseOperatorPrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -418,7 +420,7 @@ func TestParsePropertyAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -495,7 +497,7 @@ func TestParseSubscript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -539,7 +541,7 @@ func TestParseFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -595,7 +597,7 @@ func TestParseParentheses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -645,7 +647,7 @@ func TestParseComplexExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -689,7 +691,7 @@ func TestParseErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			_, err := parser.ParseExpression()
 			assert.Error(t, err)
@@ -738,7 +740,7 @@ func TestParseFilterArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -873,13 +875,13 @@ func TestExprParserErrorMethods(t *testing.T) {
 		test func(*testing.T)
 	}{
 		{
-			name: "error creates error with current position",
+			name: "parseErr creates error with current position",
 			test: func(t *testing.T) {
 				tokens := []*Token{
 					{Type: TokenNumber, Value: "1", Line: 5, Col: 10},
 				}
 				parser := NewExprParser(tokens)
-				err := parser.error("test error")
+				err := parser.parseErr("test error")
 				var parseErr *ParseError
 				ok := errors.As(err, &parseErr)
 				assert.True(t, ok)
@@ -889,11 +891,11 @@ func TestExprParserErrorMethods(t *testing.T) {
 			},
 		},
 		{
-			name: "error at end returns error with zero position",
+			name: "parseErr at end returns error with zero position",
 			test: func(t *testing.T) {
 				tokens := []*Token{}
 				parser := NewExprParser(tokens)
-				err := parser.error("test error")
+				err := parser.parseErr("test error")
 				var parseErr *ParseError
 				ok := errors.As(err, &parseErr)
 				assert.True(t, ok)
@@ -903,11 +905,11 @@ func TestExprParserErrorMethods(t *testing.T) {
 			},
 		},
 		{
-			name: "errorAt creates error at token position",
+			name: "errAtTok creates error at token position",
 			test: func(t *testing.T) {
 				token := &Token{Type: TokenNumber, Value: "1", Line: 3, Col: 7}
 				parser := NewExprParser([]*Token{})
-				err := parser.errorAt(token, "custom error")
+				err := parser.errAtTok(token, "custom error")
 				var parseErr *ParseError
 				ok := errors.As(err, &parseErr)
 				assert.True(t, ok)
@@ -1026,7 +1028,7 @@ func TestExpressionNodeTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 			assert.NoError(t, err)
@@ -1086,7 +1088,7 @@ func TestParseExpressionEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			result, err := parser.ParseExpression()
 
@@ -1275,7 +1277,7 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := tokenizeExpression(t, tt.expr)
+			tokens := mustTokenize(t, tt.expr)
 			parser := NewExprParser(tokens)
 			expr, err := parser.ParseExpression()
 
@@ -1340,7 +1342,7 @@ func TestKeywordAndSymbolEquivalence(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse and evaluate keyword version
-			tokensKeyword := tokenizeExpression(t, tt.exprKeyword)
+			tokensKeyword := mustTokenize(t, tt.exprKeyword)
 			parserKeyword := NewExprParser(tokensKeyword)
 			exprKeyword, err := parserKeyword.ParseExpression()
 			assert.NoError(t, err)
@@ -1350,7 +1352,7 @@ func TestKeywordAndSymbolEquivalence(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Parse and evaluate symbol version
-			tokensSymbol := tokenizeExpression(t, tt.exprSymbol)
+			tokensSymbol := mustTokenize(t, tt.exprSymbol)
 			parserSymbol := NewExprParser(tokensSymbol)
 			exprSymbol, err := parserSymbol.ParseExpression()
 			assert.NoError(t, err)

@@ -10,21 +10,11 @@ func (p *Parser) Current() *Token {
 	return p.tokens[p.pos]
 }
 
-// current is the internal alias of Current.
-func (p *Parser) current() *Token {
-	return p.Current()
-}
-
 // Advance moves to the next token.
 func (p *Parser) Advance() {
 	if p.pos < len(p.tokens) {
 		p.pos++
 	}
-}
-
-// advance is the internal alias of Advance.
-func (p *Parser) advance() {
-	p.Advance()
 }
 
 // peek returns the token at a relative offset without advancing.
@@ -44,14 +34,14 @@ func (p *Parser) Remaining() int {
 // expect checks whether the current token matches tokenType.
 // If it matches, it consumes and returns the token; otherwise it returns an error.
 func (p *Parser) expect(tokenType TokenType) (*Token, error) {
-	tok := p.current()
+	tok := p.Current()
 	if tok == nil {
 		return nil, p.Error("unexpected end of input")
 	}
 	if tok.Type != tokenType {
 		return nil, p.Errorf("expected %s, got %s", tokenType, tok.Type)
 	}
-	p.advance()
+	p.Advance()
 	return tok, nil
 }
 
@@ -63,9 +53,9 @@ func (p *Parser) ExpectIdentifier() (*Token, error) {
 // Match consumes and returns the current token if type and value match.
 // It returns nil when there is no match.
 func (p *Parser) Match(tokenType TokenType, value string) *Token {
-	tok := p.current()
+	tok := p.Current()
 	if tok != nil && tok.Type == tokenType && tok.Value == value {
-		p.advance()
+		p.Advance()
 		return tok
 	}
 	return nil
@@ -73,10 +63,15 @@ func (p *Parser) Match(tokenType TokenType, value string) *Token {
 
 // collectUntil collects tokens until tokenType is reached (exclusive).
 func (p *Parser) collectUntil(tokenType TokenType) []*Token {
-	var tokens []*Token
-	for p.current() != nil && p.current().Type != tokenType {
-		tokens = append(tokens, p.current())
-		p.advance()
+	// Estimate remaining tokens for preallocation.
+	remaining := p.Remaining()
+	if remaining <= 0 {
+		return nil
+	}
+	tokens := make([]*Token, 0, remaining)
+	for tok := p.Current(); tok != nil && tok.Type != tokenType; tok = p.Current() {
+		tokens = append(tokens, tok)
+		p.Advance()
 	}
 	return tokens
 }
@@ -84,19 +79,20 @@ func (p *Parser) collectUntil(tokenType TokenType) []*Token {
 // isEndTag reports whether the current position points to one of the given end tags.
 // End-tag format: {% tagname %}
 func (p *Parser) isEndTag(endTags ...string) bool {
-	if p.current() == nil || p.current().Type != TokenTagBegin {
+	tok := p.Current()
+	if tok == nil || tok.Type != TokenTagBegin {
 		return false
 	}
 
 	// Check whether the next token is a tag name.
-	nextToken := p.peek(1)
-	if nextToken == nil || nextToken.Type != TokenIdentifier {
+	next := p.peek(1)
+	if next == nil || next.Type != TokenIdentifier {
 		return false
 	}
 
 	// Check whether it matches one of the requested end tags.
 	for _, endTag := range endTags {
-		if nextToken.Value == endTag {
+		if next.Value == endTag {
 			return true
 		}
 	}
@@ -104,19 +100,19 @@ func (p *Parser) isEndTag(endTags ...string) bool {
 	return false
 }
 
-// getEndTagName returns the current end-tag name.
+// endTagName returns the current end-tag name.
 // It assumes the current token is {%.
-func (p *Parser) getEndTagName() string {
-	nextToken := p.peek(1)
-	if nextToken != nil && nextToken.Type == TokenIdentifier {
-		return nextToken.Value
+func (p *Parser) endTagName() string {
+	next := p.peek(1)
+	if next != nil && next.Type == TokenIdentifier {
+		return next.Value
 	}
 	return ""
 }
 
 // Error creates a parse error at the current token position.
 func (p *Parser) Error(msg string) error {
-	tok := p.current()
+	tok := p.Current()
 	if tok != nil {
 		return &ParseError{
 			Message: msg,
@@ -124,21 +120,12 @@ func (p *Parser) Error(msg string) error {
 			Col:     tok.Col,
 		}
 	}
-	return &ParseError{
-		Message: msg,
-		Line:    0,
-		Col:     0,
-	}
+	return &ParseError{Message: msg}
 }
 
 // Errorf creates a formatted parse error.
-func (p *Parser) Errorf(format string, args ...interface{}) error {
+func (p *Parser) Errorf(format string, args ...any) error {
 	return p.Error(fmt.Sprintf(format, args...))
-}
-
-// errorf is the internal alias of Errorf.
-func (p *Parser) errorf(format string, args ...interface{}) error {
-	return p.Errorf(format, args...)
 }
 
 func convertStatementsToNodes(stmts []Statement) []Node {

@@ -1,9 +1,5 @@
 package template
 
-import (
-	"fmt"
-)
-
 // Parser consumes tokens and builds an AST.
 type Parser struct {
 	tokens []*Token // All tokens.
@@ -12,17 +8,19 @@ type Parser struct {
 
 // NewParser creates a new Parser.
 func NewParser(tokens []*Token) *Parser {
-	return &Parser{
-		tokens: tokens,
-		pos:    0,
-	}
+	return &Parser{tokens: tokens}
 }
 
 // Parse parses the entire template and returns AST statement nodes.
 func (p *Parser) Parse() ([]Statement, error) {
-	var nodes []Statement
+	// Preallocate with a reasonable estimate based on token count.
+	estimated := len(p.tokens) / 4
+	if estimated < 4 {
+		estimated = 4
+	}
+	nodes := make([]Statement, 0, estimated)
 
-	for p.current() != nil && p.current().Type != TokenEOF {
+	for tok := p.Current(); tok != nil && tok.Type != TokenEOF; tok = p.Current() {
 		node, err := p.parseNext()
 		if err != nil {
 			return nil, err
@@ -32,12 +30,15 @@ func (p *Parser) Parse() ([]Statement, error) {
 		}
 	}
 
+	if len(nodes) == 0 {
+		return nil, nil
+	}
 	return nodes, nil
 }
 
 // parseNext parses the next node.
 func (p *Parser) parseNext() (Statement, error) {
-	tok := p.current()
+	tok := p.Current()
 	if tok == nil || tok.Type == TokenEOF {
 		return nil, nil
 	}
@@ -53,7 +54,7 @@ func (p *Parser) parseNext() (Statement, error) {
 		return p.parseTag()
 
 	case TokenError, TokenVarEnd, TokenTagEnd, TokenIdentifier, TokenString, TokenNumber, TokenSymbol:
-		return nil, p.errorf("unexpected token: %s", tok.Type)
+		return nil, p.Errorf("unexpected token: %s", tok.Type)
 
 	case TokenEOF:
 		return nil, nil
@@ -64,16 +65,15 @@ func (p *Parser) parseNext() (Statement, error) {
 
 // parseText parses a plain text node.
 func (p *Parser) parseText() Statement {
-	tok := p.current()
-	p.advance()
-
+	tok := p.Current()
+	p.Advance()
 	return NewTextNode(tok.Value, tok.Line, tok.Col)
 }
 
 // parseVariable parses a variable output: {{ expression }}.
 func (p *Parser) parseVariable() (Statement, error) {
-	startToken := p.current()
-	p.advance() // Skip {{.
+	startToken := p.Current()
+	p.Advance() // Skip {{.
 
 	// Collect expression tokens until }} (exclusive).
 	exprTokens := p.collectUntil(TokenVarEnd)
@@ -86,14 +86,14 @@ func (p *Parser) parseVariable() (Statement, error) {
 	}
 
 	// Expect }}.
-	if p.current() == nil || p.current().Type != TokenVarEnd {
+	if tok := p.Current(); tok == nil || tok.Type != TokenVarEnd {
 		return nil, &ParseError{
 			Message: "expected }}",
 			Line:    startToken.Line,
 			Col:     startToken.Col,
 		}
 	}
-	p.advance() // Consume }}.
+	p.Advance() // Consume }}.
 
 	// Parse expression tokens with ExprParser.
 	exprParser := NewExprParser(exprTokens)
@@ -108,11 +108,11 @@ func (p *Parser) parseVariable() (Statement, error) {
 // parseTag parses a tag: {% tag_name arguments %}.
 // This is the core of the tag registration mechanism: lookup and invoke the TagParser.
 func (p *Parser) parseTag() (Statement, error) {
-	startToken := p.current()
-	p.advance() // Skip {%.
+	startToken := p.Current()
+	p.Advance() // Skip {%.
 
 	// Read the tag name.
-	tagNameToken := p.current()
+	tagNameToken := p.Current()
 	if tagNameToken == nil || tagNameToken.Type != TokenIdentifier {
 		return nil, &ParseError{
 			Message: "expected tag name",
@@ -122,10 +122,10 @@ func (p *Parser) parseTag() (Statement, error) {
 	}
 
 	tagName := tagNameToken.Value
-	p.advance() // Consume tag name.
+	p.Advance() // Consume tag name.
 
 	// Lookup the tag parser in the registry.
-	tagParser, ok := GetTagParser(tagName)
+	tagParser, ok := Tag(tagName)
 	if !ok {
 		// Provide more specific messages for common mistakes.
 		var errorMsg string
@@ -139,7 +139,7 @@ func (p *Parser) parseTag() (Statement, error) {
 		case "endfor":
 			errorMsg = "unknown tag: endfor (endfor must match a corresponding for tag)"
 		default:
-			errorMsg = fmt.Sprintf("unknown tag: %s", tagName)
+			errorMsg = "unknown tag: " + tagName
 		}
 		return nil, &ParseError{
 			Message: errorMsg,
@@ -152,25 +152,18 @@ func (p *Parser) parseTag() (Statement, error) {
 	argTokens := p.collectUntil(TokenTagEnd)
 
 	// Expect %}.
-	if p.current() == nil || p.current().Type != TokenTagEnd {
+	if tok := p.Current(); tok == nil || tok.Type != TokenTagEnd {
 		return nil, &ParseError{
 			Message: "expected %}",
 			Line:    startToken.Line,
 			Col:     startToken.Col,
 		}
 	}
-	p.advance() // Consume %}.
+	p.Advance() // Consume %}.
 
-	// Create a parser for tag arguments.
+	// Create a parser for tag arguments and invoke the tag parser.
 	argParser := NewParser(argTokens)
-
-	// Invoke the tag parser (critical step).
-	node, err := tagParser(p, tagNameToken, argParser)
-	if err != nil {
-		return nil, err
-	}
-
-	return node, nil
+	return tagParser(p, tagNameToken, argParser)
 }
 
 // ParseUntil parses nodes until one of the given end tags is encountered.
@@ -189,12 +182,10 @@ func (p *Parser) parseTag() (Statement, error) {
 func (p *Parser) ParseUntil(endTags ...string) ([]Statement, string, error) {
 	var nodes []Statement
 
-	for p.current() != nil && p.current().Type != TokenEOF {
+	for tok := p.Current(); tok != nil && tok.Type != TokenEOF; tok = p.Current() {
 		// Check whether an end tag is reached.
 		if p.isEndTag(endTags...) {
-			// Found an end tag.
-			endTagName := p.getEndTagName()
-			return nodes, endTagName, nil
+			return nodes, p.endTagName(), nil
 		}
 
 		// Not an end tag; continue parsing.
@@ -208,7 +199,7 @@ func (p *Parser) ParseUntil(endTags ...string) ([]Statement, string, error) {
 	}
 
 	// Reached EOF without finding a closing tag.
-	return nil, "", p.errorf("unexpected EOF, expected one of: %v", endTags)
+	return nil, "", p.Errorf("unexpected EOF, expected one of: %v", endTags)
 }
 
 // ParseUntilWithArgs parses nodes until one of the given end tags is encountered,
@@ -225,28 +216,27 @@ func (p *Parser) ParseUntil(endTags ...string) ([]Statement, string, error) {
 func (p *Parser) ParseUntilWithArgs(endTags ...string) ([]Statement, string, *Parser, error) {
 	var nodes []Statement
 
-	for p.current() != nil && p.current().Type != TokenEOF {
+	for tok := p.Current(); tok != nil && tok.Type != TokenEOF; tok = p.Current() {
 		// Check whether an end tag is reached.
 		if p.isEndTag(endTags...) {
-			// Found an end tag.
-			p.advance() // Skip {%.
+			p.Advance() // Skip {%.
 
-			endTagToken := p.current()
+			endTagToken := p.Current()
 			endTagName := endTagToken.Value
-			p.advance() // Skip tag name.
+			p.Advance() // Skip tag name.
 
 			// Collect end-tag argument tokens.
 			argTokens := p.collectUntil(TokenTagEnd)
 
 			// Expect %}.
-			if p.current() == nil || p.current().Type != TokenTagEnd {
+			if cur := p.Current(); cur == nil || cur.Type != TokenTagEnd {
 				return nil, "", nil, &ParseError{
 					Message: "expected %}",
 					Line:    endTagToken.Line,
 					Col:     endTagToken.Col,
 				}
 			}
-			p.advance() // Consume %}.
+			p.Advance() // Consume %}.
 
 			// Create an argument parser.
 			argParser := NewParser(argTokens)
@@ -265,7 +255,7 @@ func (p *Parser) ParseUntilWithArgs(endTags ...string) ([]Statement, string, *Pa
 	}
 
 	// Reached EOF without finding a closing tag.
-	return nil, "", nil, p.errorf("unexpected EOF, expected one of: %v", endTags)
+	return nil, "", nil, p.Errorf("unexpected EOF, expected one of: %v", endTags)
 }
 
 // ParseExpression parses an expression from the current token position.

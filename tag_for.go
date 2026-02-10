@@ -7,10 +7,9 @@ func parseForTag(doc *Parser, start *Token, arguments *Parser) (Statement, error
 	// 1. Parse loop variable names.
 	var loopVars []string
 
-	// First variable.
 	firstVar, err := arguments.ExpectIdentifier()
 	if err != nil {
-		return nil, arguments.Error("expected variable name")
+		return nil, arguments.Error(ErrExpectedVariable.Error())
 	}
 	loopVars = append(loopVars, firstVar.Value)
 
@@ -18,18 +17,17 @@ func parseForTag(doc *Parser, start *Token, arguments *Parser) (Statement, error
 	if arguments.Match(TokenSymbol, ",") != nil {
 		secondVar, err := arguments.ExpectIdentifier()
 		if err != nil {
-			return nil, arguments.Error("expected second variable name after comma")
+			return nil, arguments.Error(ErrExpectedSecondVariable.Error())
 		}
 		loopVars = append(loopVars, secondVar.Value)
 	}
 
 	// 2. Expect the "in" keyword.
-	if arguments.Current() == nil ||
-		arguments.Current().Type != TokenIdentifier ||
-		arguments.Current().Value != "in" {
-		return nil, arguments.Error("expected 'in' keyword")
+	cur := arguments.Current()
+	if cur == nil || cur.Type != TokenIdentifier || cur.Value != "in" {
+		return nil, arguments.Error(ErrExpectedInKeyword.Error())
 	}
-	arguments.Advance() // Skip "in".
+	arguments.Advance()
 
 	// 3. Parse the iterable expression.
 	collection, err := arguments.ParseExpression()
@@ -38,7 +36,7 @@ func parseForTag(doc *Parser, start *Token, arguments *Parser) (Statement, error
 	}
 
 	if arguments.Remaining() > 0 {
-		return nil, arguments.Error("unexpected tokens after collection")
+		return nil, arguments.Error(ErrUnexpectedTokensAfterCollection.Error())
 	}
 
 	// 4. Parse the for body until endfor.
@@ -52,17 +50,13 @@ func parseForTag(doc *Parser, start *Token, arguments *Parser) (Statement, error
 	}
 
 	if argParser.Remaining() > 0 {
-		return nil, argParser.Error("endfor does not take arguments")
+		return nil, argParser.Error(ErrEndforNoArgs.Error())
 	}
 
-	// Convert []Statement to []Node.
-	bodyNodes := convertStatementsToNodes(body)
-
-	// 5. Return the parsed ForNode.
 	return &ForNode{
 		LoopVars:   loopVars,
 		Collection: collection,
-		Body:       bodyNodes,
+		Body:       convertStatementsToNodes(body),
 		Line:       start.Line,
 		Col:        start.Col,
 	}, nil

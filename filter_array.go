@@ -8,25 +8,19 @@ import (
 
 // registerArrayFilters registers all array-related filters.
 func registerArrayFilters() {
-	filters := map[string]FilterFunc{
-		"unique":  uniqueFilter,
-		"join":    joinFilter,
-		"first":   firstFilter,
-		"last":    lastFilter,
-		"random":  randomFilter,
-		"reverse": reverseFilter,
-		"shuffle": shuffleFilter,
-		"size":    sizeFilter,
-		"max":     maxFilter,
-		"min":     minFilter,
-		"sum":     sumFilter,
-		"average": averageFilter,
-		"map":     mapFilter,
-	}
-
-	for name, fn := range filters {
-		RegisterFilter(name, fn)
-	}
+	RegisterFilter("unique", uniqueFilter)
+	RegisterFilter("join", joinFilter)
+	RegisterFilter("first", firstFilter)
+	RegisterFilter("last", lastFilter)
+	RegisterFilter("random", randomFilter)
+	RegisterFilter("reverse", reverseFilter)
+	RegisterFilter("shuffle", shuffleFilter)
+	RegisterFilter("size", sizeFilter)
+	RegisterFilter("max", maxFilter)
+	RegisterFilter("min", minFilter)
+	RegisterFilter("sum", sumFilter)
+	RegisterFilter("average", averageFilter)
+	RegisterFilter("map", mapFilter)
 }
 
 // uniqueFilter removes duplicate elements from a slice.
@@ -37,7 +31,7 @@ func uniqueFilter(value interface{}, _ ...string) (interface{}, error) {
 // joinFilter joins the elements of a slice into a single string with a specified separator.
 func joinFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: join filter requires a separator argument", ErrInsufficientArgs)
+		return nil, fmt.Errorf("join requires a separator: %w", ErrInsufficientArgs)
 	}
 	separator := args[0]
 	return filter.Join(value, separator)
@@ -96,7 +90,7 @@ func averageFilter(value interface{}, _ ...string) (interface{}, error) {
 // mapFilter extracts a slice of values for a specified key from each map in the input slice.
 func mapFilter(value interface{}, args ...string) (interface{}, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("%w: map filter requires a key argument", ErrInsufficientArgs)
+		return nil, fmt.Errorf("map requires a key: %w", ErrInsufficientArgs)
 	}
 	key := args[0]
 	return filter.Map(value, key)

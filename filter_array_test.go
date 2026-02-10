@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -101,22 +102,31 @@ func TestArrayFilters(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Parse the template
 			tpl, err := Compile(tc.template)
-			require.NoError(t, err, "Failed to parse template")
+			require.NoError(t, err)
 
-			// Create a context and add variables
 			context := NewContext()
 			for k, v := range tc.context {
 				context.Set(k, v)
 			}
 
-			// Execute the template
 			output, err := tpl.Render(map[string]interface{}(context))
-			require.NoError(t, err, "Failed to execute template")
-
-			// Verify the output matches the expected result
-			assert.Equal(t, tc.expected, output, "Output mismatch for test case '%s'", tc.name)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, output)
 		})
 	}
+}
+
+func TestArrayFilterErrors(t *testing.T) {
+	t.Run("JoinMissingSeparator", func(t *testing.T) {
+		_, err := joinFilter([]string{"a", "b"})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
+
+	t.Run("MapMissingKey", func(t *testing.T) {
+		_, err := mapFilter([]map[string]interface{}{{"name": "John"}})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+	})
 }

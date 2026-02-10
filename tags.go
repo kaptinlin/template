@@ -2,7 +2,7 @@ package template
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 )
 
@@ -40,9 +40,9 @@ func RegisterTag(name string, parser TagParser) error {
 	return nil
 }
 
-// GetTagParser returns the parser registered for the given tag name.
+// Tag returns the parser registered for the given tag name.
 // It is safe to call from multiple goroutines.
-func GetTagParser(name string) (TagParser, bool) {
+func Tag(name string) (TagParser, bool) {
 	tagMu.RLock()
 	defer tagMu.RUnlock()
 
@@ -61,7 +61,7 @@ func ListTags() []string {
 		names = append(names, name)
 	}
 
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }
 

@@ -8,13 +8,7 @@ import (
 
 // registerFormatFilters registers all format-related filters.
 func registerFormatFilters() {
-	filters := map[string]FilterFunc{
-		"json": jsonFilter,
-	}
-
-	for name, fn := range filters {
-		RegisterFilter(name, fn)
-	}
+	RegisterFilter("json", jsonFilter)
 }
 
 // jsonFilter serializes an input object into its JSON representation.
@@ -22,7 +16,7 @@ func jsonFilter(input interface{}, _ ...string) (interface{}, error) {
 	// Use deterministic mode to ensure consistent key ordering
 	jsonBytes, err := json.Marshal(input, json.Deterministic(true))
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling to JSON: %w", err)
+		return nil, fmt.Errorf("marshal to JSON: %w", err)
 	}
 	return string(jsonBytes), nil
 }

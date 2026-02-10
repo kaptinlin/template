@@ -89,6 +89,16 @@ func (v *Value) IsTrue() bool {
 	}
 }
 
+// formatFloat renders a float as a string.
+// Whole-number floats are rendered without a fractional part (e.g. "3");
+// other values use the shortest decimal representation.
+func formatFloat(f float64) string {
+	if f == float64(int64(f)) {
+		return strconv.FormatFloat(f, 'f', 0, 64)
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
 // String returns the string representation of the value.
 func (v *Value) String() string {
 	rv := v.getResolvedValue()
@@ -112,21 +122,15 @@ func (v *Value) String() string {
 	case reflect.String:
 		return rv.String()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return fmt.Sprintf("%d", rv.Int())
+		return strconv.FormatInt(rv.Int(), 10)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return fmt.Sprintf("%d", rv.Uint())
+		return strconv.FormatUint(rv.Uint(), 10)
 	case reflect.Float32, reflect.Float64:
-		f := rv.Float()
-		// Render whole-number floats without a fractional part.
-		if f == float64(int64(f)) {
-			return fmt.Sprintf("%.0f", f)
-		}
-		// Otherwise format as decimal and trim trailing zeros automatically.
-		return strconv.FormatFloat(f, 'f', -1, 64)
+		return formatFloat(rv.Float())
 	case reflect.Bool:
-		return fmt.Sprintf("%t", rv.Bool())
+		return strconv.FormatBool(rv.Bool())
 	case reflect.Slice, reflect.Array:
-		return v.formatArrayToString(rv)
+		return v.formatSlice(rv)
 	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
 		reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
 		// For complex types (map, struct, etc.), use JSON serialization
@@ -142,8 +146,8 @@ func (v *Value) String() string {
 	return ""
 }
 
-// formatArrayToString formats an array/slice as [item1,item2,item3] with comma separation
-func (v *Value) formatArrayToString(rv reflect.Value) string {
+// formatSlice formats an array/slice as [item1,item2,item3] with comma separation.
+func (v *Value) formatSlice(rv reflect.Value) string {
 	length := rv.Len()
 	if length == 0 {
 		return "[]"
@@ -171,24 +175,17 @@ func (v *Value) formatArrayToString(rv reflect.Value) string {
 		case reflect.String:
 			str = itemRv.String()
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			str = fmt.Sprintf("%d", itemRv.Int())
+			str = strconv.FormatInt(itemRv.Int(), 10)
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			str = fmt.Sprintf("%d", itemRv.Uint())
+			str = strconv.FormatUint(itemRv.Uint(), 10)
 		case reflect.Float32, reflect.Float64:
-			f := itemRv.Float()
-			// Render whole-number floats without a fractional part.
-			if f == float64(int64(f)) {
-				str = fmt.Sprintf("%.0f", f)
-			} else {
-				// Otherwise format as decimal and trim trailing zeros automatically.
-				str = strconv.FormatFloat(f, 'f', -1, 64)
-			}
+			str = formatFloat(itemRv.Float())
 		case reflect.Bool:
-			str = fmt.Sprintf("%t", itemRv.Bool())
+			str = strconv.FormatBool(itemRv.Bool())
 		case reflect.Slice, reflect.Array:
 			// Recursively format nested arrays
 			itemValue := NewValue(item)
-			str = itemValue.formatArrayToString(itemRv)
+			str = itemValue.formatSlice(itemRv)
 		case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
 			reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
 			// For complex types (map, struct, etc.), use JSON serialization
@@ -325,8 +322,8 @@ func (v *Value) Index(i int) (*Value, error) {
 	return nil, fmt.Errorf("%w: %T", ErrTypeNotIndexable, v.val)
 }
 
-// GetKey returns the value for the given key (for maps).
-func (v *Value) GetKey(key interface{}) (*Value, error) {
+// Key returns the value for the given key (for maps).
+func (v *Value) Key(key interface{}) (*Value, error) {
 	rv := v.getResolvedValue()
 	if !rv.IsValid() {
 		return nil, ErrCannotGetKeyFromNil
@@ -346,8 +343,8 @@ func (v *Value) GetKey(key interface{}) (*Value, error) {
 	return NewValue(result.Interface()), nil
 }
 
-// GetField returns the value of a struct field or map key by name.
-func (v *Value) GetField(name string) (*Value, error) {
+// Field returns the value of a struct field or map key by name.
+func (v *Value) Field(name string) (*Value, error) {
 	rv := v.getResolvedValue()
 	if !rv.IsValid() {
 		return nil, ErrCannotGetFieldFromNil
@@ -520,10 +517,10 @@ func (v *Value) Compare(other *Value) (int, error) {
 
 	// Try string comparison
 	vs := v.String()
-	os := other.String()
-	if vs < os {
+	otherStr := other.String()
+	if vs < otherStr {
 		return -1, nil
-	} else if vs > os {
+	} else if vs > otherStr {
 		return 1, nil
 	}
 	return 0, nil

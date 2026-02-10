@@ -1,194 +1,200 @@
 package template
 
 import (
-	"fmt"
+	"strconv"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestTokenTypeString(t *testing.T) {
 	tests := []struct {
-		name      string
-		tokenType TokenType
-		expected  string
+		name string
+		typ  TokenType
+		want string
 	}{
-		{name: "TokenError", tokenType: TokenError, expected: "ERROR"},
-		{name: "TokenEOF", tokenType: TokenEOF, expected: "EOF"},
-		{name: "TokenText", tokenType: TokenText, expected: "TEXT"},
-		{name: "TokenVarBegin", tokenType: TokenVarBegin, expected: "VAR_BEGIN"},
-		{name: "TokenVarEnd", tokenType: TokenVarEnd, expected: "VAR_END"},
-		{name: "TokenTagBegin", tokenType: TokenTagBegin, expected: "TAG_BEGIN"},
-		{name: "TokenTagEnd", tokenType: TokenTagEnd, expected: "TAG_END"},
-		{name: "TokenIdentifier", tokenType: TokenIdentifier, expected: "IDENTIFIER"},
-		{name: "TokenString", tokenType: TokenString, expected: "STRING"},
-		{name: "TokenNumber", tokenType: TokenNumber, expected: "NUMBER"},
-		{name: "TokenSymbol", tokenType: TokenSymbol, expected: "SYMBOL"},
-		{name: "unknown type 999", tokenType: TokenType(999), expected: fmt.Sprintf("UNKNOWN(%d)", 999)},
-		{name: "unknown type -1", tokenType: TokenType(-1), expected: fmt.Sprintf("UNKNOWN(%d)", -1)},
+		{name: "TokenError", typ: TokenError, want: "ERROR"},
+		{name: "TokenEOF", typ: TokenEOF, want: "EOF"},
+		{name: "TokenText", typ: TokenText, want: "TEXT"},
+		{name: "TokenVarBegin", typ: TokenVarBegin, want: "VAR_BEGIN"},
+		{name: "TokenVarEnd", typ: TokenVarEnd, want: "VAR_END"},
+		{name: "TokenTagBegin", typ: TokenTagBegin, want: "TAG_BEGIN"},
+		{name: "TokenTagEnd", typ: TokenTagEnd, want: "TAG_END"},
+		{name: "TokenIdentifier", typ: TokenIdentifier, want: "IDENTIFIER"},
+		{name: "TokenString", typ: TokenString, want: "STRING"},
+		{name: "TokenNumber", typ: TokenNumber, want: "NUMBER"},
+		{name: "TokenSymbol", typ: TokenSymbol, want: "SYMBOL"},
+		{name: "unknown type 999", typ: TokenType(999), want: "UNKNOWN(" + strconv.Itoa(999) + ")"},
+		{name: "unknown type -1", typ: TokenType(-1), want: "UNKNOWN(" + strconv.Itoa(-1) + ")"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.tokenType.String()
-			assert.Equal(t, tt.expected, result)
+			got := tt.typ.String()
+			if got != tt.want {
+				t.Errorf("TokenType(%d).String() = %q, want %q", tt.typ, got, tt.want)
+			}
 		})
 	}
 }
 
 func TestTokenString(t *testing.T) {
 	tests := []struct {
-		name     string
-		token    Token
-		expected string
+		name  string
+		token Token
+		want  string
 	}{
 		{
-			name:     "EOF token",
-			token:    Token{Type: TokenEOF, Line: 1, Col: 1},
-			expected: "EOF at line 1, col 1",
+			name:  "EOF token",
+			token: Token{Type: TokenEOF, Line: 1, Col: 1},
+			want:  "EOF at line 1, col 1",
 		},
 		{
-			name:     "EOF at different position",
-			token:    Token{Type: TokenEOF, Line: 10, Col: 25},
-			expected: "EOF at line 10, col 25",
+			name:  "EOF at different position",
+			token: Token{Type: TokenEOF, Line: 10, Col: 25},
+			want:  "EOF at line 10, col 25",
 		},
 		{
-			name:     "short identifier",
-			token:    Token{Type: TokenIdentifier, Value: "name", Line: 1, Col: 5},
-			expected: `IDENTIFIER("name") at line 1, col 5`,
+			name:  "short identifier",
+			token: Token{Type: TokenIdentifier, Value: "name", Line: 1, Col: 5},
+			want:  `IDENTIFIER("name") at line 1, col 5`,
 		},
 		{
-			name:     "empty value",
-			token:    Token{Type: TokenText, Value: "", Line: 1, Col: 1},
-			expected: `TEXT("") at line 1, col 1`,
+			name:  "empty value",
+			token: Token{Type: TokenText, Value: "", Line: 1, Col: 1},
+			want:  `TEXT("") at line 1, col 1`,
 		},
 		{
-			name:     "exactly 20 characters not truncated",
-			token:    Token{Type: TokenText, Value: "12345678901234567890", Line: 2, Col: 1},
-			expected: `TEXT("12345678901234567890") at line 2, col 1`,
+			name:  "exactly 20 characters not truncated",
+			token: Token{Type: TokenText, Value: "12345678901234567890", Line: 2, Col: 1},
+			want:  `TEXT("12345678901234567890") at line 2, col 1`,
 		},
 		{
-			name:     "21 characters truncated",
-			token:    Token{Type: TokenText, Value: "123456789012345678901", Line: 3, Col: 1},
-			expected: `TEXT("12345678901234567890"...) at line 3, col 1`,
+			name:  "21 characters truncated",
+			token: Token{Type: TokenText, Value: "123456789012345678901", Line: 3, Col: 1},
+			want:  `TEXT("12345678901234567890"...) at line 3, col 1`,
 		},
 		{
-			name:     "long text truncated",
-			token:    Token{Type: TokenText, Value: "This is a very long text that exceeds twenty characters", Line: 1, Col: 1},
-			expected: `TEXT("This is a very long "...) at line 1, col 1`,
+			name:  "long text truncated",
+			token: Token{Type: TokenText, Value: "This is a very long text that exceeds twenty characters", Line: 1, Col: 1},
+			want:  `TEXT("This is a very long "...) at line 1, col 1`,
 		},
 		{
-			name:     "string literal token",
-			token:    Token{Type: TokenString, Value: "hello", Line: 1, Col: 10},
-			expected: `STRING("hello") at line 1, col 10`,
+			name:  "string literal token",
+			token: Token{Type: TokenString, Value: "hello", Line: 1, Col: 10},
+			want:  `STRING("hello") at line 1, col 10`,
 		},
 		{
-			name:     "number token",
-			token:    Token{Type: TokenNumber, Value: "42", Line: 5, Col: 3},
-			expected: `NUMBER("42") at line 5, col 3`,
+			name:  "number token",
+			token: Token{Type: TokenNumber, Value: "42", Line: 5, Col: 3},
+			want:  `NUMBER("42") at line 5, col 3`,
 		},
 		{
-			name:     "symbol token",
-			token:    Token{Type: TokenSymbol, Value: "==", Line: 1, Col: 8},
-			expected: `SYMBOL("==") at line 1, col 8`,
+			name:  "symbol token",
+			token: Token{Type: TokenSymbol, Value: "==", Line: 1, Col: 8},
+			want:  `SYMBOL("==") at line 1, col 8`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.token.String()
-			assert.Equal(t, tt.expected, result)
+			got := tt.token.String()
+			if got != tt.want {
+				t.Errorf("Token.String() = %q, want %q", got, tt.want)
+			}
 		})
 	}
 }
 
 func TestIsKeyword(t *testing.T) {
 	tests := []struct {
-		name     string
-		ident    string
-		expected bool
+		name  string
+		ident string
+		want  bool
 	}{
 		// All valid keywords
-		{name: "in", ident: "in", expected: true},
-		{name: "and", ident: "and", expected: true},
-		{name: "or", ident: "or", expected: true},
-		{name: "not", ident: "not", expected: true},
-		{name: "true", ident: "true", expected: true},
-		{name: "false", ident: "false", expected: true},
-		{name: "if", ident: "if", expected: true},
-		{name: "elif", ident: "elif", expected: true},
-		{name: "else", ident: "else", expected: true},
-		{name: "endif", ident: "endif", expected: true},
-		{name: "for", ident: "for", expected: true},
-		{name: "endfor", ident: "endfor", expected: true},
-		{name: "break", ident: "break", expected: true},
-		{name: "continue", ident: "continue", expected: true},
+		{name: "in", ident: "in", want: true},
+		{name: "and", ident: "and", want: true},
+		{name: "or", ident: "or", want: true},
+		{name: "not", ident: "not", want: true},
+		{name: "true", ident: "true", want: true},
+		{name: "false", ident: "false", want: true},
+		{name: "if", ident: "if", want: true},
+		{name: "elif", ident: "elif", want: true},
+		{name: "else", ident: "else", want: true},
+		{name: "endif", ident: "endif", want: true},
+		{name: "for", ident: "for", want: true},
+		{name: "endfor", ident: "endfor", want: true},
+		{name: "break", ident: "break", want: true},
+		{name: "continue", ident: "continue", want: true},
 		// Non-keywords
-		{name: "regular identifier name", ident: "name", expected: false},
-		{name: "regular identifier render", ident: "render", expected: false},
-		{name: "empty string", ident: "", expected: false},
-		{name: "uppercase IF is not keyword", ident: "IF", expected: false},
-		{name: "uppercase TRUE is not keyword", ident: "TRUE", expected: false},
-		{name: "mixed case Not is not keyword", ident: "Not", expected: false},
-		{name: "partial keyword end", ident: "end", expected: false},
-		{name: "partial keyword el", ident: "el", expected: false},
+		{name: "regular identifier name", ident: "name", want: false},
+		{name: "regular identifier render", ident: "render", want: false},
+		{name: "empty string", ident: "", want: false},
+		{name: "uppercase IF is not keyword", ident: "IF", want: false},
+		{name: "uppercase TRUE is not keyword", ident: "TRUE", want: false},
+		{name: "mixed case Not is not keyword", ident: "Not", want: false},
+		{name: "partial keyword end", ident: "end", want: false},
+		{name: "partial keyword el", ident: "el", want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsKeyword(tt.ident)
-			assert.Equal(t, tt.expected, result)
+			got := IsKeyword(tt.ident)
+			if got != tt.want {
+				t.Errorf("IsKeyword(%q) = %v, want %v", tt.ident, got, tt.want)
+			}
 		})
 	}
 }
 
 func TestIsSymbol(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected bool
+		name  string
+		input string
+		want  bool
 	}{
 		// Comparison operators
-		{name: "equal", input: "==", expected: true},
-		{name: "not equal", input: "!=", expected: true},
-		{name: "less than", input: "<", expected: true},
-		{name: "greater than", input: ">", expected: true},
-		{name: "less or equal", input: "<=", expected: true},
-		{name: "greater or equal", input: ">=", expected: true},
+		{name: "equal", input: "==", want: true},
+		{name: "not equal", input: "!=", want: true},
+		{name: "less than", input: "<", want: true},
+		{name: "greater than", input: ">", want: true},
+		{name: "less or equal", input: "<=", want: true},
+		{name: "greater or equal", input: ">=", want: true},
 		// Arithmetic operators
-		{name: "plus", input: "+", expected: true},
-		{name: "minus", input: "-", expected: true},
-		{name: "multiply", input: "*", expected: true},
-		{name: "divide", input: "/", expected: true},
-		{name: "modulo", input: "%", expected: true},
+		{name: "plus", input: "+", want: true},
+		{name: "minus", input: "-", want: true},
+		{name: "multiply", input: "*", want: true},
+		{name: "divide", input: "/", want: true},
+		{name: "modulo", input: "%", want: true},
 		// Logical operators
-		{name: "logical and", input: "&&", expected: true},
-		{name: "logical or", input: "||", expected: true},
-		{name: "logical not", input: "!", expected: true},
+		{name: "logical and", input: "&&", want: true},
+		{name: "logical or", input: "||", want: true},
+		{name: "logical not", input: "!", want: true},
 		// Other symbols
-		{name: "pipe", input: "|", expected: true},
-		{name: "colon", input: ":", expected: true},
-		{name: "comma", input: ",", expected: true},
-		{name: "dot", input: ".", expected: true},
-		{name: "left paren", input: "(", expected: true},
-		{name: "right paren", input: ")", expected: true},
-		{name: "left bracket", input: "[", expected: true},
-		{name: "right bracket", input: "]", expected: true},
-		{name: "assignment", input: "=", expected: true},
+		{name: "pipe", input: "|", want: true},
+		{name: "colon", input: ":", want: true},
+		{name: "comma", input: ",", want: true},
+		{name: "dot", input: ".", want: true},
+		{name: "left paren", input: "(", want: true},
+		{name: "right paren", input: ")", want: true},
+		{name: "left bracket", input: "[", want: true},
+		{name: "right bracket", input: "]", want: true},
+		{name: "assignment", input: "=", want: true},
 		// Non-symbols
-		{name: "word is not symbol", input: "abc", expected: false},
-		{name: "empty string is not symbol", input: "", expected: false},
-		{name: "triple equals is not symbol", input: "===", expected: false},
-		{name: "power operator is not symbol", input: "**", expected: false},
-		{name: "arrow is not symbol", input: "->", expected: false},
-		{name: "left brace is not symbol", input: "{", expected: false},
-		{name: "right brace is not symbol", input: "}", expected: false},
+		{name: "word is not symbol", input: "abc", want: false},
+		{name: "empty string is not symbol", input: "", want: false},
+		{name: "triple equals is not symbol", input: "===", want: false},
+		{name: "power operator is not symbol", input: "**", want: false},
+		{name: "arrow is not symbol", input: "->", want: false},
+		{name: "left brace is not symbol", input: "{", want: false},
+		{name: "right brace is not symbol", input: "}", want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsSymbol(tt.input)
-			assert.Equal(t, tt.expected, result)
+			got := IsSymbol(tt.input)
+			if got != tt.want {
+				t.Errorf("IsSymbol(%q) = %v, want %v", tt.input, got, tt.want)
+			}
 		})
 	}
 }

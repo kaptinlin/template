@@ -3,9 +3,7 @@ package template
 import (
 	"errors"
 	"fmt"
-	"math"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +16,7 @@ func TestEmptyContextInitialization(t *testing.T) {
 	}
 }
 func TestAddingAndRetrievingDiverseTypesWithRefactoring(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		description string
 		key         string
 		value       interface{}
@@ -39,26 +37,25 @@ func TestAddingAndRetrievingDiverseTypesWithRefactoring(t *testing.T) {
 		{"Retrieve zero float value", "floatValueZero", 0.0, 0.0},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
 			context := NewContext() // Initialize context for each case to avoid data pollution
-			context.Set(testCase.key, testCase.value)
+			context.Set(tc.key, tc.value)
 
-			value, err := context.Get(testCase.key)
+			value, err := context.Get(tc.key)
 			if err != nil {
-				t.Errorf("Unexpected error for '%s': %v", testCase.key, err)
-				return
+				t.Fatalf("unexpected error for '%s': %v", tc.key, err)
 			}
 
 			// Reflect is used for deep equality checks, particularly useful for slices and maps
-			if !reflect.DeepEqual(value, testCase.expected) {
-				t.Errorf("Get('%s') did not return the expected value. Got %v, expected %v", testCase.key, value, testCase.expected)
+			if !reflect.DeepEqual(value, tc.expected) {
+				t.Errorf("expected %v, got %v", tc.expected, value)
 			}
 		})
 	}
 }
 func TestRetrievingValuesWithNestedKeys(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		description   string
 		key           string
 		value         interface{}
@@ -109,22 +106,22 @@ func TestRetrievingValuesWithNestedKeys(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
 			context := NewContext() // Initialize context for each case
-			context.Set(testCase.key, testCase.value)
+			context.Set(tc.key, tc.value)
 
-			value, _ := context.Get(testCase.retrieveKey) // Error handling omitted per instructions
+			value, _ := context.Get(tc.retrieveKey) // Error handling omitted per instructions
 
 			// Using reflect.DeepEqual for complex type comparison
-			if !reflect.DeepEqual(value, testCase.expectedValue) {
-				t.Errorf("%s: expected %v, got %v", testCase.description, testCase.expectedValue, value)
+			if !reflect.DeepEqual(value, tc.expectedValue) {
+				t.Errorf("expected %v, got %v", tc.expectedValue, value)
 			}
 		})
 	}
 }
 func TestRetrievingValuesWithDeepNestedKeys(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		description   string
 		addKey        string
 		addValue      interface{}
@@ -169,21 +166,21 @@ func TestRetrievingValuesWithDeepNestedKeys(t *testing.T) {
 	}
 
 	context := NewContext()
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
-			context.Set(testCase.addKey, testCase.addValue)
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			context.Set(tc.addKey, tc.addValue)
 
-			value, _ := context.Get(testCase.retrieveKey)
+			value, _ := context.Get(tc.retrieveKey)
 
 			// Using reflect.DeepEqual for accurate comparison of complex types
-			if !reflect.DeepEqual(value, testCase.expectedValue) {
-				t.Errorf("%s: expected %v, got %v", testCase.description, testCase.expectedValue, value)
+			if !reflect.DeepEqual(value, tc.expectedValue) {
+				t.Errorf("expected %v, got %v", tc.expectedValue, value)
 			}
 		})
 	}
 }
 func TestRetrievingSliceElementsWithIndices(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		description   string
 		sliceKey      string
 		sliceValue    interface{}
@@ -233,21 +230,22 @@ func TestRetrievingSliceElementsWithIndices(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
 			context := NewContext()
-			context.Set(testCase.sliceKey, testCase.sliceValue)
+			context.Set(tc.sliceKey, tc.sliceValue)
 
-			value, err := context.Get(testCase.retrieveKey)
-			if testCase.expectedError {
+			value, err := context.Get(tc.retrieveKey)
+			if tc.expectedError {
 				if err == nil {
-					t.Errorf("%s: expected an error but got none", testCase.description)
+					t.Errorf("expected an error but got none")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("%s: unexpected error: %v", testCase.description, err)
-				} else if !reflect.DeepEqual(value, testCase.expectedValue) {
-					t.Errorf("%s: expected value %v, got %v", testCase.description, testCase.expectedValue, value)
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(value, tc.expectedValue) {
+					t.Errorf("expected %v, got %v", tc.expectedValue, value)
 				}
 			}
 		})
@@ -255,7 +253,7 @@ func TestRetrievingSliceElementsWithIndices(t *testing.T) {
 }
 
 func TestRetrievingValuesForNonExistentNestedKeys(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		description     string
 		setupKeysValues map[string]interface{} // Key-value pairs to set up context
 		nonExistentKey  string                 // Key to test for non-existence
@@ -290,27 +288,27 @@ func TestRetrievingValuesForNonExistentNestedKeys(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
 			context := NewContext() // Initialize context for each case
 
 			// Setup context with predefined keys and values
-			for key, value := range testCase.setupKeysValues {
+			for key, value := range tc.setupKeysValues {
 				context.Set(key, value)
 			}
 
 			// Attempt to retrieve a non-existent key
-			_, err := context.Get(testCase.nonExistentKey)
+			_, err := context.Get(tc.nonExistentKey)
 
 			// Verify that the correct error is returned
 			if !errors.Is(err, ErrContextKeyNotFound) {
-				t.Errorf("%s: expected ErrContextKeyNotFound for non-existent key '%s', got %v", testCase.description, testCase.nonExistentKey, err)
+				t.Errorf("expected ErrContextKeyNotFound for non-existent key '%s', got %v", tc.nonExistentKey, err)
 			}
 		})
 	}
 }
 func TestRetrievingValuesForIndexOutOfRange(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		description        string
 		setupKeysValues    map[string]interface{} // Key-value pairs to set up context
 		indexOutOfRangeKey string                 // Key to test for index out of range
@@ -335,28 +333,28 @@ func TestRetrievingValuesForIndexOutOfRange(t *testing.T) {
 		// Add more test cases as necessary
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
 			context := NewContext() // Initialize context for each case
 
 			// Setup context with predefined keys and values
-			for key, value := range testCase.setupKeysValues {
+			for key, value := range tc.setupKeysValues {
 				context.Set(key, value)
 			}
 
 			// Attempt to retrieve a value using a key that specifies an index out of range
-			_, err := context.Get(testCase.indexOutOfRangeKey)
+			_, err := context.Get(tc.indexOutOfRangeKey)
 
 			// Verify that the correct error is returned
 			if !errors.Is(err, ErrContextIndexOutOfRange) {
-				t.Errorf("%s: expected ErrContextIndexOutOfRange for key '%s', got %v", testCase.description, testCase.indexOutOfRangeKey, err)
+				t.Errorf("expected ErrContextIndexOutOfRange for key '%s', got %v", tc.indexOutOfRangeKey, err)
 			}
 		})
 	}
 }
 
 func TestSimplifiedOverwritingValuesInContext(t *testing.T) {
-	testCases := []struct {
+	tests := []struct {
 		description    string
 		key            string
 		initialValue   interface{}
@@ -388,18 +386,18 @@ func TestSimplifiedOverwritingValuesInContext(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
-			context := NewContext()                            // Initialize context for each test case
-			context.Set(testCase.key, testCase.initialValue)   // Add initial value
-			context.Set(testCase.key, testCase.overwriteValue) // Overwrite it
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			context := NewContext()                // Initialize context for each test case
+			context.Set(tc.key, tc.initialValue)   // Add initial value
+			context.Set(tc.key, tc.overwriteValue) // Overwrite it
 
 			// Retrieve to verify overwrite
-			value, _ := context.Get(testCase.key)
+			value, _ := context.Get(tc.key)
 
 			// Verify overwrite without explicitly stating expected value in test case
-			if !reflect.DeepEqual(value, testCase.overwriteValue) {
-				t.Errorf("%s: expected %v after overwrite, got %v", testCase.description, testCase.overwriteValue, value)
+			if !reflect.DeepEqual(value, tc.overwriteValue) {
+				t.Errorf("expected %v after overwrite, got %v", tc.overwriteValue, value)
 			}
 		})
 	}
@@ -431,7 +429,7 @@ func TestStructConversion(t *testing.T) {
 	}
 
 	// Test cases
-	testCases := []struct {
+	tests := []struct {
 		description string
 		key         string
 		value       interface{}
@@ -496,52 +494,34 @@ func TestStructConversion(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
 			context := NewContext()
-			context.Set(testCase.key, testCase.value)
+			context.Set(tc.key, tc.value)
 
 			// Get the value using the check path
-			value, err := context.Get(testCase.checkPath)
+			value, err := context.Get(tc.checkPath)
 
 			// For the private field test, we expect an error
-			if testCase.expected == nil {
+			if tc.expected == nil {
 				if err == nil || !errors.Is(err, ErrContextKeyNotFound) {
-					t.Errorf("%s: expected ErrContextKeyNotFound for path '%s', got %v",
-						testCase.description, testCase.checkPath, err)
+					t.Errorf("expected ErrContextKeyNotFound for path '%s', got %v",
+						tc.checkPath, err)
 				}
 				return
 			}
 
 			// For all other tests, we don't expect an error
 			if err != nil {
-				t.Errorf("%s: unexpected error: %v", testCase.description, err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
 			// Check if the value matches the expected value
-			if !reflect.DeepEqual(value, testCase.expected) {
-				t.Errorf("%s: expected %v, got %v",
-					testCase.description, testCase.expected, value)
+			if !reflect.DeepEqual(value, tc.expected) {
+				t.Errorf("expected %v, got %v", tc.expected, value)
 			}
 		})
 	}
-}
-
-// dereference automatically dereferences pointer values.
-func dereference(v interface{}) interface{} {
-	if v == nil {
-		return nil
-	}
-
-	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			return nil
-		}
-		return val.Elem().Interface()
-	}
-	return v
 }
 
 // TestComplexStructConversion tests more complex struct conversion scenarios,
@@ -575,71 +555,35 @@ func TestComplexStructConversion(t *testing.T) {
 	}
 
 	// Setup test cases
-	testCases := []struct {
+	tests := []struct {
 		description string
 		checkPath   string
 		expected    interface{}
-		compareFunc func(interface{}, interface{}) bool
 	}{
 		{
 			description: "Access embedded struct field",
 			checkPath:   "project.metadata.tags.0",
 			expected:    "important",
-			compareFunc: func(a, b interface{}) bool {
-				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
-			},
 		},
 		{
 			description: "Access pointer value",
 			checkPath:   "project.owner",
 			expected:    "Project Owner",
-			compareFunc: func(a, b interface{}) bool {
-				// For pointers, compare after dereferencing.
-				a = dereference(a)
-				b = dereference(b)
-				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
-			},
 		},
 		{
 			description: "Preserve time.Time",
 			checkPath:   "project.created",
 			expected:    creationTime.Format(time.RFC3339),
-			compareFunc: func(a, b interface{}) bool {
-				// For time values, compare via RFC3339 string representation.
-				aTime, aOk := a.(time.Time)
-				if aOk {
-					return aTime.Format(time.RFC3339) == b
-				}
-
-				// If already a string, compare directly.
-				aStr, aOk := a.(string)
-				if aOk {
-					return aStr == b
-				}
-
-				return false
-			},
 		},
 		{
 			description: "Access ID directly",
 			checkPath:   "project.id",
 			expected:    "project-123",
-			compareFunc: func(a, b interface{}) bool {
-				return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
-			},
 		},
 		{
 			description: "Access embedded field directly",
 			checkPath:   "project.metadata.priority",
 			expected:    1,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.0001
-			},
 		},
 	}
 
@@ -648,67 +592,27 @@ func TestComplexStructConversion(t *testing.T) {
 	context.Set("project", project)
 
 	// Run the tests
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
-			value, err := context.Get(testCase.checkPath)
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			value, err := context.Get(tc.checkPath)
 			if err != nil {
-				t.Errorf("%s: unexpected error: %v", testCase.description, err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			// Use custom comparison function
-			if testCase.compareFunc != nil {
-				if !testCase.compareFunc(value, testCase.expected) {
-					t.Errorf("%s: expected %v (%T), got %v (%T)",
-						testCase.description, testCase.expected, testCase.expected, value, value)
-				}
-				return
+			// Normalize value for comparison: dereference pointers, format time as RFC3339.
+			got := value
+			if v := reflect.ValueOf(value); v.Kind() == reflect.Ptr && !v.IsNil() {
+				got = v.Elem().Interface()
+			}
+			if t2, ok := got.(time.Time); ok {
+				got = t2.Format(time.RFC3339)
 			}
 
-			// Default comparison
-			if !reflect.DeepEqual(value, testCase.expected) {
-				t.Errorf("%s: expected %v (%T), got %v (%T)",
-					testCase.description, testCase.expected, testCase.expected, value, value)
+			if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", tc.expected) {
+				t.Errorf("expected %v (%T), got %v (%T)",
+					tc.expected, tc.expected, value, value)
 			}
 		})
-	}
-}
-
-// toFloat64 attempts to convert any numeric type to float64
-func toFloat64(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int8:
-		return float64(val), true
-	case int16:
-		return float64(val), true
-	case int32:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	case uint:
-		return float64(val), true
-	case uint8:
-		return float64(val), true
-	case uint16:
-		return float64(val), true
-	case uint32:
-		return float64(val), true
-	case uint64:
-		return float64(val), true
-	case string:
-		// Try to parse number from string
-		if f, err := strconv.ParseFloat(val, 64); err == nil {
-			return f, true
-		}
-		return 0, false
-	default:
-		return 0, false
 	}
 }
 
@@ -729,45 +633,25 @@ func TestSliceOfStructs(t *testing.T) {
 	}
 
 	// Setup test cases
-	testCases := []struct {
+	tests := []struct {
 		description string
 		checkPath   string
 		expected    interface{}
-		compareFunc func(interface{}, interface{}) bool // Add custom comparison function
 	}{
 		{
 			description: "Access first item name",
 			checkPath:   "items.0.name",
 			expected:    "Item 1",
-			compareFunc: nil, // Use default comparison
 		},
 		{
 			description: "Access second item price",
 			checkPath:   "items.1.price",
 			expected:    24.99,
-			compareFunc: func(a, b interface{}) bool {
-				// For floating point numbers, use approximate comparison
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.0001
-			},
 		},
 		{
 			description: "Access last item ID",
 			checkPath:   "items.2.id",
 			expected:    3,
-			compareFunc: func(a, b interface{}) bool {
-				// For integers, convert then compare
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.0001
-			},
 		},
 	}
 
@@ -776,27 +660,16 @@ func TestSliceOfStructs(t *testing.T) {
 	context.Set("items", items)
 
 	// Run the tests
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
-			value, err := context.Get(testCase.checkPath)
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			value, err := context.Get(tc.checkPath)
 			if err != nil {
-				t.Errorf("%s: unexpected error: %v", testCase.description, err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			// Use custom comparison function or default comparison
-			if testCase.compareFunc != nil {
-				if !testCase.compareFunc(value, testCase.expected) {
-					t.Errorf("%s: expected %v (%T), got %v (%T)",
-						testCase.description, testCase.expected, testCase.expected, value, value)
-				}
-				return
-			}
-
-			// Default comparison
-			if !reflect.DeepEqual(value, testCase.expected) {
-				t.Errorf("%s: expected %v (%T), got %v (%T)",
-					testCase.description, testCase.expected, testCase.expected, value, value)
+			if fmt.Sprintf("%v", value) != fmt.Sprintf("%v", tc.expected) {
+				t.Errorf("expected %v (%T), got %v (%T)",
+					tc.expected, tc.expected, value, value)
 			}
 		})
 	}
@@ -826,11 +699,10 @@ func TestMapWithStructValues(t *testing.T) {
 	}
 
 	// Setup test cases
-	testCases := []struct {
+	tests := []struct {
 		description string
 		checkPath   string
 		expected    interface{}
-		compareFunc func(interface{}, interface{}) bool
 	}{
 		{
 			description: "Access user1 username",
@@ -854,38 +726,28 @@ func TestMapWithStructValues(t *testing.T) {
 	context.Set("users", users)
 
 	// Run the tests
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
-			value, err := context.Get(testCase.checkPath)
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			value, err := context.Get(tc.checkPath)
 
 			// For the non-existent user test, we expect an error
-			if testCase.expected == nil {
+			if tc.expected == nil {
 				if err == nil || !errors.Is(err, ErrContextKeyNotFound) {
-					t.Errorf("%s: expected ErrContextKeyNotFound for path '%s', got %v",
-						testCase.description, testCase.checkPath, err)
+					t.Errorf("expected ErrContextKeyNotFound for path '%s', got %v",
+						tc.checkPath, err)
 				}
 				return
 			}
 
 			// For all other tests, we don't expect an error
 			if err != nil {
-				t.Errorf("%s: unexpected error: %v", testCase.description, err)
-				return
-			}
-
-			// Use custom comparison function or default comparison
-			if testCase.compareFunc != nil {
-				if !testCase.compareFunc(value, testCase.expected) {
-					t.Errorf("%s: expected %v (%T), got %v (%T)",
-						testCase.description, testCase.expected, testCase.expected, value, value)
-				}
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
 			// Default comparison
-			if !reflect.DeepEqual(value, testCase.expected) {
-				t.Errorf("%s: expected %v (%T), got %v (%T)",
-					testCase.description, testCase.expected, testCase.expected, value, value)
+			if fmt.Sprintf("%v", value) != fmt.Sprintf("%v", tc.expected) {
+				t.Errorf("expected %v (%T), got %v (%T)",
+					tc.expected, tc.expected, value, value)
 			}
 		})
 	}
@@ -1276,11 +1138,10 @@ func TestComplexNestedStructures(t *testing.T) {
 	}
 
 	// Setup test cases for deeply nested data
-	testCases := []struct {
+	tests := []struct {
 		description string
 		checkPath   string
 		expected    interface{}
-		compareFunc func(interface{}, interface{}) bool
 	}{
 		{
 			description: "Access company name",
@@ -1296,14 +1157,6 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access 2022 revenue",
 			checkPath:   "company.revenue.2022",
 			expected:    6250000.00,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.01
-			},
 		},
 		{
 			description: "Access first branch postal code",
@@ -1314,14 +1167,6 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access engineering department budget",
 			checkPath:   "company.departments.engineering.budget",
 			expected:    1000000.50,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.01
-			},
 		},
 		{
 			description: "Access second engineering project",
@@ -1337,14 +1182,6 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access engineering testers count",
 			checkPath:   "company.departments.engineering.staff.counts.testers",
 			expected:    10,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.01
-			},
 		},
 		{
 			description: "Access first customer name",
@@ -1365,14 +1202,6 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access first customer's first order's second item quantity",
 			checkPath:   "company.customers.cust1.orders.0.items.1.quantity",
 			expected:    2,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.01
-			},
 		},
 		{
 			description: "Access first customer's primary contact",
@@ -1388,14 +1217,6 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access first product's price",
 			checkPath:   "company.products.0.price",
 			expected:    299.99,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.01
-			},
 		},
 		{
 			description: "Access first product's first category",
@@ -1411,14 +1232,6 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access P-101 first review helpful count",
 			checkPath:   "company.reviews.P-101.0.helpful",
 			expected:    12,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.01
-			},
 		},
 		{
 			description: "Access P-102 first review response",
@@ -1429,14 +1242,6 @@ func TestComplexNestedStructures(t *testing.T) {
 			description: "Access security settings password minimum length",
 			checkPath:   "company.settings.security.password_policy.min_length",
 			expected:    12,
-			compareFunc: func(a, b interface{}) bool {
-				aVal, aOk := toFloat64(a)
-				bVal, bOk := toFloat64(b)
-				if !aOk || !bOk {
-					return false
-				}
-				return math.Abs(aVal-bVal) < 0.01
-			},
 		},
 		{
 			description: "Access notification settings for email",
@@ -1450,27 +1255,16 @@ func TestComplexNestedStructures(t *testing.T) {
 	context.Set("company", company)
 
 	// Run the tests
-	for _, testCase := range testCases {
-		t.Run(testCase.description, func(t *testing.T) {
-			value, err := context.Get(testCase.checkPath)
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			value, err := context.Get(tc.checkPath)
 			if err != nil {
-				t.Errorf("%s: unexpected error: %v", testCase.description, err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			// Use custom comparison function or default comparison
-			if testCase.compareFunc != nil {
-				if !testCase.compareFunc(value, testCase.expected) {
-					t.Errorf("%s: expected %v (%T), got %v (%T)",
-						testCase.description, testCase.expected, testCase.expected, value, value)
-				}
-				return
-			}
-
-			// Default comparison
-			if !reflect.DeepEqual(value, testCase.expected) {
-				t.Errorf("%s: expected %v (%T), got %v (%T)",
-					testCase.description, testCase.expected, testCase.expected, value, value)
+			if fmt.Sprintf("%v", value) != fmt.Sprintf("%v", tc.expected) {
+				t.Errorf("expected %v (%T), got %v (%T)",
+					tc.expected, tc.expected, value, value)
 			}
 		})
 	}
@@ -1561,7 +1355,7 @@ func TestSetPreservesOriginalTypes(t *testing.T) {
 			}
 
 			if result != tt.expected {
-				t.Errorf("Expected %v, got %v", tt.expected, result)
+				t.Errorf("expected %v, got %v", tt.expected, result)
 			}
 
 			// Also verify that the top-level value maintains its original type
@@ -1596,7 +1390,7 @@ func TestRenderingStability(t *testing.T) {
 	// Test multiple rendering iterations to catch ordering issues
 	const iterations = 10
 
-	testCases := []struct {
+	tests := []struct {
 		name        string
 		template    string
 		setupFunc   func() Context
@@ -1726,7 +1520,7 @@ func TestRenderingStability(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Parse template once
 			template, err := Compile(tc.template)
@@ -1750,862 +1544,17 @@ func TestRenderingStability(t *testing.T) {
 			firstResult := results[0]
 			for i := 1; i < iterations; i++ {
 				if results[i] != firstResult {
-					t.Errorf("%s: Inconsistent output detected\n"+
+					t.Errorf("Inconsistent output detected\n"+
 						"Iteration 0: %q\n"+
 						"Iteration %d: %q\n"+
 						"All results: %v",
-						tc.description, firstResult, i, results[i], results)
+						firstResult, i, results[i], results)
 					break
 				}
 			}
 
 			// Log the consistent result for manual verification
 			t.Logf("%s - Consistent output: %q", tc.name, firstResult)
-		})
-	}
-}
-
-// TestMapKeyOrderStability specifically tests map key ordering in different scenarios
-func TestMapKeyOrderStability(t *testing.T) {
-	const iterations = 20 // More iterations for map ordering tests
-
-	testCases := []struct {
-		name string
-		data map[string]interface{}
-	}{
-		{
-			name: "String keys",
-			data: map[string]interface{}{
-				"zebra": "last",
-				"alpha": "first",
-				"beta":  "second",
-				"gamma": "third",
-				"delta": "fourth",
-			},
-		},
-		{
-			name: "Numeric-like string keys",
-			data: map[string]interface{}{
-				"10": "ten",
-				"1":  "one",
-				"5":  "five",
-				"2":  "two",
-				"20": "twenty",
-			},
-		},
-		{
-			name: "Mixed case keys",
-			data: map[string]interface{}{
-				"Apple":  "fruit1",
-				"banana": "fruit2",
-				"Cherry": "fruit3",
-				"date":   "fruit4",
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var keyOrders [][]string
-
-			for i := 0; i < iterations; i++ {
-				ctx := NewContext()
-				ctx.Set("data", tc.data)
-
-				var observedKeys []string
-				// Use reflection to get map keys in the order they would be iterated
-				rv := reflect.ValueOf(tc.data)
-				for _, key := range rv.MapKeys() {
-					observedKeys = append(observedKeys, key.String())
-				}
-				keyOrders = append(keyOrders, observedKeys)
-			}
-
-			// Check if all key orders are the same
-			firstOrder := keyOrders[0]
-			allSame := true
-			for i := 1; i < iterations; i++ {
-				if !reflect.DeepEqual(keyOrders[i], firstOrder) {
-					allSame = false
-					t.Logf("Key order difference detected:\n"+
-						"Iteration 0: %v\n"+
-						"Iteration %d: %v", firstOrder, i, keyOrders[i])
-					break
-				}
-			}
-
-			if allSame {
-				t.Logf("%s: Key order is stable across %d iterations: %v",
-					tc.name, iterations, firstOrder)
-			} else {
-				t.Logf("%s: Key order is NOT stable - this is expected behavior in Go", tc.name)
-			}
-		})
-	}
-}
-
-// TestContextValueStability tests that different types of values maintain stability when stored and retrieved
-func TestContextValueStability(t *testing.T) {
-	const iterations = 10
-
-	testCases := []struct {
-		name     string
-		key      string
-		value    interface{}
-		checkKey string
-	}{
-		{
-			name:     "Map value stability",
-			key:      "config",
-			value:    map[string]interface{}{"a": 1, "z": 2, "m": 3, "b": 4},
-			checkKey: "config",
-		},
-		{
-			name:     "Slice value stability",
-			key:      "items",
-			value:    []interface{}{"third", "first", "second"},
-			checkKey: "items",
-		},
-		{
-			name: "Struct value stability",
-			key:  "user",
-			value: struct {
-				Name   string            `json:"name"`
-				Age    int               `json:"age"`
-				Tags   map[string]string `json:"tags"`
-				Skills []string          `json:"skills"`
-			}{
-				Name:   "John",
-				Age:    30,
-				Tags:   map[string]string{"level": "senior", "team": "backend"},
-				Skills: []string{"Go", "Python", "SQL"},
-			},
-			checkKey: "user",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var results []interface{}
-
-			for i := 0; i < iterations; i++ {
-				ctx := NewContext()
-				ctx.Set(tc.key, tc.value)
-
-				retrieved, err := ctx.Get(tc.checkKey)
-				if err != nil {
-					t.Fatalf("Iteration %d: Failed to get value: %v", i, err)
-				}
-				results = append(results, retrieved)
-			}
-
-			// For basic stability check, verify the retrieved values are deeply equal
-			firstResult := results[0]
-			for i := 1; i < iterations; i++ {
-				if !reflect.DeepEqual(results[i], firstResult) {
-					t.Errorf("Value stability failed at iteration %d\n"+
-						"Expected: %+v\n"+
-						"Got: %+v", i, firstResult, results[i])
-				}
-			}
-
-			t.Logf("%s: Value remains stable across %d iterations", tc.name, iterations)
-		})
-	}
-}
-
-// TestTemplateRenderingConsistency tests full template rendering consistency
-func TestTemplateRenderingConsistency(t *testing.T) {
-	const iterations = 15
-
-	type User struct {
-		Name     string            `json:"name"`
-		Age      int               `json:"age"`
-		Roles    []string          `json:"roles"`
-		Settings map[string]string `json:"settings"`
-	}
-
-	type Company struct {
-		Name  string          `json:"name"`
-		Users map[string]User `json:"users"`
-		Tags  []string        `json:"tags"`
-	}
-
-	template := `Company: {{ company.name }}
-Users:
-{% for userKey, user in company.users %}  - {{ userKey }}: {{ user.name }} ({{ user.age }})
-    Roles: {% for role in user.roles %}{{ role }}, {% endfor %}
-    Settings: {% for settingKey, settingValue in user.settings %}{{ settingKey }}={{ settingValue }}, {% endfor %}
-{% endfor %}
-Tags: {% for tag in company.tags %}{{ tag }}, {% endfor %}`
-
-	setupData := func() Context {
-		ctx := NewContext()
-		company := Company{
-			Name: "TechCorp",
-			Users: map[string]User{
-				"user3": {
-					Name:     "Charlie",
-					Age:      35,
-					Roles:    []string{"developer", "lead"},
-					Settings: map[string]string{"theme": "dark", "lang": "en"},
-				},
-				"user1": {
-					Name:     "Alice",
-					Age:      25,
-					Roles:    []string{"admin", "developer"},
-					Settings: map[string]string{"theme": "light", "notifications": "on"},
-				},
-				"user2": {
-					Name:     "Bob",
-					Age:      30,
-					Roles:    []string{"developer"},
-					Settings: map[string]string{"lang": "fr"},
-				},
-			},
-			Tags: []string{"startup", "tech", "remote"},
-		}
-		ctx.Set("company", company)
-		return ctx
-	}
-
-	tmpl, err := Compile(template)
-	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
-	}
-
-	var results []string
-	for i := 0; i < iterations; i++ {
-		ctx := setupData()
-		result, err := tmpl.Render(map[string]interface{}(ctx))
-		if err != nil {
-			t.Fatalf("Template execution failed at iteration %d: %v", i, err)
-		}
-		results = append(results, result)
-	}
-
-	// Check consistency
-	firstResult := results[0]
-	inconsistentFound := false
-	for i := 1; i < iterations; i++ {
-		if results[i] != firstResult {
-			inconsistentFound = true
-			t.Errorf("Template rendering inconsistency detected:\n"+
-				"=== Iteration 0 ===\n%s\n"+
-				"=== Iteration %d ===\n%s\n", firstResult, i, results[i])
-			break
-		}
-	}
-
-	if !inconsistentFound {
-		t.Logf("Template rendering is consistent across %d iterations", iterations)
-		t.Logf("Sample output:\n%s", firstResult)
-	}
-}
-
-// TestRenderingStabilityEdgeCases tests rendering stability for edge cases and boundary conditions
-func TestRenderingStabilityEdgeCases(t *testing.T) {
-	const iterations = 10
-
-	testCases := []struct {
-		name        string
-		template    string
-		setupFunc   func() Context
-		description string
-	}{
-		{
-			name:     "Empty map iteration",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]string{})
-				return ctx
-			},
-			description: "Empty map should render consistently (empty result)",
-		},
-		{
-			name:     "Single item map iteration",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]string{"onlykey": "onlyvalue"})
-				return ctx
-			},
-			description: "Single item map should render consistently",
-		},
-		{
-			name:     "Empty slice iteration",
-			template: `{% for item in data %}{{ item }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", []string{})
-				return ctx
-			},
-			description: "Empty slice should render consistently (empty result)",
-		},
-		{
-			name:     "Nil values in map",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]interface{}{
-					"nil_value": nil,
-					"empty_str": "",
-					"zero_int":  0,
-					"false_val": false,
-				})
-				return ctx
-			},
-			description: "Map with nil and falsy values should render consistently",
-		},
-		{
-			name:     "Special characters in keys",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]string{
-					"key-with-dashes":      "value1",
-					"key_with_underscores": "value2",
-					"key.with.dots":        "value3",
-					"key with spaces":      "value4",
-					"key@with#symbols":     "value5",
-				})
-				return ctx
-			},
-			description: "Keys with special characters should maintain stable order",
-		},
-		{
-			name:     "Unicode keys and values",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]string{
-					"中文":      "中文值",
-					"العربية": "قيمة",
-					"русский": "значение",
-					"日本語":     "値",
-					"한국어":     "값",
-					"emoji":   "🎉🎈🎊",
-				})
-				return ctx
-			},
-			description: "Unicode keys and values should maintain stable order",
-		},
-		{
-			name:     "Numeric string keys",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]string{
-					"100": "hundred",
-					"1":   "one",
-					"10":  "ten",
-					"2":   "two",
-					"01":  "zero-one",
-					"001": "zero-zero-one",
-					"1.5": "one-point-five",
-					"-1":  "negative-one",
-					"0":   "zero",
-				})
-				return ctx
-			},
-			description: "Numeric string keys should sort lexicographically",
-		},
-		{
-			name:     "Large map iteration",
-			template: `{% for key in data %}{{ key }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				largeMap := make(map[string]string)
-				for i := 0; i < 100; i++ {
-					key := fmt.Sprintf("key_%03d", i)
-					largeMap[key] = fmt.Sprintf("value_%d", i)
-				}
-				ctx.Set("data", largeMap)
-				return ctx
-			},
-			description: "Large map should maintain stable iteration order",
-		},
-		{
-			name:     "Deeply nested map structures",
-			template: `{% for l1k, l1v in data %}{{ l1k }}:{% for l2k, l2v in l1v %}{{ l2k }}:{% for l3k, l3v in l2v %}{{ l3k }}-{{ l3v }},{% endfor %};{% endfor %};{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]map[string]map[string]string{
-					"level1_b": {
-						"level2_y": {"level3_z": "value_z", "level3_x": "value_x"},
-						"level2_x": {"level3_a": "value_a"},
-					},
-					"level1_a": {
-						"level2_z": {"level3_b": "value_b"},
-						"level2_a": {"level3_y": "value_y", "level3_z": "value_z2"},
-					},
-				})
-				return ctx
-			},
-			description: "Deeply nested maps should maintain stable order at all levels",
-		},
-		{
-			name:     "Mixed types in map values",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]interface{}{
-					"string_val": "text",
-					"int_val":    123,
-					"float_val":  45.67,
-					"bool_val":   true,
-					"slice_val":  []string{"a", "b"},
-					"map_val":    map[string]string{"nested": "value"},
-				})
-				return ctx
-			},
-			description: "Map with mixed value types should render consistently",
-		},
-		{
-			name:     "Very long keys and values",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				longKey := strings.Repeat("a", 1000) + "_key"
-				longValue := strings.Repeat("x", 1000)
-				ctx.Set("data", map[string]string{
-					"short":  "short_value",
-					longKey:  longValue,
-					"medium": strings.Repeat("m", 100),
-				})
-				return ctx
-			},
-			description: "Maps with very long keys and values should be stable",
-		},
-		{
-			name:     "Case sensitive key ordering",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]string{
-					"Apple":  "fruit1",
-					"apple":  "fruit2",
-					"APPLE":  "fruit3",
-					"aPpLe":  "fruit4",
-					"Banana": "fruit5",
-					"banana": "fruit6",
-				})
-				return ctx
-			},
-			description: "Case sensitive keys should be sorted correctly",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			template, err := Compile(tc.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			var results []string
-			for i := 0; i < iterations; i++ {
-				ctx := tc.setupFunc()
-				result, err := template.Render(map[string]interface{}(ctx))
-				if err != nil {
-					t.Fatalf("Iteration %d failed: %v", i, err)
-				}
-				results = append(results, result)
-			}
-
-			// Check consistency
-			firstResult := results[0]
-			for i := 1; i < iterations; i++ {
-				if results[i] != firstResult {
-					t.Errorf("%s: Inconsistent output detected\n"+
-						"Iteration 0: %q\n"+
-						"Iteration %d: %q",
-						tc.description, firstResult, i, results[i])
-					break
-				}
-			}
-
-			t.Logf("%s - Consistent output: %q", tc.name, firstResult)
-		})
-	}
-}
-
-// TestRenderingStabilityPerformance tests rendering stability with performance considerations
-func TestRenderingStabilityPerformance(t *testing.T) {
-	const iterations = 5 // Fewer iterations for performance tests
-
-	testCases := []struct {
-		name        string
-		template    string
-		setupFunc   func() Context
-		description string
-	}{
-		{
-			name:     "Very large map (1000 items)",
-			template: `Count: {% for item in data %}1{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				largeMap := make(map[string]int)
-				for i := 0; i < 1000; i++ {
-					// Use random-ish keys to test sorting performance
-					key := fmt.Sprintf("key_%04d_%d", 1000-i, i*7%13)
-					largeMap[key] = i
-				}
-				ctx.Set("data", largeMap)
-				return ctx
-			},
-			description: "Very large map should maintain stability without significant performance degradation",
-		},
-		{
-			name:     "Deep nesting (10 levels)",
-			template: `{{ deep }}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				// Create deeply nested structure
-				current := make(map[string]interface{})
-				root := current
-				for i := 0; i < 10; i++ {
-					next := make(map[string]interface{})
-					current[fmt.Sprintf("level_%d_key_z", i)] = fmt.Sprintf("value_%d", i)
-					current[fmt.Sprintf("level_%d_key_a", i)] = fmt.Sprintf("value_%d", i)
-					current["nested"] = next
-					current = next
-				}
-				current["final"] = "deep_value"
-				ctx.Set("deep", root)
-				return ctx
-			},
-			description: "Deep nesting should not cause performance issues with stability",
-		},
-		{
-			name:     "Wide map (many keys at same level)",
-			template: `{% for key in data %}{{ key }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				wideMap := make(map[string]string)
-				// Create many keys with different prefixes to test sorting
-				prefixes := []string{"apple", "banana", "cherry", "date", "elderberry"}
-				for _, prefix := range prefixes {
-					for i := 0; i < 50; i++ {
-						key := fmt.Sprintf("%s_%03d", prefix, i)
-						wideMap[key] = fmt.Sprintf("value_%s_%d", prefix, i)
-					}
-				}
-				ctx.Set("data", wideMap)
-				return ctx
-			},
-			description: "Wide map with many keys should maintain stable order efficiently",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			template, err := Compile(tc.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			var results []string
-			start := time.Now()
-
-			for i := 0; i < iterations; i++ {
-				ctx := tc.setupFunc()
-				result, err := template.Render(map[string]interface{}(ctx))
-				if err != nil {
-					t.Fatalf("Iteration %d failed: %v", i, err)
-				}
-				results = append(results, result)
-			}
-
-			duration := time.Since(start)
-
-			// Check consistency
-			firstResult := results[0]
-			for i := 1; i < iterations; i++ {
-				if results[i] != firstResult {
-					t.Errorf("%s: Inconsistent output detected", tc.description)
-					break
-				}
-			}
-
-			t.Logf("%s - Completed %d iterations in %v (avg: %v per iteration)",
-				tc.name, iterations, duration, duration/time.Duration(iterations))
-		})
-	}
-}
-
-// TestContextStabilityWithStructs tests rendering stability with various struct configurations
-func TestContextStabilityWithStructs(t *testing.T) {
-	const iterations = 10
-
-	// Define test structs with different configurations
-	type SimpleStruct struct {
-		Name string `json:"name"`
-		Age  int    `json:"age"`
-	}
-
-	type StructWithTags struct {
-		PublicField  string `json:"public"`
-		privateField string // Unexported field should be ignored
-		IgnoredField string `json:"-"` // Explicitly ignored field
-		CustomName   string `json:"custom_name"`
-	}
-
-	type NestedStruct struct {
-		ID       string                 `json:"id"`
-		Simple   SimpleStruct           `json:"simple"`
-		Settings map[string]interface{} `json:"settings"`
-		Items    []string               `json:"items"`
-	}
-
-	type StructWithPointers struct {
-		Name    *string            `json:"name"`
-		Age     *int               `json:"age"`
-		Config  *map[string]string `json:"config"`
-		Enabled *bool              `json:"enabled"`
-	}
-
-	testCases := []struct {
-		name        string
-		template    string
-		setupFunc   func() Context
-		description string
-	}{
-		{
-			name:     "Simple struct rendering",
-			template: `{{ person }}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("person", SimpleStruct{Name: "Alice", Age: 30})
-				return ctx
-			},
-			description: "Simple struct should render consistently",
-		},
-		{
-			name:     "Struct with field tags",
-			template: `{{ data }}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", StructWithTags{
-					PublicField:  "public_value",
-					privateField: "private_value", // Should not appear in JSON
-					IgnoredField: "ignored_value", // Should not appear in JSON
-					CustomName:   "custom_value",
-				})
-				return ctx
-			},
-			description: "Struct with JSON tags should render consistently",
-		},
-		{
-			name:     "Nested struct iteration",
-			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				data := map[string]NestedStruct{
-					"item_b": {
-						ID:     "id_b",
-						Simple: SimpleStruct{Name: "Bob", Age: 25},
-						Settings: map[string]interface{}{
-							"theme": "dark",
-							"lang":  "en",
-						},
-						Items: []string{"item1", "item2"},
-					},
-					"item_a": {
-						ID:     "id_a",
-						Simple: SimpleStruct{Name: "Alice", Age: 30},
-						Settings: map[string]interface{}{
-							"theme":         "light",
-							"notifications": true,
-						},
-						Items: []string{"item3", "item4"},
-					},
-				}
-				ctx.Set("data", data)
-				return ctx
-			},
-			description: "Map of nested structs should maintain stable order",
-		},
-		{
-			name:     "Struct with pointers",
-			template: `{{ data }}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				name := "John"
-				age := 35
-				config := map[string]string{"key": "value"}
-				enabled := true
-
-				ctx.Set("data", StructWithPointers{
-					Name:    &name,
-					Age:     &age,
-					Config:  &config,
-					Enabled: &enabled,
-				})
-				return ctx
-			},
-			description: "Struct with pointer fields should render consistently",
-		},
-		{
-			name:     "Slice of structs with map fields",
-			template: `{% for person in people %}{{ person.name }}:{% for settingKey, settingValue in person.settings %}{{ settingKey }}={{ settingValue }},{% endfor %};{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				type PersonWithSettings struct {
-					Name     string            `json:"name"`
-					Settings map[string]string `json:"settings"`
-				}
-
-				people := []PersonWithSettings{
-					{
-						Name: "Charlie",
-						Settings: map[string]string{
-							"theme":         "auto",
-							"lang":          "fr",
-							"notifications": "off",
-						},
-					},
-					{
-						Name: "Alice",
-						Settings: map[string]string{
-							"theme": "light",
-							"lang":  "en",
-						},
-					},
-				}
-				ctx.Set("people", people)
-				return ctx
-			},
-			description: "Slice of structs with map fields should maintain stable order",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			template, err := Compile(tc.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			var results []string
-			for i := 0; i < iterations; i++ {
-				ctx := tc.setupFunc()
-				result, err := template.Render(map[string]interface{}(ctx))
-				if err != nil {
-					t.Fatalf("Iteration %d failed: %v", i, err)
-				}
-				results = append(results, result)
-			}
-
-			// Check consistency
-			firstResult := results[0]
-			for i := 1; i < iterations; i++ {
-				if results[i] != firstResult {
-					t.Errorf("%s: Inconsistent output detected\n"+
-						"Iteration 0: %q\n"+
-						"Iteration %d: %q",
-						tc.description, firstResult, i, results[i])
-					break
-				}
-			}
-
-			t.Logf("%s - Consistent output length: %d chars", tc.name, len(firstResult))
-		})
-	}
-}
-
-// TestRenderingStabilityErrorCases tests stability in error conditions
-func TestRenderingStabilityErrorCases(t *testing.T) {
-	const iterations = 5
-
-	testCases := []struct {
-		name        string
-		template    string
-		setupFunc   func() Context
-		description string
-		expectError bool
-	}{
-		{
-			name:        "Missing variable in map iteration",
-			template:    `{% for item in missing_var %}{{ item }},{% endfor %}`,
-			setupFunc:   NewContext,
-			description: "Missing variable should produce consistent error behavior",
-			expectError: true,
-		},
-		{
-			name:     "Type mismatch for iteration",
-			template: `{% for item in not_iterable %}{{ item }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("not_iterable", "this is a string, not iterable as expected")
-				return ctx
-			},
-			description: "Type mismatch should produce consistent behavior",
-			expectError: false, // String iteration is actually supported
-		},
-		{
-			name:     "Accessing non-existent nested properties",
-			template: `{% for key, item in data %}{{ item.nonexistent.property }},{% endfor %}`,
-			setupFunc: func() Context {
-				ctx := NewContext()
-				ctx.Set("data", map[string]interface{}{
-					"item1": map[string]string{"name": "value1"},
-					"item2": map[string]string{"name": "value2"},
-				})
-				return ctx
-			},
-			description: "Non-existent nested properties should render consistently",
-			expectError: false, // Should render empty strings consistently
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			template, err := Compile(tc.template)
-			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
-			}
-
-			var results []string
-			var errors []error
-
-			for i := 0; i < iterations; i++ {
-				ctx := tc.setupFunc()
-				result, err := template.Render(map[string]interface{}(ctx))
-				results = append(results, result)
-				errors = append(errors, err)
-			}
-
-			// Check error consistency
-			firstError := errors[0]
-			for i := 1; i < iterations; i++ {
-				if (firstError == nil) != (errors[i] == nil) {
-					t.Errorf("%s: Inconsistent error behavior\n"+
-						"Iteration 0 error: %v\n"+
-						"Iteration %d error: %v",
-						tc.description, firstError, i, errors[i])
-					return
-				}
-			}
-
-			// Check result consistency (even with errors, partial results should be consistent)
-			firstResult := results[0]
-			for i := 1; i < iterations; i++ {
-				if results[i] != firstResult {
-					t.Errorf("%s: Inconsistent output detected\n"+
-						"Iteration 0: %q\n"+
-						"Iteration %d: %q",
-						tc.description, firstResult, i, results[i])
-					break
-				}
-			}
-
-			if firstError != nil {
-				t.Logf("%s - Consistent error: %v", tc.name, firstError)
-			} else {
-				t.Logf("%s - Consistent output: %q", tc.name, firstResult)
-			}
 		})
 	}
 }
