@@ -31,8 +31,7 @@ func atLeastFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: atLeast filter requires one argument", ErrInsufficientArgs)
 	}
-	minValue := args[0]
-	return filter.AtLeast(value, minValue)
+	return filter.AtLeast(value, args[0])
 }
 
 // atMostFilter ensures the number is no larger than the maximum value provided.
@@ -40,8 +39,7 @@ func atMostFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: atMost filter requires one argument", ErrInsufficientArgs)
 	}
-	maxValue := args[0]
-	return filter.AtMost(value, maxValue)
+	return filter.AtMost(value, args[0])
 }
 
 // roundFilter rounds the input to the specified number of decimal places.
@@ -49,8 +47,7 @@ func roundFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: round filter requires one argument for precision", ErrInsufficientArgs)
 	}
-	precision := args[0]
-	return filter.Round(value, precision)
+	return filter.Round(value, args[0])
 }
 
 // floorFilter rounds the input down to the nearest whole number.
@@ -68,8 +65,7 @@ func plusFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: plus filter requires one argument", ErrInsufficientArgs)
 	}
-	addend := args[0]
-	return filter.Plus(value, addend)
+	return filter.Plus(value, args[0])
 }
 
 // minusFilter subtracts the second value from the first.
@@ -77,8 +73,7 @@ func minusFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: minus filter requires one argument", ErrInsufficientArgs)
 	}
-	subtrahend := args[0]
-	return filter.Minus(value, subtrahend)
+	return filter.Minus(value, args[0])
 }
 
 // timesFilter multiplies the first value by the second.
@@ -86,8 +81,7 @@ func timesFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: times filter requires one argument", ErrInsufficientArgs)
 	}
-	multiplier := args[0]
-	return filter.Times(value, multiplier)
+	return filter.Times(value, args[0])
 }
 
 // divideFilter divides the first value by the second.
@@ -95,8 +89,7 @@ func divideFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: divide filter requires one argument", ErrInsufficientArgs)
 	}
-	divisor := args[0]
-	return filter.Divide(value, divisor)
+	return filter.Divide(value, args[0])
 }
 
 // moduloFilter returns the remainder of the division of the first value by the second.
@@ -104,6 +97,5 @@ func moduloFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: modulo filter requires one argument", ErrInsufficientArgs)
 	}
-	modulus := args[0]
-	return filter.Modulo(value, modulus)
+	return filter.Modulo(value, args[0])
 }

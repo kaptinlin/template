@@ -10,23 +10,32 @@ import (
 )
 
 // Context stores template variables as a string-keyed map.
-// Values can be of any type. Dot-notation (e.g., "user.name") is supported for nested access.
+// Values can be of any type. Dot-notation (e.g., "user.name") is
+// supported for nested access.
 type Context map[string]any
 
-// ContextBuilder provides a fluent API for building Context with error collection.
+// ContextBuilder provides a fluent API for building a [Context] with
+// error collection.
 type ContextBuilder struct {
 	context Context
 	errors  []error
 }
 
-// NewContext creates and returns a new empty Context instance.
-// Example usage: ctx := NewContext()
+// ExecutionContext holds the execution state for template rendering,
+// separating user-provided variables (Public) from internal variables
+// (Private).
+type ExecutionContext struct {
+	Public  Context // user-provided variables
+	Private Context // internal variables (e.g., loop counters)
+}
+
+// NewContext creates and returns a new empty [Context].
 func NewContext() Context {
 	return make(Context)
 }
 
-// NewContextBuilder creates a new ContextBuilder for fluent Context construction.
-// Example usage:
+// NewContextBuilder creates a new [ContextBuilder] for fluent [Context]
+// construction.
 //
 //	ctx, err := NewContextBuilder().
 //	    KeyValue("name", "John").
@@ -39,22 +48,21 @@ func NewContextBuilder() *ContextBuilder {
 }
 
 // Set inserts a value into the Context with the specified key.
-// Dot-notation (e.g., "user.address.city") creates nested map structures.
-// Top-level keys preserve original data types; nested keys use map[string]any.
-// Empty keys are silently ignored.
+// Dot-notation (e.g., "user.address.city") creates nested map
+// structures. Top-level keys preserve original data types; nested keys
+// use map[string]any. Empty keys are silently ignored.
 func (c Context) Set(key string, value any) {
 	if key == "" {
 		return
 	}
 
 	parts := splitDotPath(key)
-
 	if len(parts) == 1 {
 		c[key] = value
 		return
 	}
 
-	// For nested keys, build intermediate map[string]any nodes.
+	// Build intermediate map[string]any nodes for nested keys.
 	current := c
 	last := len(parts) - 1
 	for _, part := range parts[:last] {
@@ -69,19 +77,18 @@ func (c Context) Set(key string, value any) {
 	current[parts[last]] = value
 }
 
-// Get retrieves a value from the Context by key.
-// Dot-separated keys (e.g., "user.profile.name") navigate nested structures.
-// Array indices are supported (e.g., "items.0").
+// Get retrieves a value from the Context by key. Dot-separated keys
+// (e.g., "user.profile.name") navigate nested structures. Array indices
+// are supported (e.g., "items.0").
 //
-// Returns ErrContextKeyNotFound, ErrContextIndexOutOfRange, or ErrContextInvalidKeyType
-// on failure.
+// Get returns [ErrContextKeyNotFound], [ErrContextIndexOutOfRange], or
+// [ErrContextInvalidKeyType] on failure.
 func (c Context) Get(key string) (any, error) {
 	if key == "" {
 		return map[string]any(c), nil
 	}
 
 	parts := splitDotPath(key)
-
 	for _, part := range parts {
 		if part == "" {
 			return nil, fmt.Errorf("%w: empty path component in '%s'", ErrContextInvalidKeyType, key)
@@ -90,33 +97,39 @@ func (c Context) Get(key string) (any, error) {
 
 	value, err := jsonpointer.Get(c, parts...)
 	if err != nil {
-		switch {
-		case errors.Is(err, jsonpointer.ErrNotFound),
-			errors.Is(err, jsonpointer.ErrKeyNotFound),
-			errors.Is(err, jsonpointer.ErrFieldNotFound):
-			return nil, fmt.Errorf("%w: '%s'", ErrContextKeyNotFound, key)
-		case errors.Is(err, jsonpointer.ErrIndexOutOfBounds),
-			errors.Is(err, jsonpointer.ErrInvalidIndex):
-			return nil, fmt.Errorf("%w: '%s'", ErrContextIndexOutOfRange, key)
-		case errors.Is(err, jsonpointer.ErrInvalidPath),
-			errors.Is(err, jsonpointer.ErrInvalidPathStep):
-			return nil, fmt.Errorf("%w: '%s'", ErrContextInvalidKeyType, key)
-		}
-		return nil, fmt.Errorf("accessing '%s': %w", key, err)
+		return nil, classifyGetError(err, key)
 	}
 	return value, nil
 }
 
-// splitDotPath splits a dot-notation string into path components.
-func splitDotPath(dotNotation string) []string {
-	if dotNotation == "" {
-		return []string{}
+// classifyGetError maps jsonpointer errors to context-level sentinel
+// errors.
+func classifyGetError(err error, key string) error {
+	switch {
+	case errors.Is(err, jsonpointer.ErrNotFound),
+		errors.Is(err, jsonpointer.ErrKeyNotFound),
+		errors.Is(err, jsonpointer.ErrFieldNotFound):
+		return fmt.Errorf("%w: '%s'", ErrContextKeyNotFound, key)
+	case errors.Is(err, jsonpointer.ErrIndexOutOfBounds),
+		errors.Is(err, jsonpointer.ErrInvalidIndex):
+		return fmt.Errorf("%w: '%s'", ErrContextIndexOutOfRange, key)
+	case errors.Is(err, jsonpointer.ErrInvalidPath),
+		errors.Is(err, jsonpointer.ErrInvalidPathStep):
+		return fmt.Errorf("%w: '%s'", ErrContextInvalidKeyType, key)
+	default:
+		return fmt.Errorf("accessing '%s': %w", key, err)
 	}
-	return strings.Split(dotNotation, ".")
 }
 
-// KeyValue sets a key-value pair and returns the ContextBuilder to support method chaining.
-// Example:
+// splitDotPath splits a dot-notation string into path components.
+func splitDotPath(path string) []string {
+	if path == "" {
+		return nil
+	}
+	return strings.Split(path, ".")
+}
+
+// KeyValue sets a key-value pair and returns the builder for chaining.
 //
 //	builder := NewContextBuilder().
 //	    KeyValue("name", "John").
@@ -126,11 +139,11 @@ func (cb *ContextBuilder) KeyValue(key string, value any) *ContextBuilder {
 	return cb
 }
 
-// Struct expands struct fields into the Context using JSON serialization.
-// Fields are flattened to top-level keys based on their json tags.
-// Nested structs are preserved as nested maps accessible via dot notation.
-//
-// If serialization fails, the error is collected and returned by Build.
+// Struct expands struct fields into the Context using JSON
+// serialization. Fields are flattened to top-level keys based on their
+// json tags. Nested structs are preserved as nested maps accessible via
+// dot notation. If serialization fails, the error is collected and
+// returned by [ContextBuilder.Build].
 func (cb *ContextBuilder) Struct(v any) *ContextBuilder {
 	jsonData, err := json.Marshal(v)
 	if err != nil {
@@ -151,7 +164,8 @@ func (cb *ContextBuilder) Struct(v any) *ContextBuilder {
 }
 
 // Build returns the constructed Context and any collected errors.
-// Errors from KeyValue or Struct operations are joined into a single error.
+// Errors from [ContextBuilder.KeyValue] or [ContextBuilder.Struct]
+// operations are joined into a single error.
 func (cb *ContextBuilder) Build() (Context, error) {
 	if len(cb.errors) > 0 {
 		return cb.context, errors.Join(cb.errors...)
@@ -159,14 +173,7 @@ func (cb *ContextBuilder) Build() (Context, error) {
 	return cb.context, nil
 }
 
-// ExecutionContext holds the execution state for template rendering,
-// separating user-provided variables (Public) from internal variables (Private).
-type ExecutionContext struct {
-	Public  Context // user-provided variables
-	Private Context // internal variables (e.g., loop counters)
-}
-
-// NewExecutionContext creates a new execution context from user data.
+// NewExecutionContext creates a new [ExecutionContext] from user data.
 func NewExecutionContext(data map[string]any) *ExecutionContext {
 	return &ExecutionContext{
 		Public:  Context(data),
@@ -185,13 +192,14 @@ func (ec *ExecutionContext) Get(name string) (any, bool) {
 	return nil, false
 }
 
-// Set sets a variable in the private context.
+// Set stores a variable in the private context.
 func (ec *ExecutionContext) Set(name string, value any) {
 	ec.Private.Set(name, value)
 }
 
-// NewChildContext creates a child execution context that shares the parent's
-// Public context but copies the Private context for isolated scope.
+// NewChildContext creates a child [ExecutionContext] that shares the
+// parent's Public context but copies the Private context for isolated
+// scope.
 func NewChildContext(parent *ExecutionContext) *ExecutionContext {
 	private := make(Context, len(parent.Private))
 	for k, v := range parent.Private {

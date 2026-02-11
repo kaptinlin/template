@@ -2,7 +2,7 @@ package template
 
 import (
 	"errors"
-	"reflect"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -66,8 +66,13 @@ func TestNewExprParser(t *testing.T) {
 			if parser == nil {
 				t.Fatalf("NewExprParser(%v) = nil, want non-nil", tt.tokens)
 			}
-			if got, want := parser.tokens, tt.tokens; !reflect.DeepEqual(got, want) {
-				t.Errorf("NewExprParser(%v).tokens = %v, want %v", tt.tokens, got, want)
+			if got, want := len(parser.tokens), len(tt.tokens); got != want {
+				t.Errorf("NewExprParser(%v) token count = %v, want %v", tt.tokens, got, want)
+			}
+			for i, tok := range parser.tokens {
+				if tok != tt.tokens[i] {
+					t.Errorf("NewExprParser(%v).tokens[%d] = %v, want %v", tt.tokens, i, tok, tt.tokens[i])
+				}
 			}
 			if got, want := parser.pos, 0; got != want {
 				t.Errorf("NewExprParser(%v).pos = %v, want %v", tt.tokens, got, want)
@@ -1285,8 +1290,8 @@ func TestExpressionNodeTypes(t *testing.T) {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
 			}
 
-			// Check type using reflection
-			typeName := reflect.TypeOf(result).String()
+			// Check type using fmt.Sprintf
+			typeName := fmt.Sprintf("%T", result)
 			if got, want := typeName, tt.expectedType; got != want {
 				t.Errorf("ParseExpression(%q) type = %v, want %v", tt.expr, got, want)
 			}

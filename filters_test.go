@@ -14,6 +14,8 @@ func noopFilter(value any, _ ...string) (any, error) {
 // --- Registry type tests ---
 
 func TestRegistryRegisterAndFilter(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		setup     func(r *Registry)
@@ -57,6 +59,8 @@ func TestRegistryRegisterAndFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			r := NewRegistry()
 			tt.setup(r)
 			r.Register(tt.register, noopFilter)
@@ -73,6 +77,8 @@ func TestRegistryRegisterAndFilter(t *testing.T) {
 }
 
 func TestRegistryRegisterNilPanics(t *testing.T) {
+	t.Parallel()
+
 	r := NewRegistry()
 
 	defer func() {
@@ -85,6 +91,8 @@ func TestRegistryRegisterNilPanics(t *testing.T) {
 }
 
 func TestRegistryList(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name  string
 		setup func(r *Registry)
@@ -124,6 +132,8 @@ func TestRegistryList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			r := NewRegistry()
 			tt.setup(r)
 
@@ -136,6 +146,8 @@ func TestRegistryList(t *testing.T) {
 }
 
 func TestRegistryHas(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		setup  func(r *Registry)
@@ -174,6 +186,8 @@ func TestRegistryHas(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			r := NewRegistry()
 			tt.setup(r)
 
@@ -185,6 +199,8 @@ func TestRegistryHas(t *testing.T) {
 }
 
 func TestRegistryUnregister(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		setup      func(r *Registry)
@@ -224,6 +240,8 @@ func TestRegistryUnregister(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			r := NewRegistry()
 			tt.setup(r)
 			r.Unregister(tt.unregister)
@@ -323,6 +341,8 @@ func TestUnregisterFilter(t *testing.T) {
 }
 
 func TestBuiltinFiltersRegistered(t *testing.T) {
+	t.Parallel()
+
 	builtins := []string{
 		"upper", "lower", "capitalize", "length",
 		"default", "trim", "join", "first", "last",
@@ -335,6 +355,8 @@ func TestBuiltinFiltersRegistered(t *testing.T) {
 
 	for _, name := range builtins {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			if _, ok := GetFilter(name); !ok {
 				t.Errorf("GetFilter(%q) = _, false, want true", name)
 			}

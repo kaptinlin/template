@@ -1,7 +1,6 @@
 package template
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,6 +61,6 @@ func TestNumberFilterErrors(t *testing.T) {
 	t.Run("NumberMissingFormat", func(t *testing.T) {
 		_, err := numberFilter(1234)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 }

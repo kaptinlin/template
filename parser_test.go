@@ -555,6 +555,17 @@ func TestParserHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("peek_valid_offset", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenText, Value: "a"},
+			{Type: TokenText, Value: "b"},
+		}
+		p := NewParser(tokens)
+		if got := p.peek(1); got == nil || got.Value != "b" {
+			t.Errorf("peek(1) = %v, want token with value %q", got, "b")
+		}
+	})
+
 	t.Run("remaining", func(t *testing.T) {
 		tokens := []*Token{
 			{Type: TokenText, Value: "a"},
@@ -571,6 +582,24 @@ func TestParserHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("advance_past_end", func(t *testing.T) {
+		p := NewParser([]*Token{{Type: TokenText, Value: "a"}})
+		p.Advance()
+		p.Advance() // Should not panic.
+		p.Advance() // Should not panic.
+		if got, want := p.Remaining(), 0; got != want {
+			t.Errorf("Remaining() after over-advance = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("current_past_end", func(t *testing.T) {
+		p := NewParser([]*Token{{Type: TokenText, Value: "a"}})
+		p.Advance()
+		if got := p.Current(); got != nil {
+			t.Errorf("Current() past end = %v, want nil", got)
+		}
+	})
+
 	t.Run("match_success", func(t *testing.T) {
 		p := NewParser([]*Token{
 			{Type: TokenSymbol, Value: ","},
@@ -584,7 +613,7 @@ func TestParserHelpers(t *testing.T) {
 		}
 	})
 
-	t.Run("match_failure", func(t *testing.T) {
+	t.Run("match_failure_wrong_value", func(t *testing.T) {
 		p := NewParser([]*Token{
 			{Type: TokenSymbol, Value: "."},
 		})
@@ -593,11 +622,37 @@ func TestParserHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("match_failure_wrong_type", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenIdentifier, Value: ","},
+		})
+		if tok := p.Match(TokenSymbol, ","); tok != nil {
+			t.Errorf("Match wrong type = %v, want nil", tok)
+		}
+	})
+
+	t.Run("match_nil_token", func(t *testing.T) {
+		p := NewParser(nil)
+		if tok := p.Match(TokenSymbol, ","); tok != nil {
+			t.Errorf("Match on empty parser = %v, want nil", tok)
+		}
+	})
+
 	t.Run("collectUntil_empty", func(t *testing.T) {
 		p := NewParser(nil)
 		got := p.collectUntil(TokenTagEnd)
 		if got != nil {
 			t.Errorf("collectUntil on empty parser = %v, want nil", got)
+		}
+	})
+
+	t.Run("collectUntil_immediate_match", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenTagEnd, Value: "%}"},
+		})
+		got := p.collectUntil(TokenTagEnd)
+		if got != nil {
+			t.Errorf("collectUntil immediate match = %v, want nil", got)
 		}
 	})
 }
@@ -616,5 +671,224 @@ func TestNewParseError(t *testing.T) {
 	}
 	if pe.Col != 10 {
 		t.Errorf("ParseError.Col = %d, want %d", pe.Col, 10)
+	}
+}
+
+// =============================================================================
+// Test Group 9: ExpectIdentifier
+// =============================================================================
+
+func TestParserExpectIdentifier(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenIdentifier, Value: "foo", Line: 1, Col: 1},
+		})
+		tok, err := p.ExpectIdentifier()
+		if err != nil {
+			t.Fatalf("ExpectIdentifier() returned unexpected error: %v", err)
+		}
+		if tok.Value != "foo" {
+			t.Errorf("ExpectIdentifier() value = %q, want %q", tok.Value, "foo")
+		}
+	})
+
+	t.Run("wrong_type", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenNumber, Value: "42", Line: 1, Col: 1},
+		})
+		_, err := p.ExpectIdentifier()
+		if err == nil {
+			t.Fatal("ExpectIdentifier() = nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "expected") {
+			t.Errorf("error = %q, want it to contain %q", err.Error(), "expected")
+		}
+	})
+
+	t.Run("empty_parser", func(t *testing.T) {
+		p := NewParser(nil)
+		_, err := p.ExpectIdentifier()
+		if err == nil {
+			t.Fatal("ExpectIdentifier() on empty = nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "unexpected end of input") {
+			t.Errorf("error = %q, want it to contain %q", err.Error(), "unexpected end of input")
+		}
+	})
+}
+
+// =============================================================================
+// Test Group 10: Error and Errorf helpers
+// =============================================================================
+
+func TestParserErrorHelpers(t *testing.T) {
+	t.Run("error_with_token", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenText, Value: "x", Line: 3, Col: 7},
+		})
+		err := p.Error("something wrong")
+		if !strings.Contains(err.Error(), "line 3") {
+			t.Errorf("Error() = %q, want it to contain position info", err.Error())
+		}
+	})
+
+	t.Run("error_without_token", func(t *testing.T) {
+		p := NewParser(nil)
+		err := p.Error("something wrong")
+		if !strings.Contains(err.Error(), "something wrong") {
+			t.Errorf("Error() = %q, want it to contain message", err.Error())
+		}
+	})
+
+	t.Run("errorf_formatting", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenText, Value: "x", Line: 1, Col: 1},
+		})
+		err := p.Errorf("got %s, want %s", "a", "b")
+		if !strings.Contains(err.Error(), "got a, want b") {
+			t.Errorf("Errorf() = %q, want formatted message", err.Error())
+		}
+	})
+}
+
+// =============================================================================
+// Test Group 11: convertStatementsToNodes
+// =============================================================================
+
+func TestConvertStatementsToNodes(t *testing.T) {
+	t.Run("nil_input", func(t *testing.T) {
+		got := convertStatementsToNodes(nil)
+		if got != nil {
+			t.Errorf("convertStatementsToNodes(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("empty_input", func(t *testing.T) {
+		got := convertStatementsToNodes([]Statement{})
+		if got != nil {
+			t.Errorf("convertStatementsToNodes([]) = %v, want nil", got)
+		}
+	})
+
+	t.Run("with_statements", func(t *testing.T) {
+		stmts := []Statement{
+			&TextNode{Text: "a", Line: 1, Col: 1},
+			&TextNode{Text: "b", Line: 1, Col: 2},
+		}
+		got := convertStatementsToNodes(stmts)
+		if len(got) != 2 {
+			t.Fatalf("convertStatementsToNodes() len = %d, want 2", len(got))
+		}
+		if got[0].String() != `Text("a")` {
+			t.Errorf("node[0] = %s, want Text(\"a\")", got[0])
+		}
+	})
+}
+
+// =============================================================================
+// Test Group 12: isEndTag and endTagName
+// =============================================================================
+
+func TestParserEndTagHelpers(t *testing.T) {
+	t.Run("isEndTag_match", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenTagBegin, Value: "{%"},
+			{Type: TokenIdentifier, Value: "endif"},
+			{Type: TokenTagEnd, Value: "%}"},
+		})
+		if !p.isEndTag("endif", "else") {
+			t.Error("isEndTag(endif, else) = false, want true")
+		}
+	})
+
+	t.Run("isEndTag_no_match", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenTagBegin, Value: "{%"},
+			{Type: TokenIdentifier, Value: "for"},
+			{Type: TokenTagEnd, Value: "%}"},
+		})
+		if p.isEndTag("endif", "else") {
+			t.Error("isEndTag(endif, else) = true, want false")
+		}
+	})
+
+	t.Run("isEndTag_not_tag_begin", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenText, Value: "hello"},
+		})
+		if p.isEndTag("endif") {
+			t.Error("isEndTag on text token = true, want false")
+		}
+	})
+
+	t.Run("isEndTag_no_identifier_after_begin", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenTagBegin, Value: "{%"},
+			{Type: TokenTagEnd, Value: "%}"},
+		})
+		if p.isEndTag("endif") {
+			t.Error("isEndTag with no identifier = true, want false")
+		}
+	})
+
+	t.Run("endTagName_valid", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenTagBegin, Value: "{%"},
+			{Type: TokenIdentifier, Value: "endif"},
+		})
+		if got, want := p.endTagName(), "endif"; got != want {
+			t.Errorf("endTagName() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("endTagName_no_identifier", func(t *testing.T) {
+		p := NewParser([]*Token{
+			{Type: TokenTagBegin, Value: "{%"},
+		})
+		if got := p.endTagName(); got != "" {
+			t.Errorf("endTagName() = %q, want empty", got)
+		}
+	})
+}
+
+// =============================================================================
+// Test Group 13: parseNext with unexpected token types
+// =============================================================================
+
+func TestParserUnexpectedToken(t *testing.T) {
+	tokens := []*Token{
+		{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1},
+		{Type: TokenEOF, Line: 1, Col: 3},
+	}
+	p := NewParser(tokens)
+	_, err := p.Parse()
+	if err == nil {
+		t.Fatal("Parse with unexpected token = nil error, want error")
+	}
+	if !strings.Contains(err.Error(), "unexpected token") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "unexpected token")
+	}
+}
+
+// =============================================================================
+// Test Group 14: ParseExpression on Parser
+// =============================================================================
+
+func TestParserParseExpression(t *testing.T) {
+	tokens := []*Token{
+		{Type: TokenIdentifier, Value: "x", Line: 1, Col: 1},
+		{Type: TokenEOF, Line: 1, Col: 2},
+	}
+	p := NewParser(tokens)
+	expr, err := p.ParseExpression()
+	if err != nil {
+		t.Fatalf("ParseExpression() returned unexpected error: %v", err)
+	}
+	v, ok := expr.(*VariableNode)
+	if !ok {
+		t.Fatalf("ParseExpression() = %T, want *VariableNode", expr)
+	}
+	if v.Name != "x" {
+		t.Errorf("variable name = %q, want %q", v.Name, "x")
 	}
 }

@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 )
@@ -28,50 +29,48 @@ func NewRegistry() *Registry {
 // Register panics if fn is nil.
 func (r *Registry) Register(name string, fn FilterFunc) {
 	if fn == nil {
-		panic(fmt.Sprintf("template: Register filter %q with nil function", name))
+		panic(fmt.Sprintf("template: nil filter function for %q", name))
 	}
 
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.filters[name] = fn
-	r.mu.Unlock()
 }
 
 // Filter returns the filter registered under name and a boolean
 // indicating whether it was found.
 func (r *Registry) Filter(name string) (FilterFunc, bool) {
 	r.mu.RLock()
+	defer r.mu.RUnlock()
 	fn, ok := r.filters[name]
-	r.mu.RUnlock()
 	return fn, ok
 }
 
 // Has reports whether a filter with the given name is registered.
 func (r *Registry) Has(name string) bool {
 	r.mu.RLock()
+	defer r.mu.RUnlock()
 	_, ok := r.filters[name]
-	r.mu.RUnlock()
 	return ok
 }
 
 // List returns the names of all registered filters in sorted order.
 func (r *Registry) List() []string {
 	r.mu.RLock()
-	names := make([]string, 0, len(r.filters))
-	for name := range r.filters {
-		names = append(names, name)
-	}
-	r.mu.RUnlock()
+	defer r.mu.RUnlock()
 
-	slices.Sort(names)
-	return names
+	if len(r.filters) == 0 {
+		return []string{}
+	}
+	return slices.Sorted(maps.Keys(r.filters))
 }
 
 // Unregister removes the filter registered under name.
 // It is a no-op if no such filter exists.
 func (r *Registry) Unregister(name string) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	delete(r.filters, name)
-	r.mu.Unlock()
 }
 
 // defaultRegistry is the package-level registry used by the convenience

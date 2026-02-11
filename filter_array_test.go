@@ -1,7 +1,6 @@
 package template
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -121,12 +120,12 @@ func TestArrayFilterErrors(t *testing.T) {
 	t.Run("JoinMissingSeparator", func(t *testing.T) {
 		_, err := joinFilter([]string{"a", "b"})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("MapMissingKey", func(t *testing.T) {
 		_, err := mapFilter([]map[string]any{{"name": "John"}})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 }

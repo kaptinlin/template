@@ -1,8 +1,6 @@
 package template
 
-import (
-	"github.com/kaptinlin/filter"
-)
+import "github.com/kaptinlin/filter"
 
 // registerDateFilters registers all date-related filters.
 func registerDateFilters() {
@@ -19,8 +17,9 @@ func registerDateFilters() {
 }
 
 // dateFilter formats a timestamp into a specified format using PHP-style format strings.
+// An empty format string uses the default "2006-01-02 15:04:05" layout.
 func dateFilter(value any, args ...string) (any, error) {
-	format := ""
+	var format string
 	if len(args) > 0 {
 		format = args[0]
 	}

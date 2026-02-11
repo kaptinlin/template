@@ -43,11 +43,7 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 			if ap.Remaining() > 0 {
 				return nil, ap.Error(ErrUnexpectedTokensAfterCondition.Error())
 			}
-
-			var next []Statement
-			var nextTag string
-			var nextAP *Parser
-			next, nextTag, nextAP, err = doc.ParseUntilWithArgs("elif", "else", "endif")
+			next, nextTag, nextAP, err := doc.ParseUntilWithArgs("elif", "else", "endif")
 			if err != nil {
 				return nil, err
 			}
@@ -66,11 +62,7 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 			if ap.Remaining() > 0 {
 				return nil, ap.Error(ErrElseNoArgs.Error())
 			}
-
-			var stmts []Statement
-			var nextTag string
-			var nextAP *Parser
-			stmts, nextTag, nextAP, err = doc.ParseUntilWithArgs("endif")
+			stmts, nextTag, nextAP, err := doc.ParseUntilWithArgs("endif")
 			if err != nil {
 				return nil, err
 			}

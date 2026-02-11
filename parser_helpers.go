@@ -154,12 +154,14 @@ func convertStatementsToNodes(stmts []Statement) []Node {
 	if len(stmts) == 0 {
 		return nil
 	}
+
 	nodes := make([]Node, 0, len(stmts))
 	for _, s := range stmts {
 		if s != nil {
 			nodes = append(nodes, s)
 		}
 	}
+
 	if len(nodes) == 0 {
 		return nil
 	}

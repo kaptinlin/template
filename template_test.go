@@ -374,9 +374,8 @@ func TestIfConditions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
 			}
@@ -461,11 +460,10 @@ Total Products: 3`,
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -581,7 +579,7 @@ Featured Products:
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
@@ -759,9 +757,8 @@ Special Offers:
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
 				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
 					len(tt.expected), len(result), tt.expected, result)
@@ -770,7 +767,7 @@ Special Offers:
 	}
 }
 
-// TestDepartmentInterface tests interface implementation in template context
+// Department is a test interface for template context.
 type Department interface {
 	GetName() string
 }
@@ -1003,7 +1000,7 @@ Lower city: shanghai`,
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
@@ -1030,7 +1027,7 @@ func TestComplexNestedVariableAccess(t *testing.T) {
 
 	tmpl, err := Compile(sourceTemplate)
 	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
+		t.Fatalf("compiling template: %v", err)
 	}
 
 	// Create context and set complex nested data
@@ -1127,9 +1124,8 @@ func TestComplexNestedVariableAccess(t *testing.T) {
 	// Execute template
 	output, err := tmpl.Render(ctx)
 	if err != nil {
-		t.Fatalf("Failed to execute template: %v", err)
+		t.Fatalf("rendering template: %v", err)
 	}
-
 	// Verify output contains all expected values
 	expectedValues := []string{
 		"SimpleMap", "ArrayMap", "NestedMap", "StringSliceMap", "NestedSliceMap",
@@ -1170,7 +1166,7 @@ func TestComplexNestedConditions(t *testing.T) {
 
 	tmpl, err := Compile(sourceTemplate)
 	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
+		t.Fatalf("compiling template: %v", err)
 	}
 
 	// Create context and set complex nested data
@@ -1270,9 +1266,8 @@ func TestComplexNestedConditions(t *testing.T) {
 	// Execute template
 	output, err := tmpl.Render(ctx)
 	if err != nil {
-		t.Fatalf("Failed to execute template: %v", err)
+		t.Fatalf("rendering template: %v", err)
 	}
-
 	// Verify output contains all expected values
 	expectedValues := []string{
 		"Hello, [UserProfile,PersonalInfo]!", "Hello, [AccountInfo,SecurityInfo]!", "Hello, StudentInfo2!",
@@ -1344,7 +1339,7 @@ func TestComplexNestedConditions(t *testing.T) {
 
 // 	tmpl, err := Compile(sourceTemplate)
 // 	if err != nil {
-// 		t.Fatalf("Failed to parse template: %v", err)
+// 		t.Fatalf("compiling template: %v", err)
 // 	}
 
 // 	// Create context and set complex nested data
@@ -1433,7 +1428,7 @@ func TestComplexNestedConditions(t *testing.T) {
 // 	// Execute template
 // 	output, err := tmpl.Render(ctx)
 // 	if err != nil {
-// 		t.Fatalf("Failed to execute template: %v", err)
+// 		t.Fatalf("rendering template: %v", err)
 // 	}
 
 // 	// Check results of various loop and access patterns
@@ -1722,7 +1717,7 @@ Department SliceMap: [[{"key1":"nestedvalue1","key2":"nestedvalue2"},{"key1":"ne
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			// For tests with JSON output, check key content rather than exact string match
 			// due to map key ordering variations in go-json-experiment
@@ -1875,7 +1870,7 @@ Time exists: ` + now.Format(time.RFC3339),
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
@@ -2075,7 +2070,7 @@ key2: value2`,
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
@@ -2222,10 +2217,10 @@ Empty field: Not set`,
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -2418,10 +2413,10 @@ Sufficient scores: has 2 scores
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -2637,7 +2632,7 @@ Member: Carol Brown
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if tt.useContainsChecking {
 				// Use contains checking to handle map iteration order uncertainty
@@ -2653,7 +2648,7 @@ Member: Carol Brown
 				}
 			} else if result != tt.exactMatch {
 				// Exact match
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.exactMatch, result)
+				t.Errorf("got %q, want %q", result, tt.exactMatch)
 			}
 		})
 	}
@@ -3597,7 +3592,7 @@ Team:
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 
 			if tt.useContains {
@@ -3614,7 +3609,7 @@ Team:
 				}
 			} else if strings.TrimSpace(result) != strings.TrimSpace(tt.expected) {
 				// Exact match
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4122,10 +4117,10 @@ Carol Pointer:
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Template execution failed: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4186,11 +4181,10 @@ func TestBasicBreakContinue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("got %q, want %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4233,11 +4227,10 @@ func TestNestedBreakContinue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("got %q, want %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4364,11 +4357,10 @@ func TestAdvancedBreakContinue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("got %q, want %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4405,11 +4397,10 @@ func TestDeepNestedBreakContinue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("got %q, want %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4490,11 +4481,10 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("got %q, want %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4549,11 +4539,10 @@ func TestBreakContinueEdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("got %q, want %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -4657,7 +4646,7 @@ func TestElifBasic(t *testing.T) {
 			ctx := Context(tt.context)
 			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
@@ -4766,7 +4755,7 @@ func TestElifNested(t *testing.T) {
 			ctx := Context(tt.context)
 			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
@@ -4892,7 +4881,7 @@ func TestElifComplexExpressions(t *testing.T) {
 			ctx := Context(tt.context)
 			result, err := Render(tt.tmpl, ctx)
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
@@ -5373,7 +5362,7 @@ Category: Electronics
 			}
 
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
@@ -6027,7 +6016,7 @@ req = req.JSONBody(r.Body)
 			}
 
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
@@ -6105,10 +6094,10 @@ Outer[1]:
 			}
 
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -6157,16 +6146,15 @@ func TestLoopContext(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpl, err := Compile(tt.tmpl)
 			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
+				t.Fatalf("compiling template: %v", err)
 			}
 
 			result, err := tmpl.Render(tt.ctx)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %s\ngot:  %s", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -6207,12 +6195,12 @@ Outer loop 1 (first: false, last: true):
 
 	compiled, err := Compile(tmpl)
 	if err != nil {
-		t.Fatalf("Failed to parse template: %v", err)
+		t.Fatalf("compiling template: %v", err)
 	}
 
 	result, err := compiled.Render(ctx)
 	if err != nil {
-		t.Fatalf("Failed to execute template: %v", err)
+		t.Fatalf("rendering template: %v", err)
 	}
 
 	if result != expected {
@@ -6424,16 +6412,15 @@ ROW[1]:FOOTER (rev:0)
 		t.Run(tt.name, func(t *testing.T) {
 			tmpl, err := Compile(tt.tmpl)
 			if err != nil {
-				t.Fatalf("Failed to parse template: %v", err)
+				t.Fatalf("compiling template: %v", err)
 			}
 
 			result, err := tmpl.Render(tt.ctx)
 			if err != nil {
-				t.Fatalf("Failed to execute template: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %q\ngot:  %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -6510,11 +6497,10 @@ func TestLoopContextFullFeatures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Render(tt.tmpl, tt.context)
 			if err != nil {
-				t.Fatalf("Render error: %v", err)
+				t.Fatalf("rendering template: %v", err)
 			}
-
 			if result != tt.expected {
-				t.Errorf("output mismatch:\nwant: %q\ngot:  %q", tt.expected, result)
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}

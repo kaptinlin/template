@@ -79,24 +79,32 @@ func UnregisterTag(name string) {
 	delete(tagRegistry, name)
 }
 
-// ========================================
-// Built-in Tag Registration
-// ========================================
+// Built-in tag registration.
 
-// init automatically registers all built-in tags when the package is imported.
-// The tag parser functions are implemented in tag_*.go files.
+// builtinTag pairs a tag name with its parser for deterministic registration.
+type builtinTag struct {
+	name   string
+	parser TagParser
+}
+
+// builtinTags lists all built-in tags in registration order.
+var builtinTags = []builtinTag{
+	{"if", parseIfTag},
+	{"for", parseForTag},
+	{"break", parseBreakTag},
+	{"continue", parseContinueTag},
+}
+
+// init registers all built-in tags when the package is imported.
+// Tag parsers are implemented in the corresponding tag_*.go files.
+//
+// Note: elif, else, and endif are not registered as independent tags.
+// They are recognized only within if blocks by parseIfTag, which
+// prevents them from appearing outside of if blocks.
 func init() {
-	for name, parser := range map[string]TagParser{
-		"if":       parseIfTag,
-		"for":      parseForTag,
-		"break":    parseBreakTag,
-		"continue": parseContinueTag,
-	} {
-		if err := RegisterTag(name, parser); err != nil {
+	for _, bt := range builtinTags {
+		if err := RegisterTag(bt.name, bt.parser); err != nil {
 			panic(err)
 		}
 	}
-	// Note: elif/else/endif are NOT registered as independent tags
-	// They are only recognized within if blocks by parseIfTag
-	// This ensures they cannot appear outside of if blocks
 }

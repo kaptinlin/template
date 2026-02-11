@@ -17,8 +17,7 @@ func numberFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: number filter requires a format string", ErrInsufficientArgs)
 	}
-	format := args[0]
-	return filter.Number(value, format)
+	return filter.Number(value, args[0])
 }
 
 // bytesFilter converts a numeric value into a human-readable byte format.

@@ -1,7 +1,6 @@
 package template
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,6 +88,6 @@ func TestExtractFilterErrors(t *testing.T) {
 	t.Run("MissingKeyPath", func(t *testing.T) {
 		_, err := extractFilter(map[string]any{"key": "value"})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 }

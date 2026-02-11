@@ -551,3 +551,252 @@ func TestExecuteBody(t *testing.T) {
 		t.Errorf("executeBody() wrote %q, want %q", got, "abc")
 	}
 }
+
+func TestExecuteBodySkipsNonStatements(t *testing.T) {
+	// LiteralNode implements Expression but not Statement.
+	body := []Node{
+		NewTextNode("a", 1, 1),
+		NewLiteralNode("skip", 1, 1),
+		NewTextNode("b", 1, 2),
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := executeBody(body, ctx, &buf); err != nil {
+		t.Fatalf("executeBody() error: %v", err)
+	}
+	if got := buf.String(); got != "ab" {
+		t.Errorf("executeBody() wrote %q, want %q", got, "ab")
+	}
+}
+
+func TestBreakErrorMessage(t *testing.T) {
+	err := &BreakError{}
+	want := ErrBreakOutsideLoop.Error()
+	if got := err.Error(); got != want {
+		t.Errorf("BreakError.Error() = %q, want %q", got, want)
+	}
+}
+
+func TestContinueErrorMessage(t *testing.T) {
+	err := &ContinueError{}
+	want := ErrContinueOutsideLoop.Error()
+	if got := err.Error(); got != want {
+		t.Errorf("ContinueError.Error() = %q, want %q", got, want)
+	}
+}
+
+func TestBinaryOpNodeSubtractTypeError(t *testing.T) {
+	n := NewBinaryOpNode("-",
+		NewLiteralNode("a", 1, 1),
+		NewLiteralNode(1.0, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if !errors.Is(err, ErrCannotSubtractTypes) {
+		t.Errorf("error = %v, want %v", err, ErrCannotSubtractTypes)
+	}
+}
+
+func TestBinaryOpNodeMultiplyTypeError(t *testing.T) {
+	n := NewBinaryOpNode("*",
+		NewLiteralNode("a", 1, 1),
+		NewLiteralNode(1.0, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if !errors.Is(err, ErrCannotMultiplyTypes) {
+		t.Errorf("error = %v, want %v", err, ErrCannotMultiplyTypes)
+	}
+}
+
+func TestBinaryOpNodeDivideTypeError(t *testing.T) {
+	n := NewBinaryOpNode("/",
+		NewLiteralNode("a", 1, 1),
+		NewLiteralNode(1.0, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if !errors.Is(err, ErrCannotDivideTypes) {
+		t.Errorf("error = %v, want %v", err, ErrCannotDivideTypes)
+	}
+}
+
+func TestBinaryOpNodeModuloTypeError(t *testing.T) {
+	n := NewBinaryOpNode("%",
+		NewLiteralNode("a", 1, 1),
+		NewLiteralNode(1, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if !errors.Is(err, ErrCannotModuloTypes) {
+		t.Errorf("error = %v, want %v", err, ErrCannotModuloTypes)
+	}
+}
+
+func TestUnaryOpNodeNegateTypeError(t *testing.T) {
+	n := NewUnaryOpNode("-", NewLiteralNode("text", 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if !errors.Is(err, ErrCannotNegate) {
+		t.Errorf("error = %v, want %v", err, ErrCannotNegate)
+	}
+}
+
+func TestUnaryOpNodePlusTypeError(t *testing.T) {
+	n := NewUnaryOpNode("+", NewLiteralNode("text", 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if !errors.Is(err, ErrCannotApplyUnaryPlus) {
+		t.Errorf("error = %v, want %v", err, ErrCannotApplyUnaryPlus)
+	}
+}
+
+func TestForNodeMapSingleVar(t *testing.T) {
+	n := &ForNode{
+		Vars:       []string{"k"},
+		Collection: NewLiteralNode(map[string]any{"x": 1}, 1, 1),
+		Body: []Node{
+			NewOutputNode(NewVariableNode("k", 1, 1), 1, 1),
+		},
+		Line: 1, Col: 1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if got := buf.String(); got != "x" {
+		t.Errorf("Execute() = %q, want %q", got, "x")
+	}
+}
+
+func TestForNodeBreak(t *testing.T) {
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
+		Body: []Node{
+			NewOutputNode(NewVariableNode("item", 1, 1), 1, 1),
+			&BreakNode{Line: 1, Col: 1},
+		},
+		Line: 1, Col: 1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if got := buf.String(); got != "a" {
+		t.Errorf("Execute() = %q, want %q", got, "a")
+	}
+}
+
+func TestForNodeContinue(t *testing.T) {
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
+		Body: []Node{
+			&ContinueNode{Line: 1, Col: 1},
+			NewOutputNode(NewVariableNode("item", 1, 1), 1, 1),
+		},
+		Line: 1, Col: 1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if got := buf.String(); got != "" {
+		t.Errorf("Execute() = %q, want empty", got)
+	}
+}
+
+func TestPropertyAccessNodeString(t *testing.T) {
+	n := NewPropertyAccessNode(
+		NewVariableNode("user", 1, 1), "Name", 1, 1)
+	want := "PropAccess(Var(user).Name)"
+	if got := n.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+}
+
+func TestSubscriptNodeString(t *testing.T) {
+	n := NewSubscriptNode(
+		NewVariableNode("items", 1, 1),
+		NewLiteralNode(0, 1, 1), 1, 1)
+	want := "Subscript(Var(items)[Literal(0)])"
+	if got := n.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+}
+
+func TestBinaryOpNodeString(t *testing.T) {
+	n := NewBinaryOpNode("+",
+		NewVariableNode("a", 1, 1),
+		NewVariableNode("b", 1, 1), 1, 1)
+	want := "BinOp(Var(a) + Var(b))"
+	if got := n.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+}
+
+func TestUnaryOpNodeString(t *testing.T) {
+	n := NewUnaryOpNode("not",
+		NewVariableNode("x", 1, 1), 1, 1)
+	want := "UnaryOp(not Var(x))"
+	if got := n.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+}
+
+func TestLiteralNodeString(t *testing.T) {
+	n := NewLiteralNode(42, 1, 1)
+	want := "Literal(42)"
+	if got := n.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+}
+
+func TestIfNodeString(t *testing.T) {
+	n := &IfNode{
+		Branches: []IfBranch{
+			{Condition: NewLiteralNode(true, 1, 1)},
+			{Condition: NewLiteralNode(false, 1, 1)},
+		},
+		Line: 1, Col: 1,
+	}
+	want := "If(2 branches)"
+	if got := n.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+}
+
+func TestForNodeLoopContextFields(t *testing.T) {
+	var captured *LoopContext
+	// We'll use a custom approach: iterate and capture loop context.
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
+		Body:       []Node{NewTextNode(".", 1, 1)},
+		Line:       1, Col: 1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	// After the loop, check the last loop context set.
+	if v, ok := ctx.Get("loop"); ok {
+		captured = v.(*LoopContext)
+	}
+	if captured == nil {
+		t.Fatal("loop context not found after execution")
+	}
+	if captured.Length != 3 {
+		t.Errorf("Length = %d, want 3", captured.Length)
+	}
+	if captured.Index != 2 {
+		t.Errorf("Index = %d, want 2", captured.Index)
+	}
+	if captured.Counter != 3 {
+		t.Errorf("Counter = %d, want 3", captured.Counter)
+	}
+	if !captured.Last {
+		t.Error("Last = false, want true")
+	}
+}

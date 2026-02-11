@@ -33,8 +33,7 @@ func joinFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: join filter requires a separator argument", ErrInsufficientArgs)
 	}
-	sep := args[0]
-	return filter.Join(value, sep)
+	return filter.Join(value, args[0])
 }
 
 // firstFilter returns the first element of a slice.
@@ -92,6 +91,5 @@ func mapFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: map filter requires a key argument", ErrInsufficientArgs)
 	}
-	key := args[0]
-	return filter.Map(value, key)
+	return filter.Map(value, args[0])
 }

@@ -716,6 +716,12 @@ func TestForTagExecution(t *testing.T) {
 			data: map[string]any{"outer": []int{1, 2}, "inner": []string{"a", "b"}},
 			want: "1a1b2a2b",
 		},
+		{
+			name: "for loop with index",
+			tmpl: `{% for i, item in items %}{{ i }}:{{ item }};{% endfor %}`,
+			data: map[string]any{"items": []string{"x", "y"}},
+			want: "0:x;1:y;",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1039,180 +1045,6 @@ func TestIntegration_BasicTemplateRendering(t *testing.T) {
 			tmpl: "{{ user.name }}",
 			data: map[string]any{"user": map[string]any{"name": "Charlie"}},
 			want: "Charlie",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
-			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
-			}
-			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestIntegration_IfElseConditions(t *testing.T) {
-	tests := []struct {
-		name string
-		tmpl string
-		data map[string]any
-		want string
-	}{
-		{
-			name: "if true",
-			tmpl: `{% if show %}visible{% endif %}`,
-			data: map[string]any{"show": true},
-			want: "visible",
-		},
-		{
-			name: "if false",
-			tmpl: `{% if show %}visible{% endif %}`,
-			data: map[string]any{"show": false},
-			want: "",
-		},
-		{
-			name: "if-else true branch",
-			tmpl: `{% if flag %}yes{% else %}no{% endif %}`,
-			data: map[string]any{"flag": true},
-			want: "yes",
-		},
-		{
-			name: "if-else false branch",
-			tmpl: `{% if flag %}yes{% else %}no{% endif %}`,
-			data: map[string]any{"flag": false},
-			want: "no",
-		},
-		{
-			name: "if-elif-else first",
-			tmpl: `{% if x %}first{% elif y %}second{% else %}third{% endif %}`,
-			data: map[string]any{"x": true, "y": false},
-			want: "first",
-		},
-		{
-			name: "if-elif-else second",
-			tmpl: `{% if x %}first{% elif y %}second{% else %}third{% endif %}`,
-			data: map[string]any{"x": false, "y": true},
-			want: "second",
-		},
-		{
-			name: "if-elif-else third",
-			tmpl: `{% if x %}first{% elif y %}second{% else %}third{% endif %}`,
-			data: map[string]any{"x": false, "y": false},
-			want: "third",
-		},
-		{
-			name: "nested if",
-			tmpl: `{% if outer %}{% if inner %}both{% endif %}{% endif %}`,
-			data: map[string]any{"outer": true, "inner": true},
-			want: "both",
-		},
-		{
-			name: "if with comparison",
-			tmpl: `{% if count > 5 %}many{% else %}few{% endif %}`,
-			data: map[string]any{"count": 10},
-			want: "many",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
-			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
-			}
-			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestIntegration_ForLoops(t *testing.T) {
-	tests := []struct {
-		name string
-		tmpl string
-		data map[string]any
-		want string
-	}{
-		{
-			name: "simple for loop",
-			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
-			data: map[string]any{"items": []int{1, 2, 3}},
-			want: "123",
-		},
-		{
-			name: "for loop with separator",
-			tmpl: `{% for item in items %}{{ item }},{% endfor %}`,
-			data: map[string]any{"items": []string{"a", "b", "c"}},
-			want: "a,b,c,",
-		},
-		{
-			name: "for loop with index",
-			tmpl: `{% for i, item in items %}{{ i }}:{{ item }};{% endfor %}`,
-			data: map[string]any{"items": []string{"x", "y"}},
-			want: "0:x;1:y;",
-		},
-		{
-			name: "empty for loop",
-			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
-			data: map[string]any{"items": []int{}},
-			want: "",
-		},
-		{
-			name: "nested for loops",
-			tmpl: `{% for i in outer %}{% for j in inner %}{{ i }}{{ j }}{% endfor %}{% endfor %}`,
-			data: map[string]any{"outer": []int{1, 2}, "inner": []string{"a", "b"}},
-			want: "1a1b2a2b",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
-			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
-			}
-			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestIntegration_BreakContinue(t *testing.T) {
-	tests := []struct {
-		name string
-		tmpl string
-		data map[string]any
-		want string
-	}{
-		{
-			name: "break in loop",
-			tmpl: `{% for item in items %}{% if item > 2 %}{% break %}{% endif %}{{ item }}{% endfor %}`,
-			data: map[string]any{"items": []int{1, 2, 3, 4}},
-			want: "12",
-		},
-		{
-			name: "continue in loop",
-			tmpl: `{% for item in items %}{% if item > 1 and item < 4 %}{% continue %}{% endif %}{{ item }}{% endfor %}`,
-			data: map[string]any{"items": []int{1, 2, 3, 4}},
-			want: "14",
-		},
-		{
-			name: "break immediately",
-			tmpl: `{% for item in items %}{% break %}{{ item }}{% endfor %}`,
-			data: map[string]any{"items": []int{1, 2, 3}},
-			want: "",
-		},
-		{
-			name: "continue all iterations",
-			tmpl: `{% for item in items %}{% continue %}{{ item }}{% endfor %}`,
-			data: map[string]any{"items": []int{1, 2, 3}},
-			want: "",
 		},
 	}
 
@@ -1639,14 +1471,24 @@ func TestHasTag(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
-	if !HasTag("if") {
-		t.Error("HasTag(\"if\") = false, want true")
+	tests := []struct {
+		name string
+		tag  string
+		want bool
+	}{
+		{"registered if", "if", true},
+		{"registered for", "for", true},
+		{"registered break", "break", true},
+		{"registered continue", "continue", true},
+		{"nonexistent", "nonexistent", false},
 	}
-	if !HasTag("for") {
-		t.Error("HasTag(\"for\") = false, want true")
-	}
-	if HasTag("nonexistent") {
-		t.Error("HasTag(\"nonexistent\") = true, want false")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasTag(tt.tag); got != tt.want {
+				t.Errorf("HasTag(%q) = %v, want %v", tt.tag, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -1669,13 +1511,21 @@ func TestDuplicateRegistration(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
-	err := RegisterTag("if", parseIfTag)
-	if !errors.Is(err, ErrTagAlreadyRegistered) {
-		t.Errorf("RegisterTag(\"if\") err = %v, want %v", err, ErrTagAlreadyRegistered)
+	tests := []struct {
+		name string
+		tag  string
+		fn   TagParser
+	}{
+		{"duplicate if", "if", parseIfTag},
+		{"duplicate for", "for", parseForTag},
 	}
-	err = RegisterTag("for", parseForTag)
-	if !errors.Is(err, ErrTagAlreadyRegistered) {
-		t.Errorf("RegisterTag(\"for\") err = %v, want %v", err, ErrTagAlreadyRegistered)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := RegisterTag(tt.tag, tt.fn); !errors.Is(err, ErrTagAlreadyRegistered) {
+				t.Errorf("RegisterTag(%q) err = %v, want %v", tt.tag, err, ErrTagAlreadyRegistered)
+			}
+		})
 	}
 }
 

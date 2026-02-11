@@ -10,7 +10,7 @@ import (
 func TestNewContextBuilder(t *testing.T) {
 	got, err := NewContextBuilder().Build()
 	if err != nil {
-		t.Fatalf("Build() = _, %v, want nil error", err)
+		t.Fatalf("Build() unexpected error: %v", err)
 	}
 	if want := (Context{}); !cmp.Equal(got, want) {
 		t.Errorf("Build() = %v, want %v", got, want)
@@ -86,7 +86,7 @@ func TestContextBuilderKeyValue(t *testing.T) {
 			}
 			got, err := b.Build()
 			if err != nil {
-				t.Fatalf("Build() = _, %v, want nil error", err)
+				t.Fatalf("Build() unexpected error: %v", err)
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("Build() mismatch (-want +got):\n%s", diff)
@@ -156,7 +156,7 @@ func TestContextBuilderStruct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewContextBuilder().Struct(tt.input).Build()
 			if err != nil {
-				t.Fatalf("Build() = _, %v, want nil error", err)
+				t.Fatalf("Build() unexpected error: %v", err)
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("Build() mismatch (-want +got):\n%s", diff)
@@ -222,7 +222,7 @@ func TestContextBuilderChaining(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.build().Build()
 			if err != nil {
-				t.Fatalf("Build() = _, %v, want nil error", err)
+				t.Fatalf("Build() unexpected error: %v", err)
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("Build() mismatch (-want +got):\n%s", diff)
@@ -278,10 +278,10 @@ func TestContextBuilderBuildErrorCollection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.build().Build()
 			if tt.wantError && err == nil {
-				t.Error("Build() = _, nil, want error")
+				t.Error("Build() error = nil, want error")
 			}
 			if !tt.wantError && err != nil {
-				t.Errorf("Build() = _, %v, want nil error", err)
+				t.Errorf("Build() unexpected error: %v", err)
 			}
 			if got == nil {
 				t.Error("Build() returned nil context, want non-nil")
@@ -339,7 +339,6 @@ func TestNewChildContext(t *testing.T) {
 			for k, v := range tt.parentPrivate {
 				parent.Set(k, v)
 			}
-
 			child := NewChildContext(parent)
 			for k, v := range tt.childPrivate {
 				child.Set(k, v)
@@ -354,9 +353,9 @@ func TestNewChildContext(t *testing.T) {
 					t.Errorf("child.Get(%q) = %v, want %v", key, got, want)
 				}
 			}
-
 			if !reflect.DeepEqual(map[string]any(parent.Private), tt.wantParentPrivate) {
-				t.Errorf("parent.Private = %v, want %v", parent.Private, tt.wantParentPrivate)
+				t.Errorf("parent.Private = %v, want %v",
+					parent.Private, tt.wantParentPrivate)
 			}
 		})
 	}
@@ -365,7 +364,6 @@ func TestNewChildContext(t *testing.T) {
 func TestNewChildContextSharesPublic(t *testing.T) {
 	parent := NewExecutionContext(map[string]any{"shared": "original"})
 	child := NewChildContext(parent)
-
 	child.Public.Set("shared", "modified")
 
 	got, ok := parent.Get("shared")
@@ -426,10 +424,9 @@ func TestExecutionContextGetPriority(t *testing.T) {
 			for k, v := range tt.private {
 				ec.Set(k, v)
 			}
-
 			got, ok := ec.Get(tt.key)
 			if ok != tt.wantFound {
-				t.Errorf("Get(%q) = _, %v, want _, %v", tt.key, ok, tt.wantFound)
+				t.Errorf("Get(%q) found = %v, want %v", tt.key, ok, tt.wantFound)
 			}
 			if got != tt.wantVal {
 				t.Errorf("Get(%q) = %v, want %v", tt.key, got, tt.wantVal)

@@ -12,8 +12,8 @@ func registerFormatFilters() {
 }
 
 // jsonFilter serializes an input object into its JSON representation.
+// It uses deterministic mode to ensure consistent key ordering.
 func jsonFilter(input any, _ ...string) (any, error) {
-	// Use deterministic mode to ensure consistent key ordering
 	b, err := json.Marshal(input, json.Deterministic(true))
 	if err != nil {
 		return nil, fmt.Errorf("marshal to JSON: %w", err)

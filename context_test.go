@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+// lastYear returns the same date one year earlier.
+func lastYear(t time.Time) time.Time {
+	return t.AddDate(-1, 0, 0)
+}
+
 func TestEmptyContextInitialization(t *testing.T) {
 	ctx := NewContext()
 	if len(ctx) != 0 {
@@ -27,13 +32,25 @@ func TestContextSetAndGet(t *testing.T) {
 		{"integer", "intValue", 28, 28},
 		{"bool true", "boolValueTrue", true, true},
 		{"float", "floatValue", 1.75, 1.75},
-		{"string slice", "sliceOfString", []string{"Go", "Python", "JavaScript"}, []string{"Go", "Python", "JavaScript"}},
+		{
+			"string slice", "sliceOfString",
+			[]string{"Go", "Python", "JavaScript"},
+			[]string{"Go", "Python", "JavaScript"},
+		},
 		{"int slice", "sliceOfInt", []int{1, 2, 3}, []int{1, 2, 3}},
-		{"2d slice", "multiDimSlice", [][]int{{1, 2}, {3, 4}}, [][]int{{1, 2}, {3, 4}}},
+		{
+			"2d slice", "multiDimSlice",
+			[][]int{{1, 2}, {3, 4}},
+			[][]int{{1, 2}, {3, 4}},
+		},
 		{"nil", "nilValue", nil, nil},
 		{"empty string", "emptyStringValue", "", ""},
 		{"zero int", "intValueZero", 0, 0},
-		{"map", "mapValue", map[string]any{"name": "John", "age": 30}, map[string]any{"name": "John", "age": 30}},
+		{
+			"map", "mapValue",
+			map[string]any{"name": "John", "age": 30},
+			map[string]any{"name": "John", "age": 30},
+		},
 		{"bool false", "boolValueFalse", false, false},
 		{"zero float", "floatValueZero", 0.0, 0.0},
 	}
@@ -42,10 +59,9 @@ func TestContextSetAndGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := NewContext()
 			ctx.Set(tt.key, tt.val)
-
 			got, err := ctx.Get(tt.key)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.key, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.key, err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Get(%q) = %v, want %v", tt.key, got, tt.want)
@@ -100,10 +116,9 @@ func TestContextNestedKeys(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := NewContext()
 			ctx.Set(tt.setKey, tt.val)
-
 			got, err := ctx.Get(tt.getKey)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Get(%q) = %v, want %v", tt.getKey, got, tt.want)
@@ -152,10 +167,9 @@ func TestContextDeepNestedKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx.Set(tt.setKey, tt.val)
-
 			got, err := ctx.Get(tt.getKey)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Get(%q) = %v, want %v", tt.getKey, got, tt.want)
@@ -203,16 +217,15 @@ func TestContextSliceIndexAccess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := NewContext()
 			ctx.Set(tt.setKey, tt.val)
-
 			got, err := ctx.Get(tt.getKey)
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("Get(%q) = %v, nil, want error", tt.getKey, got)
+					t.Errorf("Get(%q) = %v, want error", tt.getKey, got)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Get(%q) = %v, want %v", tt.getKey, got, tt.want)
@@ -320,10 +333,9 @@ func TestContextOverwrite(t *testing.T) {
 			ctx := NewContext()
 			ctx.Set(tt.key, tt.initial)
 			ctx.Set(tt.key, tt.override)
-
 			got, err := ctx.Get(tt.key)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.key, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.key, err)
 			}
 			if !reflect.DeepEqual(got, tt.override) {
 				t.Errorf("Get(%q) = %v, want %v", tt.key, got, tt.override)
@@ -402,7 +414,6 @@ func TestContextStructConversion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := NewContext()
 			ctx.Set(tt.key, tt.val)
-
 			got, err := ctx.Get(tt.getKey)
 			if tt.wantError != nil {
 				if !errors.Is(err, tt.wantError) {
@@ -411,7 +422,7 @@ func TestContextStructConversion(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Get(%q) = %v, want %v", tt.getKey, got, tt.want)
@@ -462,7 +473,7 @@ func TestContextComplexStruct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			raw, err := ctx.Get(tt.getKey)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 
 			// Normalize: dereference pointers, format time as RFC3339.
@@ -475,7 +486,8 @@ func TestContextComplexStruct(t *testing.T) {
 			}
 
 			if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", tt.want) {
-				t.Errorf("Get(%q) = %v (%T), want %v (%T)", tt.getKey, raw, raw, tt.want, tt.want)
+				t.Errorf("Get(%q) = %v (%T), want %v (%T)",
+					tt.getKey, raw, raw, tt.want, tt.want)
 			}
 		})
 	}
@@ -511,10 +523,11 @@ func TestContextSliceOfStructs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ctx.Get(tt.getKey)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", tt.want) {
-				t.Errorf("Get(%q) = %v (%T), want %v (%T)", tt.getKey, got, got, tt.want, tt.want)
+				t.Errorf("Get(%q) = %v (%T), want %v (%T)",
+					tt.getKey, got, got, tt.want, tt.want)
 			}
 		})
 	}
@@ -551,15 +564,17 @@ func TestContextMapWithStructValues(t *testing.T) {
 			got, err := ctx.Get(tt.getKey)
 			if tt.wantError != nil {
 				if !errors.Is(err, tt.wantError) {
-					t.Errorf("Get(%q) error = %v, want %v", tt.getKey, err, tt.wantError)
+					t.Errorf("Get(%q) error = %v, want %v",
+						tt.getKey, err, tt.wantError)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", tt.want) {
-				t.Errorf("Get(%q) = %v (%T), want %v (%T)", tt.getKey, got, got, tt.want, tt.want)
+				t.Errorf("Get(%q) = %v (%T), want %v (%T)",
+					tt.getKey, got, got, tt.want, tt.want)
 			}
 		})
 	}
@@ -856,21 +871,61 @@ func TestContextComplexNestedStructures(t *testing.T) {
 		{"2022 revenue", "company.revenue.2022", 6250000.00},
 		{"first branch postal code", "company.branches.0.postalCode", "20025"},
 		{"engineering budget", "company.departments.engineering.budget", 1000000.50},
-		{"second engineering project", "company.departments.engineering.projects.1", "Project Beta"},
-		{"engineering senior staff", "company.departments.engineering.staff.senior.1", "Bob"},
-		{"engineering testers count", "company.departments.engineering.staff.counts.testers", 10},
+		{
+			"second engineering project",
+			"company.departments.engineering.projects.1",
+			"Project Beta",
+		},
+		{
+			"engineering senior staff",
+			"company.departments.engineering.staff.senior.1",
+			"Bob",
+		},
+		{
+			"engineering testers count",
+			"company.departments.engineering.staff.counts.testers",
+			10,
+		},
 		{"first customer name", "company.customers.cust1.name", "XYZ Corp"},
-		{"first customer second address city", "company.customers.cust1.addresses.1.city", "Commerce City"},
-		{"first customer first contact type", "company.customers.cust1.contacts.0.type", "phone"},
-		{"first customer order second item quantity", "company.customers.cust1.orders.0.items.1.quantity", 2},
-		{"first customer primary contact", "company.customers.cust1.metadata.contacts.primary", "John Smith"},
-		{"second customer device OS", "company.customers.cust2.metadata.deviceInfo.os", "Windows"},
+		{
+			"first customer second address city",
+			"company.customers.cust1.addresses.1.city",
+			"Commerce City",
+		},
+		{
+			"first customer first contact type",
+			"company.customers.cust1.contacts.0.type",
+			"phone",
+		},
+		{
+			"first customer order second item quantity",
+			"company.customers.cust1.orders.0.items.1.quantity",
+			2,
+		},
+		{
+			"first customer primary contact",
+			"company.customers.cust1.metadata.contacts.primary",
+			"John Smith",
+		},
+		{
+			"second customer device OS",
+			"company.customers.cust2.metadata.deviceInfo.os",
+			"Windows",
+		},
 		{"first product price", "company.products.0.price", 299.99},
 		{"first product first category", "company.products.0.categories.0", "software"},
 		{"second product warranty tag", "company.products.1.tags.warranty", "2-year"},
 		{"P-101 first review helpful", "company.reviews.P-101.0.helpful", 12},
-		{"P-102 first review response", "company.reviews.P-102.0.responses.0", "We're glad you enjoy our product!"},
-		{"security password min length", "company.settings.security.password_policy.min_length", 12},
+		{
+			"P-102 first review response",
+			"company.reviews.P-102.0.responses.0",
+			"We're glad you enjoy our product!",
+		},
+		{
+			"security password min length",
+			"company.settings.security.password_policy.min_length",
+			12,
+		},
 		{"email notification setting", "company.settings.notifications.email", true},
 	}
 
@@ -881,17 +936,14 @@ func TestContextComplexNestedStructures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ctx.Get(tt.getKey)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", tt.want) {
-				t.Errorf("Get(%q) = %v (%T), want %v (%T)", tt.getKey, got, got, tt.want, tt.want)
+				t.Errorf("Get(%q) = %v (%T), want %v (%T)",
+					tt.getKey, got, got, tt.want, tt.want)
 			}
 		})
 	}
-}
-
-func lastYear(t time.Time) time.Time {
-	return t.AddDate(-1, 0, 0)
 }
 
 func TestContextPreservesOriginalTypes(t *testing.T) {
@@ -952,10 +1004,9 @@ func TestContextPreservesOriginalTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := NewContext()
 			ctx.Set(tt.key, tt.val)
-
 			got, err := ctx.Get(tt.getKey)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", tt.getKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", tt.getKey, err)
 			}
 			if got != tt.want {
 				t.Errorf("Get(%q) = %v, want %v", tt.getKey, got, tt.want)
@@ -965,9 +1016,8 @@ func TestContextPreservesOriginalTypes(t *testing.T) {
 			topKey := strings.Split(tt.key, ".")[0]
 			top, err := ctx.Get(topKey)
 			if err != nil {
-				t.Fatalf("Get(%q) = _, %v, want nil error", topKey, err)
+				t.Fatalf("Get(%q) unexpected error: %v", topKey, err)
 			}
-
 			switch tt.val.(type) {
 			case User:
 				if _, ok := top.(User); !ok {

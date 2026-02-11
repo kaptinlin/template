@@ -33,14 +33,13 @@ func registerStringFilters() {
 
 // defaultFilter returns a default value if the input is falsy.
 func defaultFilter(value any, args ...string) (any, error) {
-	fallback := ""
+	if NewValue(value).IsTrue() {
+		return value, nil
+	}
 	if len(args) > 0 {
-		fallback = args[0]
+		return args[0], nil
 	}
-	if !NewValue(value).IsTrue() {
-		return fallback, nil
-	}
-	return value, nil
+	return "", nil
 }
 
 // trimFilter removes leading and trailing whitespace.
@@ -53,8 +52,7 @@ func splitFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: split filter requires a delimiter argument", ErrInsufficientArgs)
 	}
-	delimiter := args[0]
-	return filter.Split(toString(value), delimiter), nil
+	return filter.Split(toString(value), args[0]), nil
 }
 
 // replaceFilter substitutes all instances of a substring.
@@ -71,8 +69,7 @@ func removeFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: remove filter requires a substring argument", ErrInsufficientArgs)
 	}
-	sub := args[0]
-	return filter.Remove(toString(value), sub), nil
+	return filter.Remove(toString(value), args[0]), nil
 }
 
 // appendFilter adds characters to the end of a string.
@@ -80,8 +77,7 @@ func appendFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: append filter requires a string to append", ErrInsufficientArgs)
 	}
-	suffix := args[0]
-	return filter.Append(toString(value), suffix), nil
+	return filter.Append(toString(value), args[0]), nil
 }
 
 // prependFilter adds characters to the beginning of a string.
@@ -89,8 +85,7 @@ func prependFilter(value any, args ...string) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: prepend filter requires a string to prepend", ErrInsufficientArgs)
 	}
-	prefix := args[0]
-	return filter.Prepend(toString(value), prefix), nil
+	return filter.Prepend(toString(value), args[0]), nil
 }
 
 // lengthFilter returns the length of a string, slice, array, or map.
@@ -100,9 +95,8 @@ func lengthFilter(value any, _ ...string) (any, error) {
 	switch v.Kind() {
 	case reflect.Slice, reflect.Array, reflect.Map:
 		return v.Len(), nil
-	default:
-		return filter.Length(toString(value)), nil
 	}
+	return filter.Length(toString(value)), nil
 }
 
 // upperFilter converts all characters to uppercase.

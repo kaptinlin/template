@@ -1,7 +1,6 @@
 package template
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -116,48 +115,48 @@ func TestMathFilterErrors(t *testing.T) {
 	t.Run("AtLeastMissingArg", func(t *testing.T) {
 		_, err := atLeastFilter(5)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("AtMostMissingArg", func(t *testing.T) {
 		_, err := atMostFilter(5)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("RoundMissingArg", func(t *testing.T) {
 		_, err := roundFilter(3.14)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("PlusMissingArg", func(t *testing.T) {
 		_, err := plusFilter(5)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("MinusMissingArg", func(t *testing.T) {
 		_, err := minusFilter(5)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("TimesMissingArg", func(t *testing.T) {
 		_, err := timesFilter(5)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("DivideMissingArg", func(t *testing.T) {
 		_, err := divideFilter(5)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("ModuloMissingArg", func(t *testing.T) {
 		_, err := moduloFilter(5)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 }

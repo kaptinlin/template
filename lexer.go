@@ -5,6 +5,26 @@ import (
 	"strings"
 )
 
+// LexerError represents a lexical analysis error with position information.
+type LexerError struct {
+	Message string
+	Line    int
+	Col     int
+}
+
+// Error implements the error interface.
+func (e *LexerError) Error() string {
+	var b strings.Builder
+	b.Grow(48)
+	b.WriteString("lexer error at line ")
+	b.WriteString(strconv.Itoa(e.Line))
+	b.WriteString(", col ")
+	b.WriteString(strconv.Itoa(e.Col))
+	b.WriteString(": ")
+	b.WriteString(e.Message)
+	return b.String()
+}
+
 // Lexer performs lexical analysis on template input.
 type Lexer struct {
 	input  string
@@ -354,22 +374,11 @@ func (l *Lexer) peek2(a, b byte) bool {
 	return l.pos+2 <= l.len && l.input[l.pos] == a && l.input[l.pos+1] == b
 }
 
-// advance moves the position forward by n bytes, tracking line and column.
-// For tag delimiters like {{ }}, {# #}, {% %}, which never span newlines.
+// advance moves the position forward by n bytes for tag delimiters
+// (e.g. {{ }}, {# #}, {% %}) that never span newlines.
 func (l *Lexer) advance(n int) {
-	end := l.pos + n
-	if end > l.len {
-		end = l.len
-	}
-	for l.pos < end {
-		if l.input[l.pos] == '\n' {
-			l.line++
-			l.col = 1
-		} else {
-			l.col++
-		}
-		l.pos++
-	}
+	l.pos += n
+	l.col += n
 }
 
 // skipWhitespace advances past any whitespace characters.
@@ -395,26 +404,6 @@ func (l *Lexer) errorAt(line, col int, msg string) error {
 		Line:    line,
 		Col:     col,
 	}
-}
-
-// LexerError represents a lexical analysis error with position information.
-type LexerError struct {
-	Message string
-	Line    int
-	Col     int
-}
-
-// Error implements the error interface.
-func (e *LexerError) Error() string {
-	var b strings.Builder
-	b.Grow(48)
-	b.WriteString("lexer error at line ")
-	b.WriteString(strconv.Itoa(e.Line))
-	b.WriteString(", col ")
-	b.WriteString(strconv.Itoa(e.Col))
-	b.WriteString(": ")
-	b.WriteString(e.Message)
-	return b.String()
 }
 
 // isLetter reports whether the byte is an ASCII letter.

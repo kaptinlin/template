@@ -1,15 +1,18 @@
 package template
 
 import (
+	"fmt"
 	"strconv"
-	"strings"
 )
 
 // comparisonOps is the set of comparison operators for fast lookup.
 var comparisonOps = map[string]struct{}{
-	"==": {}, "!=": {},
-	"<": {}, ">": {},
-	"<=": {}, ">=": {},
+	"==": {},
+	"!=": {},
+	"<":  {},
+	">":  {},
+	"<=": {},
+	">=": {},
 }
 
 // ExprParser parses expressions from a token stream.
@@ -17,6 +20,18 @@ var comparisonOps = map[string]struct{}{
 type ExprParser struct {
 	tokens []*Token
 	pos    int
+}
+
+// ParseError represents a parsing error with source location.
+type ParseError struct {
+	Message string
+	Line    int
+	Col     int
+}
+
+// Error returns a human-readable error message with source location.
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("parse error at line %d, col %d: %s", e.Line, e.Col, e.Message)
 }
 
 // NewExprParser creates a new expression parser.
@@ -363,7 +378,6 @@ func (p *ExprParser) parseFilterArg() (Expression, error) {
 		return nil, p.errAtTok(tok, "expected literal or variable as filter argument")
 	}
 
-	// unreachable: all TokenType cases handled above
 	return nil, p.errAtTok(tok, "expected literal or variable as filter argument")
 }
 
@@ -424,7 +438,6 @@ func (p *ExprParser) parsePrimary() (Expression, error) {
 		return nil, p.errAtTok(tok, "unexpected token: "+tok.Value)
 	}
 
-	// unreachable: all TokenType cases handled above
 	return nil, p.errAtTok(tok, "unexpected token: "+tok.Value)
 }
 
@@ -477,22 +490,4 @@ func (p *ExprParser) errAtTok(tok *Token, msg string) error {
 		Line:    tok.Line,
 		Col:     tok.Col,
 	}
-}
-
-// ParseError represents a parsing error with source location.
-type ParseError struct {
-	Message string
-	Line    int
-	Col     int
-}
-
-func (e *ParseError) Error() string {
-	var b strings.Builder
-	b.WriteString("parse error at line ")
-	b.WriteString(strconv.Itoa(e.Line))
-	b.WriteString(", col ")
-	b.WriteString(strconv.Itoa(e.Col))
-	b.WriteString(": ")
-	b.WriteString(e.Message)
-	return b.String()
 }

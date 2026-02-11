@@ -52,7 +52,7 @@ func (v *Value) IsTrue() bool {
 	if !rv.IsValid() {
 		return false
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.Bool:
 		return rv.Bool()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -67,11 +67,9 @@ func (v *Value) IsTrue() bool {
 		return rv.Len() > 0
 	case reflect.Invalid:
 		return false
-	case reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Ptr, reflect.Struct, reflect.UnsafePointer:
+	default:
 		return true
 	}
-	return true
 }
 
 // formatFloat renders a float as a string.
@@ -99,7 +97,7 @@ func (v *Value) String() string {
 		return s.String()
 	}
 
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.String:
 		return rv.String()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -112,16 +110,13 @@ func (v *Value) String() string {
 		return strconv.FormatBool(rv.Bool())
 	case reflect.Slice, reflect.Array:
 		return formatSlice(rv)
-	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan,
-		reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct,
-		reflect.UnsafePointer:
+	default:
 		b, err := json.Marshal(rv.Interface(), json.Deterministic(true))
 		if err != nil {
 			return fmt.Sprint(rv.Interface())
 		}
 		return string(b)
 	}
-	return ""
 }
 
 // formatSlice formats a slice or array as [item1,item2,item3].
@@ -151,7 +146,7 @@ func formatSliceItem(rv reflect.Value) string {
 	if !rv.IsValid() {
 		return "null"
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.String:
 		return rv.String()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -164,16 +159,13 @@ func formatSliceItem(rv reflect.Value) string {
 		return strconv.FormatBool(rv.Bool())
 	case reflect.Slice, reflect.Array:
 		return formatSlice(rv)
-	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan,
-		reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct,
-		reflect.UnsafePointer:
+	default:
 		data, err := json.Marshal(rv.Interface(), json.Deterministic(true))
 		if err != nil {
 			return fmt.Sprint(rv.Interface())
 		}
 		return string(data)
 	}
-	return ""
 }
 
 // Int returns the value as int64, converting if possible.
@@ -182,7 +174,7 @@ func (v *Value) Int() (int64, error) {
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToInt
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return rv.Int(), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -198,12 +190,9 @@ func (v *Value) Int() (int64, error) {
 			return 1, nil
 		}
 		return 0, nil
-	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
-		reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice,
-		reflect.String, reflect.Struct, reflect.UnsafePointer:
+	default:
 		return 0, fmt.Errorf("%w: %T", ErrCannotConvertToInt, v.val)
 	}
-	return 0, fmt.Errorf("%w: %T", ErrCannotConvertToInt, v.val)
 }
 
 // Float returns the value as float64, converting if possible.
@@ -212,19 +201,16 @@ func (v *Value) Float() (float64, error) {
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToFloat
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.Float32, reflect.Float64:
 		return rv.Float(), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return float64(rv.Int()), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return float64(rv.Uint()), nil
-	case reflect.Invalid, reflect.Bool, reflect.Complex64, reflect.Complex128, reflect.Array,
-		reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr,
-		reflect.Slice, reflect.String, reflect.Struct, reflect.UnsafePointer:
+	default:
 		return 0, fmt.Errorf("%w: %T", ErrCannotConvertToFloat, v.val)
 	}
-	return 0, fmt.Errorf("%w: %T", ErrCannotConvertToFloat, v.val)
 }
 
 // Bool reports whether the value is truthy.
@@ -238,17 +224,12 @@ func (v *Value) Len() (int, error) {
 	if !rv.IsValid() {
 		return 0, nil
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.String, reflect.Slice, reflect.Map, reflect.Array:
 		return rv.Len(), nil
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
-		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
-		reflect.Chan, reflect.Func, reflect.Interface, reflect.Ptr, reflect.Struct,
-		reflect.UnsafePointer:
+	default:
 		return 0, fmt.Errorf("%w: %T", ErrTypeHasNoLength, v.val)
 	}
-	return 0, fmt.Errorf("%w: %T", ErrTypeHasNoLength, v.val)
 }
 
 // Index returns the element at index i (for slices, arrays, strings).
@@ -257,7 +238,7 @@ func (v *Value) Index(i int) (*Value, error) {
 	if !rv.IsValid() {
 		return nil, ErrCannotIndexNil
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.Slice, reflect.Array:
 		if i < 0 || i >= rv.Len() {
 			return nil, fmt.Errorf("%w: %d", ErrIndexOutOfRange, i)
@@ -269,14 +250,9 @@ func (v *Value) Index(i int) (*Value, error) {
 			return nil, fmt.Errorf("%w: %d", ErrIndexOutOfRange, i)
 		}
 		return NewValue(string(s[i])), nil
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
-		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
-		reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Struct,
-		reflect.UnsafePointer:
+	default:
 		return nil, fmt.Errorf("%w: %T", ErrTypeNotIndexable, v.val)
 	}
-	return nil, fmt.Errorf("%w: %T", ErrTypeNotIndexable, v.val)
 }
 
 // Key returns the map value for the given key.
@@ -302,7 +278,7 @@ func (v *Value) Field(name string) (*Value, error) {
 	if !rv.IsValid() {
 		return nil, ErrCannotGetFieldFromNil
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.Struct:
 		field, found := findStructField(rv, name)
 		if !found {
@@ -315,14 +291,9 @@ func (v *Value) Field(name string) (*Value, error) {
 			return NewValue(nil), nil
 		}
 		return NewValue(result.Interface()), nil
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
-		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
-		reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Ptr, reflect.Slice,
-		reflect.String, reflect.UnsafePointer:
+	default:
 		return nil, fmt.Errorf("%w: %T %q", ErrTypeHasNoField, v.val, name)
 	}
-	return nil, fmt.Errorf("%w: %T %q", ErrTypeHasNoField, v.val, name)
 }
 
 // findStructField finds a struct field by JSON tag or exported name.
@@ -368,7 +339,7 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 	if !rv.IsValid() {
 		return nil
 	}
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive
 	case reflect.Slice, reflect.Array:
 		count := rv.Len()
 		for i := range count {
@@ -396,14 +367,9 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 			}
 		}
 		return nil
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
-		reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
-		reflect.Chan, reflect.Func, reflect.Interface, reflect.Ptr, reflect.Struct,
-		reflect.UnsafePointer:
+	default:
 		return fmt.Errorf("%w: %T", ErrTypeNotIterable, v.val)
 	}
-	return fmt.Errorf("%w: %T", ErrTypeNotIterable, v.val)
 }
 
 // Compare compares v with other.

@@ -1,7 +1,6 @@
 package template
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -152,61 +151,61 @@ func TestStringFilterErrors(t *testing.T) {
 	t.Run("SplitMissingDelimiter", func(t *testing.T) {
 		_, err := splitFilter("hello")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("ReplaceMissingArgs", func(t *testing.T) {
 		_, err := replaceFilter("hello", "old")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("RemoveMissingSubstring", func(t *testing.T) {
 		_, err := removeFilter("hello")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("AppendMissingArg", func(t *testing.T) {
 		_, err := appendFilter("hello")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("PrependMissingArg", func(t *testing.T) {
 		_, err := prependFilter("hello")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("PluralizeMissingArgs", func(t *testing.T) {
 		_, err := pluralizeFilter(1, "apple")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("TruncateMissingLength", func(t *testing.T) {
 		_, err := truncateFilter("hello")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("TruncateWordsMissingCount", func(t *testing.T) {
 		_, err := truncateWordsFilter("hello world")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrInsufficientArgs))
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
 	t.Run("TruncateInvalidLength", func(t *testing.T) {
 		_, err := truncateFilter("hello", "abc")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrFilterInputNotNumeric))
+		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
 	})
 
 	t.Run("PluralizeInvalidCount", func(t *testing.T) {
 		_, err := pluralizeFilter("not_a_number", "apple", "apples")
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrFilterInputNotNumeric))
+		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
 	})
 
 	t.Run("DefaultFilterNoArgs", func(t *testing.T) {

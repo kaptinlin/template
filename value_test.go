@@ -122,51 +122,23 @@ func TestValue_String(t *testing.T) {
 		{"nested slice", [][]int{{1, 2}, {3, 4}}, "[[1,2],[3,4]]"},
 		{"empty slice", []int{}, "[]"},
 		{"bool slice", []bool{true, false, true}, "[true,false,true]"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.value).String(); got != tt.want {
-				t.Errorf("NewValue(%v).String() = %q, want %q", tt.value, got, tt.want)
-			}
-		})
-	}
-}
 
-func TestValue_String_Uint(t *testing.T) {
-	tests := []struct {
-		name  string
-		value any
-		want  string
-	}{
+		// Unsigned integer types.
 		{"uint", uint(100), "100"},
 		{"uint8", uint8(255), "255"},
 		{"uint16", uint16(1000), "1000"},
 		{"uint32", uint32(70000), "70000"},
 		{"uint64", uint64(99999), "99999"},
 		{"uint zero", uint(0), "0"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.value).String(); got != tt.want {
-				t.Errorf("NewValue(%v).String() = %q, want %q", tt.value, got, tt.want)
-			}
-		})
-	}
-}
 
-func TestFormatFloat(t *testing.T) {
-	tests := []struct {
-		name  string
-		value float64
-		want  string
-	}{
-		{"whole number", 42.0, "42"},
-		{"zero", 0.0, "0"},
-		{"negative whole", -10.0, "-10"},
-		{"decimal", 3.14, "3.14"},
-		{"negative decimal", -2.5, "-2.5"},
-		{"small decimal", 0.001, "0.001"},
-		{"large whole", 1000000.0, "1000000"},
+		// Float formatting.
+		{"whole number float", 42.0, "42"},
+		{"zero float", 0.0, "0"},
+		{"negative whole float", -10.0, "-10"},
+		{"decimal float", 3.14, "3.14"},
+		{"negative decimal float", -2.5, "-2.5"},
+		{"small decimal float", 0.001, "0.001"},
+		{"large whole float", 1000000.0, "1000000"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -717,23 +689,8 @@ func TestValue_Equals(t *testing.T) {
 		{"map equal", map[string]int{"a": 1, "b": 2}, map[string]int{"a": 1, "b": 2}, true},
 		{"map not equal", map[string]int{"a": 1, "b": 2}, map[string]int{"a": 1, "b": 3}, false},
 		{"different types", 42, "42", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.a).Equals(NewValue(tt.b)); got != tt.want {
-				t.Errorf("Equals(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
-			}
-		})
-	}
-}
 
-func TestValue_Equals_CrossNumericTypes(t *testing.T) {
-	tests := []struct {
-		name string
-		a    any
-		b    any
-		want bool
-	}{
+		// Cross-numeric type comparisons.
 		{"int and float64 equal", 42, float64(42), true},
 		{"int and float64 not equal", 42, float64(42.5), false},
 		{"int64 and uint equal", int64(100), uint(100), true},

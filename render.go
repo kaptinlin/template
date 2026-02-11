@@ -2,7 +2,7 @@ package template
 
 // Render compiles and renders a template in one step.
 //
-// This is a shorthand for calling [Compile] followed by [Template.Render].
+// Render is a shorthand for calling [Compile] followed by [Template.Render].
 // For repeated rendering of the same template, compile once with [Compile]
 // and call [Template.Render] to avoid redundant compilation.
 func Render(source string, data map[string]any) (string, error) {

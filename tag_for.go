@@ -7,14 +7,12 @@ package template
 //	{% for item in items %}...{% endfor %}
 //	{% for key, value in dict %}...{% endfor %}
 func parseForTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
-	// Parse loop variable names.
-	var vars []string
-
+	// Parse the first loop variable.
 	first, err := args.ExpectIdentifier()
 	if err != nil {
 		return nil, args.Error(ErrExpectedVariable.Error())
 	}
-	vars = append(vars, first.Value)
+	vars := []string{first.Value}
 
 	// Optional second variable (key, value).
 	if args.Match(TokenSymbol, ",") != nil {
@@ -26,8 +24,7 @@ func parseForTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 	}
 
 	// Expect the "in" keyword.
-	cur := args.Current()
-	if cur == nil || cur.Type != TokenIdentifier || cur.Value != "in" {
+	if cur := args.Current(); cur == nil || cur.Type != TokenIdentifier || cur.Value != "in" {
 		return nil, args.Error(ErrExpectedInKeyword.Error())
 	}
 	args.Advance()

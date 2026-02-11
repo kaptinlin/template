@@ -7,6 +7,8 @@ import (
 	"reflect"
 )
 
+// Interfaces
+
 // Node is the interface that all AST nodes must implement.
 // Each node represents a part of the template syntax tree.
 type Node interface {
@@ -17,16 +19,21 @@ type Node interface {
 	String() string
 }
 
-// =============================================================================
-// Statement Nodes - represent template statements (if, for, output, etc.)
-// =============================================================================
-
 // Statement is the interface for all statement nodes.
 // Statements are executed and produce output or side effects.
 type Statement interface {
 	Node
 	Execute(ctx *ExecutionContext, writer io.Writer) error
 }
+
+// Expression is the interface for all expression nodes.
+// Expressions are evaluated to produce values.
+type Expression interface {
+	Node
+	Evaluate(ctx *ExecutionContext) (*Value, error)
+}
+
+// Statement Node Types
 
 // TextNode represents plain text outside of template tags.
 type TextNode struct {
@@ -35,9 +42,186 @@ type TextNode struct {
 	Col  int
 }
 
-// Position implements Node.
+// OutputNode represents a variable output {{ ... }}.
+type OutputNode struct {
+	Expr Expression
+	Line int
+	Col  int
+}
+
+// IfNode represents an if-elif-else conditional block.
+type IfNode struct {
+	Branches []IfBranch
+	ElseBody []Node
+	Line     int
+	Col      int
+}
+
+// IfBranch represents a single if or elif branch.
+type IfBranch struct {
+	Condition Expression
+	Body      []Node
+}
+
+// LoopContext represents loop metadata for templates.
+type LoopContext struct {
+	Index      int
+	Counter    int
+	Revindex   int
+	Revcounter int
+	First      bool
+	Last       bool
+	Length     int
+	Parent     *LoopContext
+}
+
+// ForNode represents a for loop.
+type ForNode struct {
+	Vars       []string
+	Collection Expression
+	Body       []Node
+	Line       int
+	Col        int
+}
+
+// BreakNode represents a {% break %} statement.
+type BreakNode struct {
+	Line int
+	Col  int
+}
+
+// ContinueNode represents a {% continue %} statement.
+type ContinueNode struct {
+	Line int
+	Col  int
+}
+
+// Expression Node Types
+
+// LiteralNode represents a literal value (string, number, boolean).
+type LiteralNode struct {
+	Value any
+	Line  int
+	Col   int
+}
+
+// VariableNode represents a variable reference.
+type VariableNode struct {
+	Name string
+	Line int
+	Col  int
+}
+
+// BinaryOpNode represents a binary operation.
+type BinaryOpNode struct {
+	Operator string
+	Left     Expression
+	Right    Expression
+	Line     int
+	Col      int
+}
+
+// UnaryOpNode represents a unary operation.
+type UnaryOpNode struct {
+	Operator string
+	Operand  Expression
+	Line     int
+	Col      int
+}
+
+// PropertyAccessNode represents property/attribute access.
+type PropertyAccessNode struct {
+	Object   Expression
+	Property string
+	Line     int
+	Col      int
+}
+
+// SubscriptNode represents subscript/index access.
+type SubscriptNode struct {
+	Object Expression
+	Index  Expression
+	Line   int
+	Col    int
+}
+
+// FilterNode represents a filter application.
+type FilterNode struct {
+	Expr Expression
+	Name string
+	Args []Expression
+	Line int
+	Col  int
+}
+
+// Loop Control Errors
+
+// BreakError signals loop termination.
+type BreakError struct{}
+
+// Error implements the error interface.
+func (e *BreakError) Error() string { return ErrBreakOutsideLoop.Error() }
+
+// ContinueError signals loop continuation.
+type ContinueError struct{}
+
+// Error implements the error interface.
+func (e *ContinueError) Error() string { return ErrContinueOutsideLoop.Error() }
+
+// Constructors
+
+// NewTextNode returns a new TextNode.
+func NewTextNode(text string, line, col int) *TextNode {
+	return &TextNode{Text: text, Line: line, Col: col}
+}
+
+// NewOutputNode returns a new OutputNode.
+func NewOutputNode(expr Expression, line, col int) *OutputNode {
+	return &OutputNode{Expr: expr, Line: line, Col: col}
+}
+
+// NewLiteralNode returns a new LiteralNode.
+func NewLiteralNode(value any, line, col int) *LiteralNode {
+	return &LiteralNode{Value: value, Line: line, Col: col}
+}
+
+// NewVariableNode returns a new VariableNode.
+func NewVariableNode(name string, line, col int) *VariableNode {
+	return &VariableNode{Name: name, Line: line, Col: col}
+}
+
+// NewFilterNode returns a new FilterNode.
+func NewFilterNode(expr Expression, name string, args []Expression, line, col int) *FilterNode {
+	return &FilterNode{Expr: expr, Name: name, Args: args, Line: line, Col: col}
+}
+
+// NewPropertyAccessNode returns a new PropertyAccessNode.
+func NewPropertyAccessNode(object Expression, property string, line, col int) *PropertyAccessNode {
+	return &PropertyAccessNode{Object: object, Property: property, Line: line, Col: col}
+}
+
+// NewSubscriptNode returns a new SubscriptNode.
+func NewSubscriptNode(object, index Expression, line, col int) *SubscriptNode {
+	return &SubscriptNode{Object: object, Index: index, Line: line, Col: col}
+}
+
+// NewBinaryOpNode returns a new BinaryOpNode.
+func NewBinaryOpNode(operator string, left, right Expression, line, col int) *BinaryOpNode {
+	return &BinaryOpNode{Operator: operator, Left: left, Right: right, Line: line, Col: col}
+}
+
+// NewUnaryOpNode returns a new UnaryOpNode.
+func NewUnaryOpNode(operator string, operand Expression, line, col int) *UnaryOpNode {
+	return &UnaryOpNode{Operator: operator, Operand: operand, Line: line, Col: col}
+}
+
+// TextNode Methods
+
+// Position returns the position of the TextNode.
 func (n *TextNode) Position() (int, int) { return n.Line, n.Col }
-func (n *TextNode) String() string       { return fmt.Sprintf("Text(%q)", n.Text) }
+
+// String returns a debug representation of the TextNode.
+func (n *TextNode) String() string { return fmt.Sprintf("Text(%q)", n.Text) }
 
 // Execute writes the raw text to the output.
 func (n *TextNode) Execute(_ *ExecutionContext, w io.Writer) error {
@@ -45,17 +229,13 @@ func (n *TextNode) Execute(_ *ExecutionContext, w io.Writer) error {
 	return err
 }
 
-// OutputNode represents a variable output {{ ... }}.
-// Example: {{ name }}, {{ user.email|upper }}
-type OutputNode struct {
-	Expr Expression // The expression to evaluate and output
-	Line int
-	Col  int
-}
+// OutputNode Methods
 
-// Position implements Node.
+// Position returns the position of the OutputNode.
 func (n *OutputNode) Position() (int, int) { return n.Line, n.Col }
-func (n *OutputNode) String() string       { return fmt.Sprintf("Output(%s)", n.Expr) }
+
+// String returns a debug representation of the OutputNode.
+func (n *OutputNode) String() string { return fmt.Sprintf("Output(%s)", n.Expr) }
 
 // Execute evaluates the expression and writes its string value.
 func (n *OutputNode) Execute(ctx *ExecutionContext, w io.Writer) error {
@@ -67,24 +247,13 @@ func (n *OutputNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	return err
 }
 
-// IfNode represents an if-elif-else conditional block.
-// Example: {% if x > 0 %} ... {% elif x < 0 %} ... {% else %} ... {% endif %}
-type IfNode struct {
-	Branches []IfBranch // List of if/elif branches
-	ElseBody []Node     // Optional else body
-	Line     int
-	Col      int
-}
+// IfNode Methods
 
-// IfBranch represents a single if or elif branch.
-type IfBranch struct {
-	Condition Expression // The condition expression
-	Body      []Node     // Statements to execute if condition is true
-}
-
-// Position implements Node.
+// Position returns the position of the IfNode.
 func (n *IfNode) Position() (int, int) { return n.Line, n.Col }
-func (n *IfNode) String() string       { return fmt.Sprintf("If(%d branches)", len(n.Branches)) }
+
+// String returns a debug representation of the IfNode.
+func (n *IfNode) String() string { return fmt.Sprintf("If(%d branches)", len(n.Branches)) }
 
 // Execute runs the first truthy branch, or the else block if no branch matches.
 func (n *IfNode) Execute(ctx *ExecutionContext, w io.Writer) error {
@@ -103,32 +272,12 @@ func (n *IfNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	return nil
 }
 
-// LoopContext represents the loop information available in templates.
-// Provides loop metadata compatible with both Django and Jinja2 styles.
-type LoopContext struct {
-	Index      int          // Current zero-based index.
-	Counter    int          // Current one-based counter (Index + 1).
-	Revindex   int          // Reverse index (length-1 to 0).
-	Revcounter int          // Remaining iterations including current (length to 1).
-	First      bool         // True on first iteration.
-	Last       bool         // True on last iteration.
-	Length     int          // Total collection length.
-	Parent     *LoopContext // Parent loop context for nested loops.
-}
+// ForNode Methods
 
-// ForNode represents a for loop.
-// Example: {% for item in items %} ... {% endfor %}
-// Example: {% for key, value in dict %} ... {% endfor %}
-type ForNode struct {
-	Vars       []string   // Variable names (e.g., ["item"] or ["key", "value"])
-	Collection Expression // Expression that evaluates to an iterable
-	Body       []Node     // Statements inside the loop
-	Line       int
-	Col        int
-}
-
-// Position implements Node.
+// Position returns the position of the ForNode.
 func (n *ForNode) Position() (int, int) { return n.Line, n.Col }
+
+// String returns a debug representation of the ForNode.
 func (n *ForNode) String() string {
 	return fmt.Sprintf("For(%v in %s)", n.Vars, n.Collection)
 }
@@ -141,11 +290,8 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	}
 
 	// Django behavior: {% for item in map %} binds to the map key.
-	bindToKey := false
 	rv := col.resolved()
-	if rv.IsValid() && rv.Kind() == reflect.Map {
-		bindToKey = true
-	}
+	bindToKey := rv.IsValid() && rv.Kind() == reflect.Map
 
 	var parent *LoopContext
 	if v, ok := ctx.Get("loop"); ok {
@@ -157,13 +303,14 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	var execErr error
 
 	iterErr := col.Iterate(func(idx, count int, key, value *Value) bool {
-		if len(n.Vars) == 1 {
+		switch len(n.Vars) {
+		case 1:
 			if bindToKey {
 				ctx.Set(n.Vars[0], key.Interface())
 			} else {
 				ctx.Set(n.Vars[0], value.Interface())
 			}
-		} else if len(n.Vars) == 2 {
+		case 2:
 			ctx.Set(n.Vars[0], key.Interface())
 			ctx.Set(n.Vars[1], value.Interface())
 		}
@@ -211,97 +358,68 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	return iterErr
 }
 
-// BreakNode represents a {% break %} statement.
-type BreakNode struct {
-	Line int
-	Col  int
-}
+// BreakNode Methods
 
-// Position implements Node.
+// Position returns the position of the BreakNode.
 func (n *BreakNode) Position() (int, int) { return n.Line, n.Col }
-func (n *BreakNode) String() string       { return "Break" }
+
+// String returns a debug representation of the BreakNode.
+func (n *BreakNode) String() string { return "Break" }
 
 // Execute signals loop termination via BreakError.
 func (n *BreakNode) Execute(_ *ExecutionContext, _ io.Writer) error {
 	return &BreakError{}
 }
 
-// ContinueNode represents a {% continue %} statement.
-type ContinueNode struct {
-	Line int
-	Col  int
-}
+// ContinueNode Methods
 
-// Position implements Node.
+// Position returns the position of the ContinueNode.
 func (n *ContinueNode) Position() (int, int) { return n.Line, n.Col }
-func (n *ContinueNode) String() string       { return "Continue" }
+
+// String returns a debug representation of the ContinueNode.
+func (n *ContinueNode) String() string { return "Continue" }
 
 // Execute signals loop continuation via ContinueError.
 func (n *ContinueNode) Execute(_ *ExecutionContext, _ io.Writer) error {
 	return &ContinueError{}
 }
 
-// =============================================================================
-// Expression Nodes - represent expressions that evaluate to values
-// =============================================================================
+// LiteralNode Methods
 
-// Expression is the interface for all expression nodes.
-// Expressions are evaluated to produce values.
-type Expression interface {
-	Node
-	Evaluate(ctx *ExecutionContext) (*Value, error)
-}
-
-// LiteralNode represents a literal value (string, number, boolean).
-// Examples: "hello", 42, 3.14, true, false
-type LiteralNode struct {
-	Value any // The literal value (string, float64, bool)
-	Line  int
-	Col   int
-}
-
-// Position implements Node.
+// Position returns the position of the LiteralNode.
 func (n *LiteralNode) Position() (int, int) { return n.Line, n.Col }
-func (n *LiteralNode) String() string       { return fmt.Sprintf("Literal(%v)", n.Value) }
 
-// Evaluate returns the literal value as-is.
+// String returns a debug representation of the LiteralNode.
+func (n *LiteralNode) String() string { return fmt.Sprintf("Literal(%v)", n.Value) }
+
+// Evaluate returns the literal value wrapped in a Value.
 func (n *LiteralNode) Evaluate(_ *ExecutionContext) (*Value, error) {
 	return NewValue(n.Value), nil
 }
 
-// VariableNode represents a variable reference.
-// Example: name, user, items
-type VariableNode struct {
-	Name string
-	Line int
-	Col  int
-}
+// VariableNode Methods
 
-// Position implements Node.
+// Position returns the position of the VariableNode.
 func (n *VariableNode) Position() (int, int) { return n.Line, n.Col }
-func (n *VariableNode) String() string       { return fmt.Sprintf("Var(%s)", n.Name) }
+
+// String returns a debug representation of the VariableNode.
+func (n *VariableNode) String() string { return fmt.Sprintf("Var(%s)", n.Name) }
 
 // Evaluate resolves the variable in the current execution context.
 func (n *VariableNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	val, ok := ctx.Get(n.Name)
 	if !ok {
-		return NewValue(nil), nil // Return nil for undefined variables
+		return NewValue(nil), nil
 	}
 	return NewValue(val), nil
 }
 
-// BinaryOpNode represents a binary operation.
-// Examples: a + b, x == 10, count > 0
-type BinaryOpNode struct {
-	Operator string     // Operator: +, -, *, /, ==, !=, <, >, <=, >=, and, or
-	Left     Expression // Left operand
-	Right    Expression // Right operand
-	Line     int
-	Col      int
-}
+// BinaryOpNode Methods
 
-// Position implements Node.
+// Position returns the position of the BinaryOpNode.
 func (n *BinaryOpNode) Position() (int, int) { return n.Line, n.Col }
+
+// String returns a debug representation of the BinaryOpNode.
 func (n *BinaryOpNode) String() string {
 	return fmt.Sprintf("BinOp(%s %s %s)", n.Left, n.Operator, n.Right)
 }
@@ -427,17 +545,12 @@ func (n *BinaryOpNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	}
 }
 
-// UnaryOpNode represents a unary operation.
-// Examples: not flag, -value
-type UnaryOpNode struct {
-	Operator string     // Operator: not, -, +
-	Operand  Expression // The operand
-	Line     int
-	Col      int
-}
+// UnaryOpNode Methods
 
-// Position implements Node.
+// Position returns the position of the UnaryOpNode.
 func (n *UnaryOpNode) Position() (int, int) { return n.Line, n.Col }
+
+// String returns a debug representation of the UnaryOpNode.
 func (n *UnaryOpNode) String() string {
 	return fmt.Sprintf("UnaryOp(%s %s)", n.Operator, n.Operand)
 }
@@ -472,17 +585,12 @@ func (n *UnaryOpNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	}
 }
 
-// PropertyAccessNode represents property/attribute access.
-// Example: user.name, item.price
-type PropertyAccessNode struct {
-	Object   Expression // The object to access
-	Property string     // The property name
-	Line     int
-	Col      int
-}
+// PropertyAccessNode Methods
 
-// Position implements Node.
+// Position returns the position of the PropertyAccessNode.
 func (n *PropertyAccessNode) Position() (int, int) { return n.Line, n.Col }
+
+// String returns a debug representation of the PropertyAccessNode.
 func (n *PropertyAccessNode) String() string {
 	return fmt.Sprintf("PropAccess(%s.%s)", n.Object, n.Property)
 }
@@ -496,17 +604,12 @@ func (n *PropertyAccessNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	return object.Field(n.Property)
 }
 
-// SubscriptNode represents subscript/index access.
-// Example: items[0], dict["key"]
-type SubscriptNode struct {
-	Object Expression // The object to subscript
-	Index  Expression // The index/key expression
-	Line   int
-	Col    int
-}
+// SubscriptNode Methods
 
-// Position implements Node.
+// Position returns the position of the SubscriptNode.
 func (n *SubscriptNode) Position() (int, int) { return n.Line, n.Col }
+
+// String returns a debug representation of the SubscriptNode.
 func (n *SubscriptNode) String() string {
 	return fmt.Sprintf("Subscript(%s[%s])", n.Object, n.Index)
 }
@@ -523,24 +626,18 @@ func (n *SubscriptNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 		return nil, err
 	}
 
-	if idx, err := index.Int(); err == nil { // if NO error
+	if idx, err := index.Int(); err == nil {
 		return object.Index(int(idx))
 	}
 	return object.Key(index.Interface())
 }
 
-// FilterNode represents a filter application.
-// Examples: name|upper, price|add:10, text|slice:0:10
-type FilterNode struct {
-	Expr Expression   // The expression to filter
-	Name string       // The filter name
-	Args []Expression // Filter arguments (can be empty)
-	Line int
-	Col  int
-}
+// FilterNode Methods
 
-// Position implements Node.
+// Position returns the position of the FilterNode.
 func (n *FilterNode) Position() (int, int) { return n.Line, n.Col }
+
+// String returns a debug representation of the FilterNode.
 func (n *FilterNode) String() string {
 	if len(n.Args) > 0 {
 		return fmt.Sprintf("Filter(%s|%s:%v)", n.Expr, n.Name, n.Args)
@@ -576,77 +673,18 @@ func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	return NewValue(result), nil
 }
 
-// =============================================================================
 // Helper Functions
-// =============================================================================
 
 // executeBody executes a list of nodes as statements, returning the first error.
 func executeBody(body []Node, ctx *ExecutionContext, w io.Writer) error {
 	for _, node := range body {
-		if s, ok := node.(Statement); ok {
-			if err := s.Execute(ctx, w); err != nil {
-				return err
-			}
+		s, ok := node.(Statement)
+		if !ok {
+			continue
+		}
+		if err := s.Execute(ctx, w); err != nil {
+			return err
 		}
 	}
 	return nil
 }
-
-// NewTextNode returns a new TextNode.
-func NewTextNode(text string, line, col int) *TextNode {
-	return &TextNode{Text: text, Line: line, Col: col}
-}
-
-// NewOutputNode returns a new OutputNode.
-func NewOutputNode(expr Expression, line, col int) *OutputNode {
-	return &OutputNode{Expr: expr, Line: line, Col: col}
-}
-
-// NewLiteralNode returns a new LiteralNode.
-func NewLiteralNode(value any, line, col int) *LiteralNode {
-	return &LiteralNode{Value: value, Line: line, Col: col}
-}
-
-// NewVariableNode returns a new VariableNode.
-func NewVariableNode(name string, line, col int) *VariableNode {
-	return &VariableNode{Name: name, Line: line, Col: col}
-}
-
-// NewFilterNode returns a new FilterNode.
-func NewFilterNode(expr Expression, name string, args []Expression, line, col int) *FilterNode {
-	return &FilterNode{Expr: expr, Name: name, Args: args, Line: line, Col: col}
-}
-
-// NewPropertyAccessNode returns a new PropertyAccessNode.
-func NewPropertyAccessNode(object Expression, property string, line, col int) *PropertyAccessNode {
-	return &PropertyAccessNode{Object: object, Property: property, Line: line, Col: col}
-}
-
-// NewSubscriptNode returns a new SubscriptNode.
-func NewSubscriptNode(object, index Expression, line, col int) *SubscriptNode {
-	return &SubscriptNode{Object: object, Index: index, Line: line, Col: col}
-}
-
-// NewBinaryOpNode returns a new BinaryOpNode.
-func NewBinaryOpNode(operator string, left, right Expression, line, col int) *BinaryOpNode {
-	return &BinaryOpNode{Operator: operator, Left: left, Right: right, Line: line, Col: col}
-}
-
-// NewUnaryOpNode returns a new UnaryOpNode.
-func NewUnaryOpNode(operator string, operand Expression, line, col int) *UnaryOpNode {
-	return &UnaryOpNode{Operator: operator, Operand: operand, Line: line, Col: col}
-}
-
-// =============================================================================
-// Loop Control Errors
-// =============================================================================
-
-// BreakError signals loop termination.
-type BreakError struct{}
-
-func (e *BreakError) Error() string { return ErrBreakOutsideLoop.Error() }
-
-// ContinueError signals loop continuation.
-type ContinueError struct{}
-
-func (e *ContinueError) Error() string { return ErrContinueOutsideLoop.Error() }
