@@ -830,6 +830,88 @@ func TestLexerMultilineTemplate(t *testing.T) {
 	compareTokens(t, "multiline template", got, want)
 }
 
+func TestLexerScanBlockTagError(t *testing.T) {
+	// Cover the error return from scanInsideTag inside scanBlockTag.
+	_, err := NewLexer("{% @ %}").Tokenize()
+	if err == nil {
+		t.Fatal("expected error for invalid character in block tag")
+	}
+	var lexErr *LexerError
+	if !errors.As(err, &lexErr) {
+		t.Fatalf("error type = %T, want *LexerError", err)
+	}
+	if !strings.Contains(lexErr.Message, "unexpected character") {
+		t.Errorf("error message = %q, want 'unexpected character'", lexErr.Message)
+	}
+}
+
+func TestLexerScanStringEscapes(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []*Token
+	}{
+		{
+			name:  "carriage return escape",
+			input: `{{ "a\rb" }}`,
+			want: []*Token{
+				tok(TokenVarBegin, "{{", 1, 1),
+				tok(TokenString, "a\rb", 1, 4),
+				tok(TokenVarEnd, "}}", 1, 11),
+				eof(1, 13),
+			},
+		},
+		{
+			name:  "escaped single quote in double quoted string",
+			input: `{{ "it\'s" }}`,
+			want: []*Token{
+				tok(TokenVarBegin, "{{", 1, 1),
+				tok(TokenString, "it's", 1, 4),
+				tok(TokenVarEnd, "}}", 1, 12),
+				eof(1, 14),
+			},
+		},
+		{
+			name:  "escaped single quote in single quoted string",
+			input: `{{ 'it\'s' }}`,
+			want: []*Token{
+				tok(TokenVarBegin, "{{", 1, 1),
+				tok(TokenString, "it's", 1, 4),
+				tok(TokenVarEnd, "}}", 1, 12),
+				eof(1, 14),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewLexer(tt.input).Tokenize()
+			if err != nil {
+				t.Fatalf("Tokenize(%q) returned unexpected error: %v", tt.input, err)
+			}
+			compareTokens(t, tt.name, got, tt.want)
+		})
+	}
+}
+
+func TestLexerScanInsideTagEOF(t *testing.T) {
+	// Cover the pos >= len early return in scanInsideTag.
+	// After "x" is scanned, skipWhitespace advances past trailing spaces
+	// to EOF. scanInsideTag is called but pos >= len, so it returns nil.
+	// Then the outer loop detects EOF and returns the "unclosed" error.
+	_, err := NewLexer("{{ x   ").Tokenize()
+	if err == nil {
+		t.Fatal("expected error for unclosed variable tag with trailing whitespace")
+	}
+	var lexErr *LexerError
+	if !errors.As(err, &lexErr) {
+		t.Fatalf("error type = %T, want *LexerError", err)
+	}
+	if !strings.Contains(lexErr.Message, "unclosed variable tag") {
+		t.Errorf("error message = %q, want 'unclosed variable tag'", lexErr.Message)
+	}
+}
+
 func TestLexerEdgeCases(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -753,3 +753,112 @@ func TestNewValue(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// Edge Case Tests for Coverage
+// =============================================================================
+
+func TestValueIsTrueEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected bool
+	}{
+		{"uint zero", uint(0), false},
+		{"uint nonzero", uint(1), true},
+		{"empty array", [0]int{}, false},
+		{"nonempty array", [2]int{1, 2}, true},
+		{"struct", struct{ X int }{1}, true},
+		{"func", func() {}, true},
+		{"channel", make(chan int), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValue(tt.input)
+			if got := v.IsTrue(); got != tt.expected {
+				t.Errorf("IsTrue() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValueFormatSliceItemEdgeCases(t *testing.T) {
+	// Nested slices.
+	v := NewValue([][]int{{1, 2}, {3, 4}})
+	got := v.String()
+	if got != "[[1,2],[3,4]]" {
+		t.Errorf("String() = %q, want %q", got, "[[1,2],[3,4]]")
+	}
+
+	// Slice of maps.
+	v2 := NewValue([]map[string]int{{"a": 1}})
+	s := v2.String()
+	if s == "" {
+		t.Error("String() returned empty for slice of maps")
+	}
+
+	// Slice of bools.
+	v3 := NewValue([]bool{true, false})
+	if got := v3.String(); got != "[true,false]" {
+		t.Errorf("String() = %q, want %q", got, "[true,false]")
+	}
+
+	// Slice of uints.
+	v4 := NewValue([]uint{10, 20})
+	if got := v4.String(); got != "[10,20]" {
+		t.Errorf("String() = %q, want %q", got, "[10,20]")
+	}
+
+	// Slice of floats.
+	v5 := NewValue([]float64{1.5, 2.5})
+	if got := v5.String(); got != "[1.5,2.5]" {
+		t.Errorf("String() = %q, want %q", got, "[1.5,2.5]")
+	}
+}
+
+func TestValueLessEdgeCases(t *testing.T) {
+	// String keys.
+	keys := sortedKeys{reflect.ValueOf("banana"), reflect.ValueOf("apple")}
+	if !keys.Less(1, 0) {
+		t.Error("Less('apple', 'banana') should be true")
+	}
+	if keys.Less(0, 1) {
+		t.Error("Less('banana', 'apple') should be false")
+	}
+
+	// Numeric keys.
+	numKeys := sortedKeys{reflect.ValueOf(3), reflect.ValueOf(1)}
+	if !numKeys.Less(1, 0) {
+		t.Error("Less(1, 3) should be true")
+	}
+
+	// Mixed: one numeric, one not — falls back to string.
+	mixedKeys := sortedKeys{reflect.ValueOf("abc"), reflect.ValueOf(1)}
+	_ = mixedKeys.Less(0, 1) // cover the branch
+}
+
+func TestValueStringUint(t *testing.T) {
+	v := NewValue(uint(42))
+	if got := v.String(); got != "42" {
+		t.Errorf("String() = %q, want %q", got, "42")
+	}
+}
+
+type stringerVal string
+
+func (s stringerVal) String() string { return "stringer:" + string(s) }
+
+func TestValueStringStringer(t *testing.T) {
+	v := NewValue(stringerVal("hello"))
+	if got := v.String(); got != "stringer:hello" {
+		t.Errorf("String() = %q, want %q", got, "stringer:hello")
+	}
+}
+
+func TestValueStringJSONFallback(t *testing.T) {
+	v := NewValue(map[string]int{"x": 1})
+	got := v.String()
+	if got == "" {
+		t.Error("String() returned empty for map")
+	}
+}

@@ -213,4 +213,40 @@ func TestStringFilterErrors(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "", got)
 	})
+
+	t.Run("OrdinalizeValidInt", func(t *testing.T) {
+		got, err := ordinalizeFilter(1)
+		require.NoError(t, err)
+		assert.Equal(t, "1st", got)
+	})
+
+	t.Run("OrdinalizeNonNumeric", func(t *testing.T) {
+		_, err := ordinalizeFilter("abc")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
+	})
+
+	t.Run("TruncateWordsValid", func(t *testing.T) {
+		got, err := truncateWordsFilter("one two three four", "2")
+		require.NoError(t, err)
+		assert.Equal(t, "one two...", got)
+	})
+
+	t.Run("TruncateWordsNoArgs", func(t *testing.T) {
+		_, err := truncateWordsFilter("hello world")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrInsufficientArgs)
+	})
+
+	t.Run("TruncateWordsInvalidArg", func(t *testing.T) {
+		_, err := truncateWordsFilter("hello world", "abc")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
+	})
+
+	t.Run("TruncateWordsEmpty", func(t *testing.T) {
+		got, err := truncateWordsFilter("", "5")
+		require.NoError(t, err)
+		assert.Equal(t, "", got)
+	})
 }

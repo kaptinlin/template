@@ -1171,3 +1171,66 @@ func TestRenderingStability(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// Edge Case Tests for Coverage
+// =============================================================================
+
+func TestContextGetEmptyPathComponent(t *testing.T) {
+	c := NewContext()
+	c.Set("a", 1)
+	_, err := c.Get("a..b")
+	if err == nil {
+		t.Fatal("expected error for empty path component")
+	}
+}
+
+func TestContextGetEmptyKey(t *testing.T) {
+	c := NewContext()
+	c.Set("x", 1)
+	val, err := c.Get("")
+	if err != nil {
+		t.Fatalf("Get('') error: %v", err)
+	}
+	m, ok := val.(map[string]any)
+	if !ok {
+		t.Fatalf("Get('') type = %T, want map[string]any", val)
+	}
+	if m["x"] != 1 {
+		t.Errorf("Get('')['x'] = %v, want 1", m["x"])
+	}
+}
+
+func TestSplitDotPathEmpty(t *testing.T) {
+	result := splitDotPath("")
+	if result != nil {
+		t.Errorf("splitDotPath('') = %v, want nil", result)
+	}
+}
+
+func TestContextSetNestedEmpty(t *testing.T) {
+	c := NewContext()
+	c.Set("", "ignored")
+	if len(c) != 0 {
+		t.Errorf("Set('', ...) should be ignored, got len = %d", len(c))
+	}
+}
+
+func TestContextGetIndexOutOfRange(t *testing.T) {
+	c := NewContext()
+	c.Set("items", []int{1, 2, 3})
+	_, err := c.Get("items.99")
+	if err == nil {
+		t.Fatal("expected error for index out of range")
+	}
+}
+
+func TestContextBuilderStructMarshalError(t *testing.T) {
+	// A channel cannot be marshaled to JSON.
+	cb := NewContextBuilder()
+	cb.Struct(make(chan int))
+	_, err := cb.Build()
+	if err == nil {
+		t.Fatal("expected error for unmarshalable struct")
+	}
+}

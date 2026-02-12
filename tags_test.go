@@ -1551,3 +1551,43 @@ func TestTagRegistrySaveRestore(t *testing.T) {
 		t.Error("HasTag(\"if\") = false, want true (after restore)")
 	}
 }
+
+func TestTagIfElseAfterElse(t *testing.T) {
+	// {% if x %}...{% else %}...{% else %}...{% endif %}
+	_, err := Compile("{% if x %}a{% else %}b{% else %}c{% endif %}")
+	if err == nil {
+		t.Fatal("expected error for else after else")
+	}
+}
+
+func TestTagIfElifAfterElse(t *testing.T) {
+	// {% if x %}...{% else %}...{% elif y %}...{% endif %}
+	_, err := Compile("{% if x %}a{% else %}b{% elif y %}c{% endif %}")
+	if err == nil {
+		t.Fatal("expected error for elif after else")
+	}
+}
+
+func TestTagForMissingIn(t *testing.T) {
+	// {% for x items %}...{% endfor %} — missing "in"
+	_, err := Compile("{% for x items %}a{% endfor %}")
+	if err == nil {
+		t.Fatal("expected error for missing 'in' keyword")
+	}
+}
+
+func TestTagForMissingVariable(t *testing.T) {
+	// {% for in items %}...{% endfor %} — variable missing/ambiguous
+	_, err := Compile("{% for in items %}a{% endfor %}")
+	if err == nil {
+		t.Fatal("expected error for missing variable")
+	}
+}
+
+func TestTagForSecondVariableMissing(t *testing.T) {
+	// {% for k, in items %}...{% endfor %} — second variable missing
+	_, err := Compile("{% for k, in items %}a{% endfor %}")
+	if err == nil {
+		t.Fatal("expected error for missing second variable")
+	}
+}

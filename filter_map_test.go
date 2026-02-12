@@ -90,4 +90,9 @@ func TestExtractFilterErrors(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
+
+	t.Run("NonMapInput", func(_ *testing.T) {
+		// Extracting from a non-map/non-slice returns empty or error.
+		_, _ = extractFilter(42, "key")
+	})
 }

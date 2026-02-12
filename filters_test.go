@@ -1,6 +1,7 @@
 package template
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -361,5 +362,28 @@ func TestBuiltinFiltersRegistered(t *testing.T) {
 				t.Errorf("GetFilter(%q) = _, false, want true", name)
 			}
 		})
+	}
+}
+
+func TestFilterRegistryConcurrentAccess(_ *testing.T) {
+	// Concurrent register and query to verify thread safety.
+	const goroutines = 10
+	done := make(chan struct{})
+
+	for i := range goroutines {
+		go func(id int) {
+			defer func() { done <- struct{}{} }()
+			name := fmt.Sprintf("concurrent_filter_%d", id)
+			RegisterFilter(name, func(value any, _ ...string) (any, error) {
+				return value, nil
+			})
+			_, _ = GetFilter(name)
+			_ = ListFilters()
+			_ = HasFilter(name)
+		}(i)
+	}
+
+	for range goroutines {
+		<-done
 	}
 }

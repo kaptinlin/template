@@ -3,8 +3,34 @@ package template
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"testing"
 )
+
+// Test sentinel errors for mock types.
+var (
+	errMockEval       = errors.New("eval failed")
+	errMockWrite      = errors.New("write failed")
+	errMockObjectEval = errors.New("object eval failed")
+	errMockIndexEval  = errors.New("index eval failed")
+	errMockLeftEval   = errors.New("left eval failed")
+	errMockRightEval  = errors.New("right eval failed")
+	errMockOperand    = errors.New("operand eval failed")
+	errMockCollection = errors.New("collection eval failed")
+	errMockBody       = errors.New("body error")
+)
+
+// errExpr is a mock expression that always returns an error.
+type errExpr struct{ err error }
+
+func (e *errExpr) Position() (int, int)                         { return 1, 1 }
+func (e *errExpr) String() string                               { return "errExpr" }
+func (e *errExpr) Evaluate(_ *ExecutionContext) (*Value, error) { return nil, e.err }
+
+// errWriter is a mock writer that always returns an error.
+type errWriter struct{ err error }
+
+func (w *errWriter) Write(_ []byte) (int, error) { return 0, w.err }
 
 func TestTextNode(t *testing.T) {
 	n := NewTextNode("hello", 1, 5)
@@ -798,5 +824,251 @@ func TestForNodeLoopContextFields(t *testing.T) {
 	}
 	if !captured.Last {
 		t.Error("Last = false, want true")
+	}
+}
+
+// =============================================================================
+// Edge Case Tests for Coverage
+// =============================================================================
+
+func TestOutputNodeEvaluateError(t *testing.T) {
+	mockErr := errMockEval
+	n := NewOutputNode(&errExpr{err: mockErr}, 1, 1)
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	err := n.Execute(ctx, &buf)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "eval failed" {
+		t.Errorf("error = %q, want %q", err.Error(), "eval failed")
+	}
+}
+
+func TestOutputNodeWriteError(t *testing.T) {
+	n := NewOutputNode(NewLiteralNode("hello", 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	writeErr := errMockWrite
+	err := n.Execute(ctx, &errWriter{err: writeErr})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "write failed" {
+		t.Errorf("error = %q, want %q", err.Error(), "write failed")
+	}
+}
+
+func TestPropertyAccessNodeEvaluateError(t *testing.T) {
+	mockErr := errMockObjectEval
+	n := NewPropertyAccessNode(&errExpr{err: mockErr}, "name", 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestPropertyAccessNodeFieldNotFound(t *testing.T) {
+	// Access a non-existent field on a primitive value.
+	n := NewPropertyAccessNode(NewLiteralNode(42, 1, 1), "foo", 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if err == nil {
+		t.Fatal("expected error for field access on non-struct")
+	}
+}
+
+func TestSubscriptNodeObjectError(t *testing.T) {
+	mockErr := errMockObjectEval
+	n := NewSubscriptNode(&errExpr{err: mockErr}, NewLiteralNode(0, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSubscriptNodeIndexError(t *testing.T) {
+	mockErr := errMockIndexEval
+	n := NewSubscriptNode(NewLiteralNode([]int{1, 2, 3}, 1, 1), &errExpr{err: mockErr}, 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSubscriptNodeStringKeyFallback(t *testing.T) {
+	// When index is a non-integer (string), falls through Int() to Key().
+	m := map[string]any{"name": "Alice"}
+	n := NewSubscriptNode(
+		NewLiteralNode(m, 1, 1),
+		NewLiteralNode("name", 1, 1),
+		1, 1,
+	)
+	ctx := NewExecutionContext(map[string]any{})
+	val, err := n.Evaluate(ctx)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+	if got := val.String(); got != "Alice" {
+		t.Errorf("value = %q, want %q", got, "Alice")
+	}
+}
+
+func TestBinaryOpNodeLeftError(t *testing.T) {
+	mockErr := errMockLeftEval
+	n := NewBinaryOpNode("+", &errExpr{err: mockErr}, NewLiteralNode(1, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestBinaryOpNodeRightError(t *testing.T) {
+	mockErr := errMockRightEval
+	n := NewBinaryOpNode("+", NewLiteralNode(1, 1, 1), &errExpr{err: mockErr}, 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestBinaryOpNodeStringConcatFallback(t *testing.T) {
+	// "+" with string left, numeric right — falls back to string concatenation.
+	n := NewBinaryOpNode("+", NewLiteralNode("count: ", 1, 1), NewLiteralNode(42, 1, 1), 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	val, err := n.Evaluate(ctx)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+	if got := val.String(); got != "count: 42" {
+		t.Errorf("value = %q, want %q", got, "count: 42")
+	}
+}
+
+func TestBinaryOpNodeComparisonSuccess(t *testing.T) {
+	// Comparison operators with various types to cover all branches.
+	tests := []struct {
+		op       string
+		left     any
+		right    any
+		expected bool
+	}{
+		{"<", 1, 2, true},
+		{"<", 2, 1, false},
+		{">", 2, 1, true},
+		{">", 1, 2, false},
+		{"<=", 1, 1, true},
+		{"<=", 2, 1, false},
+		{">=", 1, 1, true},
+		{">=", 1, 2, false},
+		// String comparison fallback.
+		{"<", "apple", "banana", true},
+		{">", "banana", "apple", true},
+	}
+	for _, tt := range tests {
+		name := fmt.Sprintf("%v_%s_%v", tt.left, tt.op, tt.right)
+		t.Run(name, func(t *testing.T) {
+			n := NewBinaryOpNode(tt.op,
+				NewLiteralNode(tt.left, 1, 1),
+				NewLiteralNode(tt.right, 1, 1),
+				1, 1)
+			ctx := NewExecutionContext(map[string]any{})
+			val, err := n.Evaluate(ctx)
+			if err != nil {
+				t.Fatalf("Evaluate() error: %v", err)
+			}
+			if got := val.IsTrue(); got != tt.expected {
+				t.Errorf("%v %s %v = %v, want %v", tt.left, tt.op, tt.right, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestUnaryOpNodeOperandError(t *testing.T) {
+	mockErr := errMockOperand
+	n := NewUnaryOpNode("not", &errExpr{err: mockErr}, 1, 1)
+	ctx := NewExecutionContext(map[string]any{})
+	_, err := n.Evaluate(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestForNodeCollectionError(t *testing.T) {
+	mockErr := errMockCollection
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: &errExpr{err: mockErr},
+		Body:       nil,
+		Line:       1,
+		Col:        1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	err := n.Execute(ctx, &buf)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestForNodeBodyError(t *testing.T) {
+	// Body statement returns a non-break/continue error.
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: NewLiteralNode([]int{1, 2}, 1, 1),
+		Body: []Node{
+			// Use an OutputNode with an errExpr to trigger error in body.
+			NewOutputNode(&errExpr{err: errMockBody}, 1, 1),
+		},
+		Line: 1,
+		Col:  1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	err := n.Execute(ctx, &buf)
+	if err == nil {
+		t.Fatal("expected error from body execution")
+	}
+}
+
+func TestForNodeNestedLoop(t *testing.T) {
+	// Nested for loops to verify parent loop context restoration.
+	tmpl := `{% for i in outer %}{% for j in inner %}{{ i }}-{{ j }} {% endfor %}{% endfor %}`
+	compiled, err := Compile(tmpl)
+	if err != nil {
+		t.Fatalf("Compile() error: %v", err)
+	}
+	result, err := compiled.Render(map[string]any{
+		"outer": []int{1, 2},
+		"inner": []string{"a", "b"},
+	})
+	if err != nil {
+		t.Fatalf("Render() error: %v", err)
+	}
+	expected := "1-a 1-b 2-a 2-b "
+	if result != expected {
+		t.Errorf("result = %q, want %q", result, expected)
+	}
+}
+
+func TestForNodeEmptyCollection(t *testing.T) {
+	n := &ForNode{
+		Vars:       []string{"item"},
+		Collection: NewLiteralNode([]int{}, 1, 1),
+		Body:       []Node{NewTextNode("x", 1, 1)},
+		Line:       1,
+		Col:        1,
+	}
+	var buf bytes.Buffer
+	ctx := NewExecutionContext(map[string]any{})
+	if err := n.Execute(ctx, &buf); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if buf.String() != "" {
+		t.Errorf("output = %q, want empty", buf.String())
 	}
 }

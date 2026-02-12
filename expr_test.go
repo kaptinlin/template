@@ -1588,6 +1588,283 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 	}
 }
 
+func TestParsePropertyAccessEdgeCases(t *testing.T) {
+	tests := []struct {
+		name          string
+		expr          string
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:        "numeric index after dot",
+			expr:        "items.0",
+			expectError: false,
+		},
+		{
+			name:          "symbol after dot",
+			expr:          "items.+",
+			expectError:   true,
+			errorContains: "expected property name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens := mustTokenize(t, tt.expr)
+			parser := NewExprParser(tokens)
+			result, err := parser.ParseExpression()
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("ParseExpression(%q) error = nil, want error containing %q", tt.expr, tt.errorContains)
+				}
+				if !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("error = %q, want substring %q", err.Error(), tt.errorContains)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("ParseExpression(%q) error = %v", tt.expr, err)
+				}
+				if result == nil {
+					t.Fatal("result is nil")
+				}
+			}
+		})
+	}
+
+	// Test float numeric index via direct token construction.
+	// The lexer never produces a float after ".", but the parser handles it.
+	t.Run("float numeric index via tokens", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenIdentifier, Value: "items", Line: 1, Col: 1},
+			{Type: TokenSymbol, Value: ".", Line: 1, Col: 6},
+			{Type: TokenNumber, Value: "3.14", Line: 1, Col: 7},
+		}
+		parser := NewExprParser(tokens)
+		result, err := parser.ParseExpression()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		sub, ok := result.(*SubscriptNode)
+		if !ok {
+			t.Fatalf("type = %T, want *SubscriptNode", result)
+		}
+		lit, ok := sub.Index.(*LiteralNode)
+		if !ok {
+			t.Fatalf("Index type = %T, want *LiteralNode", sub.Index)
+		}
+		if got, want := lit.Value, 3.14; got != want {
+			t.Errorf("Index.Value = %v, want %v", got, want)
+		}
+	})
+
+	// Test invalid numeric index (both ParseInt and ParseFloat fail).
+	t.Run("invalid numeric index via tokens", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenIdentifier, Value: "items", Line: 1, Col: 1},
+			{Type: TokenSymbol, Value: ".", Line: 1, Col: 6},
+			{Type: TokenNumber, Value: "1e999999", Line: 1, Col: 7},
+		}
+		parser := NewExprParser(tokens)
+		_, err := parser.ParseExpression()
+		if err == nil {
+			t.Fatal("expected error for invalid numeric index")
+		}
+		if !strings.Contains(err.Error(), "invalid numeric index") {
+			t.Errorf("error = %q, want 'invalid numeric index'", err.Error())
+		}
+	})
+}
+
+func TestParseFilterArgEdgeCases(t *testing.T) {
+	// Test missing filter argument after colon.
+	t.Run("missing arg after colon", func(t *testing.T) {
+		// Construct tokens: name | truncate :
+		tokens := []*Token{
+			{Type: TokenIdentifier, Value: "name", Line: 1, Col: 1},
+			{Type: TokenSymbol, Value: "|", Line: 1, Col: 6},
+			{Type: TokenIdentifier, Value: "truncate", Line: 1, Col: 7},
+			{Type: TokenSymbol, Value: ":", Line: 1, Col: 15},
+		}
+		parser := NewExprParser(tokens)
+		_, err := parser.ParseExpression()
+		if err == nil {
+			t.Fatal("expected error for missing filter argument")
+		}
+		if !strings.Contains(err.Error(), "expected filter argument") {
+			t.Errorf("error = %q, want 'expected filter argument'", err.Error())
+		}
+	})
+
+	// Test unexpected token type as filter argument (e.g., a symbol).
+	t.Run("symbol as filter arg", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenIdentifier, Value: "name", Line: 1, Col: 1},
+			{Type: TokenSymbol, Value: "|", Line: 1, Col: 6},
+			{Type: TokenIdentifier, Value: "truncate", Line: 1, Col: 7},
+			{Type: TokenSymbol, Value: ":", Line: 1, Col: 15},
+			{Type: TokenSymbol, Value: "+", Line: 1, Col: 16},
+		}
+		parser := NewExprParser(tokens)
+		_, err := parser.ParseExpression()
+		if err == nil {
+			t.Fatal("expected error for symbol as filter argument")
+		}
+		if !strings.Contains(err.Error(), "expected literal or variable") {
+			t.Errorf("error = %q, want 'expected literal or variable'", err.Error())
+		}
+	})
+}
+
+func TestParsePrimaryEdgeCases(t *testing.T) {
+	// Test unexpected symbol (not parenthesis).
+	t.Run("unexpected symbol", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenSymbol, Value: "]", Line: 1, Col: 1},
+		}
+		parser := NewExprParser(tokens)
+		_, err := parser.ParseExpression()
+		if err == nil {
+			t.Fatal("expected error for unexpected symbol")
+		}
+		if !strings.Contains(err.Error(), "unexpected symbol") {
+			t.Errorf("error = %q, want 'unexpected symbol'", err.Error())
+		}
+	})
+
+	// Test unexpected token type (e.g., TokenVarEnd).
+	t.Run("unexpected token type", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1},
+		}
+		parser := NewExprParser(tokens)
+		_, err := parser.ParseExpression()
+		if err == nil {
+			t.Fatal("expected error for unexpected token type")
+		}
+		if !strings.Contains(err.Error(), "unexpected token") {
+			t.Errorf("error = %q, want 'unexpected token'", err.Error())
+		}
+	})
+
+	// Test error propagation from parenthesized expression.
+	t.Run("error inside parentheses", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenSymbol, Value: "(", Line: 1, Col: 1},
+			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 2},
+		}
+		parser := NewExprParser(tokens)
+		_, err := parser.ParseExpression()
+		if err == nil {
+			t.Fatal("expected error for invalid expression inside parentheses")
+		}
+	})
+
+	// Test missing closing parenthesis with nil token.
+	t.Run("missing closing paren at EOF", func(t *testing.T) {
+		tokens := []*Token{
+			{Type: TokenSymbol, Value: "(", Line: 1, Col: 1},
+			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 2},
+		}
+		parser := NewExprParser(tokens)
+		_, err := parser.ParseExpression()
+		if err == nil {
+			t.Fatal("expected error for missing closing paren")
+		}
+		if !strings.Contains(err.Error(), "expected ')'") {
+			t.Errorf("error = %q, want 'expected ')'", err.Error())
+		}
+	})
+}
+
+func TestParseErrorPropagation(t *testing.T) {
+	// These tests trigger error propagation through each precedence level.
+	tests := []struct {
+		name   string
+		tokens []*Token
+	}{
+		{
+			// Error in right operand of "or": a or <bad>
+			name: "error in or right operand",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
+				{Type: TokenIdentifier, Value: "or", Line: 1, Col: 3},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 6},
+			},
+		},
+		{
+			// Error in right operand of "and": a and <bad>
+			name: "error in and right operand",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
+				{Type: TokenIdentifier, Value: "and", Line: 1, Col: 3},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 7},
+			},
+		},
+		{
+			// Error in right operand of comparison: a == <bad>
+			name: "error in comparison right operand",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
+				{Type: TokenSymbol, Value: "==", Line: 1, Col: 3},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 6},
+			},
+		},
+		{
+			// Error in right operand of addition: a + <bad>
+			name: "error in addition right operand",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
+				{Type: TokenSymbol, Value: "+", Line: 1, Col: 3},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
+			},
+		},
+		{
+			// Error in right operand of multiplication: a * <bad>
+			name: "error in multiplication right operand",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
+				{Type: TokenSymbol, Value: "*", Line: 1, Col: 3},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
+			},
+		},
+		{
+			// Error in unary operand: not <bad>
+			name: "error in unary operand",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "not", Line: 1, Col: 1},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
+			},
+		},
+		{
+			// Error in unary minus operand: - <bad>
+			name: "error in unary minus operand",
+			tokens: []*Token{
+				{Type: TokenSymbol, Value: "-", Line: 1, Col: 1},
+				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 3},
+			},
+		},
+		{
+			// Error in filter pipe missing name: a | <non-identifier>
+			name: "filter pipe with non-identifier",
+			tokens: []*Token{
+				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
+				{Type: TokenSymbol, Value: "|", Line: 1, Col: 3},
+				{Type: TokenNumber, Value: "123", Line: 1, Col: 5},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewExprParser(tt.tokens)
+			_, err := parser.ParseExpression()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+		})
+	}
+}
+
 // TestKeywordAndSymbolEquivalence tests that keywords and symbols are equivalent
 func TestKeywordAndSymbolEquivalence(t *testing.T) {
 	tests := []struct {

@@ -55,3 +55,11 @@ func TestJsonFilterViaTemplate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, `{"key":"value"}`, got)
 }
+
+func TestJsonFilterMarshalError(t *testing.T) {
+	// Channels cannot be JSON-serialized.
+	_, err := jsonFilter(make(chan int))
+	if err == nil {
+		t.Fatal("expected error for channel marshal")
+	}
+}

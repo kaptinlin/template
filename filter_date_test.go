@@ -110,6 +110,12 @@ func TestDateFilters(t *testing.T) {
 			},
 			expected: "Time ago: 5 days ago",
 		},
+		{
+			name:     "WeekFilter",
+			template: "Week: {{ current | week }}",
+			context:  map[string]any{"current": current},
+			expected: "Week: 13",
+		},
 	}
 
 	for _, tc := range cases {

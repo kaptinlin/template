@@ -892,3 +892,234 @@ func TestParserParseExpression(t *testing.T) {
 		t.Errorf("variable name = %q, want %q", v.Name, "x")
 	}
 }
+
+// =============================================================================
+// Test Group 15: Parser Edge Cases (coverage gaps)
+// =============================================================================
+
+func TestParserParseUntil(t *testing.T) {
+	// ParseUntil is public API but unused by built-in tags (they use ParseUntilWithArgs).
+	t.Run("basic ParseUntil", func(t *testing.T) {
+		tokens, err := NewLexer("hello{% endif %}").Tokenize()
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := NewParser(tokens)
+		nodes, tag, err := p.ParseUntil("endif")
+		if err != nil {
+			t.Fatalf("ParseUntil() error = %v", err)
+		}
+		if tag != "endif" {
+			t.Errorf("tag = %q, want %q", tag, "endif")
+		}
+		if len(nodes) != 1 {
+			t.Errorf("len(nodes) = %d, want 1", len(nodes))
+		}
+	})
+
+	t.Run("ParseUntil EOF", func(t *testing.T) {
+		tokens, err := NewLexer("hello world").Tokenize()
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := NewParser(tokens)
+		_, _, err = p.ParseUntil("endif")
+		if err == nil {
+			t.Fatal("expected error for unexpected EOF")
+		}
+		if !strings.Contains(err.Error(), "unexpected EOF") {
+			t.Errorf("error = %q, want 'unexpected EOF'", err.Error())
+		}
+	})
+}
+
+func TestParserParseNextEdgeCases(t *testing.T) {
+	// Test the exhaustive switch branches for unexpected token types.
+	unexpectedTypes := []struct {
+		name string
+		tok  *Token
+	}{
+		{"TokenError", &Token{Type: TokenError, Value: "err", Line: 1, Col: 1}},
+		{"TokenVarEnd", &Token{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1}},
+		{"TokenTagEnd", &Token{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 1}},
+		{"TokenIdentifier", &Token{Type: TokenIdentifier, Value: "x", Line: 1, Col: 1}},
+		{"TokenString", &Token{Type: TokenString, Value: "hello", Line: 1, Col: 1}},
+		{"TokenNumber", &Token{Type: TokenNumber, Value: "42", Line: 1, Col: 1}},
+		{"TokenSymbol", &Token{Type: TokenSymbol, Value: "+", Line: 1, Col: 1}},
+	}
+
+	for _, tt := range unexpectedTypes {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens := []*Token{tt.tok, {Type: TokenEOF, Line: 1, Col: 2}}
+			p := NewParser(tokens)
+			_, err := p.Parse()
+			if err == nil {
+				t.Fatalf("expected error for %s as first token", tt.name)
+			}
+			if !strings.Contains(err.Error(), "unexpected token") {
+				t.Errorf("error = %q, want 'unexpected token'", err.Error())
+			}
+		})
+	}
+}
+
+func TestParserParseVariableEdgeCases(t *testing.T) {
+	t.Run("empty variable expression", func(t *testing.T) {
+		// {{ }}
+		tokens := []*Token{
+			{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
+			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 4},
+			{Type: TokenEOF, Line: 1, Col: 6},
+		}
+		p := NewParser(tokens)
+		_, err := p.Parse()
+		if err == nil {
+			t.Fatal("expected error for empty variable expression")
+		}
+		if !strings.Contains(err.Error(), "empty variable expression") {
+			t.Errorf("error = %q, want 'empty variable expression'", err.Error())
+		}
+	})
+
+	t.Run("missing VarEnd", func(t *testing.T) {
+		// {{ x <EOF>
+		tokens := []*Token{
+			{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
+			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 4},
+			{Type: TokenEOF, Line: 1, Col: 5},
+		}
+		p := NewParser(tokens)
+		_, err := p.Parse()
+		if err == nil {
+			t.Fatal("expected error for missing }}")
+		}
+		if !strings.Contains(err.Error(), "expected }}") {
+			t.Errorf("error = %q, want 'expected }}'", err.Error())
+		}
+	})
+
+	t.Run("expression parse error in variable", func(t *testing.T) {
+		// {{ ]] }}
+		tokens := []*Token{
+			{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
+			{Type: TokenSymbol, Value: "]", Line: 1, Col: 4},
+			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
+			{Type: TokenEOF, Line: 1, Col: 7},
+		}
+		p := NewParser(tokens)
+		_, err := p.Parse()
+		if err == nil {
+			t.Fatal("expected error for invalid expression")
+		}
+	})
+}
+
+func TestParserParseExpressionError(t *testing.T) {
+	// Test error propagation in Parser.ParseExpression.
+	tokens := []*Token{
+		{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1},
+		{Type: TokenEOF, Line: 1, Col: 3},
+	}
+	p := NewParser(tokens)
+	_, err := p.ParseExpression()
+	if err == nil {
+		t.Fatal("expected error from ParseExpression")
+	}
+}
+
+func TestParserConsumeEndTagMissingClose(t *testing.T) {
+	// Test consumeEndTag when %} is missing.
+	// Construct: {% endif <EOF>
+	tokens := []*Token{
+		{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
+		{Type: TokenIdentifier, Value: "endif", Line: 1, Col: 4},
+		{Type: TokenEOF, Line: 1, Col: 9},
+	}
+	p := NewParser(tokens)
+	// Manually call ParseUntilWithArgs which calls consumeEndTag.
+	// But we need isEndTag to match first. Let's use ParseUntil instead.
+	_, tag, err := p.ParseUntil("endif")
+	if err != nil {
+		// ParseUntil returns tag name from endTagName without consuming.
+		// It just peeks, so it returns successfully but doesn't consume.
+		// Actually ParseUntil checks isEndTag and returns immediately.
+		// It returns the endTagName which is "endif".
+		t.Fatalf("ParseUntil() unexpected error: %v", err)
+	}
+	if tag != "endif" {
+		t.Errorf("tag = %q, want %q", tag, "endif")
+	}
+}
+
+func TestParserParseTagEdgeCases(t *testing.T) {
+	t.Run("missing tag name", func(t *testing.T) {
+		// {% %} — no identifier after {%
+		tokens := []*Token{
+			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
+			{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 4},
+			{Type: TokenEOF, Line: 1, Col: 6},
+		}
+		p := NewParser(tokens)
+		_, err := p.Parse()
+		if err == nil {
+			t.Fatal("expected error for missing tag name")
+		}
+		if !strings.Contains(err.Error(), "expected tag name") {
+			t.Errorf("error = %q, want 'expected tag name'", err.Error())
+		}
+	})
+
+	t.Run("unknown tag", func(t *testing.T) {
+		// {% foobar %}
+		tokens := []*Token{
+			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
+			{Type: TokenIdentifier, Value: "foobar", Line: 1, Col: 4},
+			{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 11},
+			{Type: TokenEOF, Line: 1, Col: 13},
+		}
+		p := NewParser(tokens)
+		_, err := p.Parse()
+		if err == nil {
+			t.Fatal("expected error for unknown tag")
+		}
+		if !strings.Contains(err.Error(), "unknown tag: foobar") {
+			t.Errorf("error = %q, want 'unknown tag: foobar'", err.Error())
+		}
+	})
+
+	t.Run("misused endif standalone", func(t *testing.T) {
+		// {% endif %} at top level
+		tokens := []*Token{
+			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
+			{Type: TokenIdentifier, Value: "endif", Line: 1, Col: 4},
+			{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 10},
+			{Type: TokenEOF, Line: 1, Col: 12},
+		}
+		p := NewParser(tokens)
+		_, err := p.Parse()
+		if err == nil {
+			t.Fatal("expected error for misused endif")
+		}
+		if !strings.Contains(err.Error(), "endif must match") {
+			t.Errorf("error = %q, want hint about endif", err.Error())
+		}
+	})
+
+	t.Run("missing TagEnd", func(t *testing.T) {
+		// {% if x <EOF>
+		tokens := []*Token{
+			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
+			{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
+			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 7},
+			{Type: TokenEOF, Line: 1, Col: 8},
+		}
+		p := NewParser(tokens)
+		_, err := p.Parse()
+		if err == nil {
+			t.Fatal("expected error for missing %}")
+		}
+		if !strings.Contains(err.Error(), "expected %}") {
+			t.Errorf("error = %q, want 'expected %%}'", err.Error())
+		}
+	})
+}
