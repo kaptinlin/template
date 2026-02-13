@@ -1,6 +1,0 @@
-{
-    "env": {
-        "ANTHROPIC_AUTH_TOKEN": "sk-neurax-pnnxulikxbd3bsw4welnsn4ouw2dxtny3taqcxrts5sutj1y",
-        "ANTHROPIC_BASE_URL": "https://api.neurax.xin"
-    }
-  }
