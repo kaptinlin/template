@@ -1150,7 +1150,7 @@ func TestRenderingStability(t *testing.T) {
 				t.Fatalf("Compile(%q) = _, %v", tt.template, err)
 			}
 
-			var results []string
+			results := make([]string, 0, iterations)
 			for i := range iterations {
 				ctx := tt.setup()
 				result, err := tmpl.Render(map[string]any(ctx))

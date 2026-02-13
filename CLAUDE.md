@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A lightweight Go template engine (`github.com/kaptinlin/template`) with Liquid/Django-style syntax. Supports variable interpolation, filters, conditionals (`if/elif/else`), loops (`for/break/continue`), and comments. Go 1.25+.
+A lightweight Go template engine (`github.com/kaptinlin/template`) with Liquid/Django-style syntax. Supports variable interpolation, filters, conditionals (`if/elif/else`), loops (`for/break/continue`), and comments. Go 1.26+.
 
 ## Build & Test Commands
 
@@ -21,7 +21,7 @@ CI runs `make test` and `make lint` on push/PR to main.
 ## Code Style
 
 - **Google Go style guide**: imports grouped (stdlib, external, internal), doc comments start with function name, table-driven subtests
-- **golangci-lint v2.7.2**: errcheck, govet, staticcheck, revive, gosec, exhaustive, err113, errorlint, and more (see `.golangci.yml`)
+- **golangci-lint v2.9.0**: errcheck, govet, staticcheck, revive, gosec, exhaustive, err113, errorlint, and more (see `.golangci.yml`)
 - **Formatters**: gofmt, goimports, gci
 - Receiver names: short, consistent (e.g., `p` for Parser, `l` for Lexer, `v` for Value)
 - Sentinel errors with `fmt.Errorf` wrapping: `fmt.Errorf("%w: %s", ErrSomething, detail)`

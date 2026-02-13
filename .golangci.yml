@@ -30,6 +30,11 @@ linters:
     - noctx
     - nolintlint
     - promlinter
+  settings:
+    revive:
+      rules:
+        - name: var-naming
+          disabled: true
 
 formatters:
   enable:
