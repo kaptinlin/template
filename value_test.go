@@ -2,6 +2,7 @@ package template
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -816,25 +817,83 @@ func TestValueFormatSliceItemEdgeCases(t *testing.T) {
 	}
 }
 
-func TestValueLessEdgeCases(t *testing.T) {
-	// String keys.
-	keys := sortedKeys{reflect.ValueOf("banana"), reflect.ValueOf("apple")}
-	if !keys.Less(1, 0) {
-		t.Error("Less('apple', 'banana') should be true")
-	}
-	if keys.Less(0, 1) {
-		t.Error("Less('banana', 'apple') should be false")
+func TestValueSortingEdgeCases(t *testing.T) {
+	// Test string keys sorting
+	keys := []reflect.Value{reflect.ValueOf("banana"), reflect.ValueOf("apple")}
+	slices.SortFunc(keys, func(a, b reflect.Value) int {
+		va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+		if fa, err := va.Float(); err == nil {
+			if fb, err := vb.Float(); err == nil {
+				if fa < fb {
+					return -1
+				} else if fa > fb {
+					return 1
+				}
+				return 0
+			}
+		}
+		sa, sb := va.String(), vb.String()
+		if sa < sb {
+			return -1
+		} else if sa > sb {
+			return 1
+		}
+		return 0
+	})
+	if keys[0].String() != "apple" || keys[1].String() != "banana" {
+		t.Error("String keys should be sorted alphabetically")
 	}
 
-	// Numeric keys.
-	numKeys := sortedKeys{reflect.ValueOf(3), reflect.ValueOf(1)}
-	if !numKeys.Less(1, 0) {
-		t.Error("Less(1, 3) should be true")
+	// Test numeric keys sorting
+	numKeys := []reflect.Value{reflect.ValueOf(3), reflect.ValueOf(1)}
+	slices.SortFunc(numKeys, func(a, b reflect.Value) int {
+		va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+		if fa, err := va.Float(); err == nil {
+			if fb, err := vb.Float(); err == nil {
+				if fa < fb {
+					return -1
+				} else if fa > fb {
+					return 1
+				}
+				return 0
+			}
+		}
+		sa, sb := va.String(), vb.String()
+		if sa < sb {
+			return -1
+		} else if sa > sb {
+			return 1
+		}
+		return 0
+	})
+	if numKeys[0].Interface().(int) != 1 || numKeys[1].Interface().(int) != 3 {
+		t.Error("Numeric keys should be sorted numerically")
 	}
 
-	// Mixed: one numeric, one not — falls back to string.
-	mixedKeys := sortedKeys{reflect.ValueOf("abc"), reflect.ValueOf(1)}
-	_ = mixedKeys.Less(0, 1) // cover the branch
+	// Test mixed keys: one numeric, one not — falls back to string
+	mixedKeys := []reflect.Value{reflect.ValueOf("abc"), reflect.ValueOf(1)}
+	slices.SortFunc(mixedKeys, func(a, b reflect.Value) int {
+		va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+		if fa, err := va.Float(); err == nil {
+			if fb, err := vb.Float(); err == nil {
+				if fa < fb {
+					return -1
+				} else if fa > fb {
+					return 1
+				}
+				return 0
+			}
+		}
+		sa, sb := va.String(), vb.String()
+		if sa < sb {
+			return -1
+		} else if sa > sb {
+			return 1
+		}
+		return 0
+	})
+	// Just verify it doesn't panic
+	_ = mixedKeys
 }
 
 func TestValueStringUint(t *testing.T) {

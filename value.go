@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -349,8 +349,27 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 		}
 		return nil
 	case reflect.Map:
-		keys := sortedKeys(rv.MapKeys())
-		sort.Sort(keys)
+		keys := rv.MapKeys()
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+			if fa, err := va.Float(); err == nil {
+				if fb, err := vb.Float(); err == nil {
+					if fa < fb {
+						return -1
+					} else if fa > fb {
+						return 1
+					}
+					return 0
+				}
+			}
+			sa, sb := va.String(), vb.String()
+			if sa < sb {
+				return -1
+			} else if sa > sb {
+				return 1
+			}
+			return 0
+		})
 		count := len(keys)
 		for i, k := range keys {
 			if !fn(i, count, NewValue(k.Interface()), NewValue(rv.MapIndex(k).Interface())) {
@@ -435,20 +454,4 @@ func (v *Value) Equals(other *Value) bool {
 	}
 
 	return reflect.DeepEqual(v.val, other.val)
-}
-
-// sortedKeys implements sort.Interface for a slice of reflect.Value.
-type sortedKeys []reflect.Value
-
-func (sk sortedKeys) Len() int      { return len(sk) }
-func (sk sortedKeys) Swap(i, j int) { sk[i], sk[j] = sk[j], sk[i] }
-
-func (sk sortedKeys) Less(i, j int) bool {
-	vi, vj := NewValue(sk[i].Interface()), NewValue(sk[j].Interface())
-	if fi, err := vi.Float(); err == nil {
-		if fj, err := vj.Float(); err == nil {
-			return fi < fj
-		}
-	}
-	return vi.String() < vj.String()
 }

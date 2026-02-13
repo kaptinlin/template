@@ -3169,7 +3169,7 @@ func TestComplexNestedDataStructuresWithTemplateFeatures(t *testing.T) {
 	company.Employees[1].Projects = []*Project{company.Projects["active"][1], company.Projects["completed"][0]}
 
 	// Set department project references
-	var allProjects []*Project
+	allProjects := make([]*Project, 0, len(company.Projects["active"])+len(company.Projects["completed"]))
 	allProjects = append(allProjects, company.Projects["active"]...)
 	allProjects = append(allProjects, company.Projects["completed"]...)
 	company.Departments[0].Projects = allProjects
@@ -4281,7 +4281,7 @@ func TestBreakContinueErrors(t *testing.T) {
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error containing %q, got nil error and result %q", tt.errorMsg, result)
-				} else if !contains(err.Error(), tt.errorMsg) {
+				} else if !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("Expected error containing %q, got %q", tt.errorMsg, err.Error())
 				}
 			} else {
@@ -4291,15 +4291,6 @@ func TestBreakContinueErrors(t *testing.T) {
 			}
 		})
 	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestAdvancedBreakContinue(t *testing.T) {
