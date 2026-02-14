@@ -1,6 +1,7 @@
 package template
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"reflect"
@@ -354,21 +355,10 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 			va, vb := NewValue(a.Interface()), NewValue(b.Interface())
 			if fa, err := va.Float(); err == nil {
 				if fb, err := vb.Float(); err == nil {
-					if fa < fb {
-						return -1
-					} else if fa > fb {
-						return 1
-					}
-					return 0
+					return cmp.Compare(fa, fb)
 				}
 			}
-			sa, sb := va.String(), vb.String()
-			if sa < sb {
-				return -1
-			} else if sa > sb {
-				return 1
-			}
-			return 0
+			return cmp.Compare(va.String(), vb.String())
 		})
 		count := len(keys)
 		for i, k := range keys {
