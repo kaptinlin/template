@@ -3,6 +3,8 @@ package template
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/go-json-experiment/json"
@@ -89,10 +91,8 @@ func (c Context) Get(key string) (any, error) {
 	}
 
 	parts := splitDotPath(key)
-	for _, part := range parts {
-		if part == "" {
-			return nil, fmt.Errorf("%w: empty path component in '%s'", ErrContextInvalidKeyType, key)
-		}
+	if slices.Contains(parts, "") {
+		return nil, fmt.Errorf("%w: empty path component in '%s'", ErrContextInvalidKeyType, key)
 	}
 
 	value, err := jsonpointer.Get(c, parts...)
@@ -157,9 +157,7 @@ func (cb *ContextBuilder) Struct(v any) *ContextBuilder {
 		return cb
 	}
 
-	for k, v := range temp {
-		cb.context[k] = v
-	}
+	maps.Copy(cb.context, temp)
 	return cb
 }
 
@@ -201,12 +199,8 @@ func (ec *ExecutionContext) Set(name string, value any) {
 // parent's Public context but copies the Private context for isolated
 // scope.
 func NewChildContext(parent *ExecutionContext) *ExecutionContext {
-	private := make(Context, len(parent.Private))
-	for k, v := range parent.Private {
-		private[k] = v
-	}
 	return &ExecutionContext{
 		Public:  parent.Public,
-		Private: private,
+		Private: maps.Clone(parent.Private),
 	}
 }
