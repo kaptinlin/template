@@ -39,7 +39,7 @@ func toInteger(input any) (int, error) {
 // dereferenceIfNeeded checks if the input is a pointer and dereferences it if it's not nil.
 func dereferenceIfNeeded(input any) any {
 	valRef := reflect.ValueOf(input)
-	if valRef.Kind() == reflect.Ptr && !valRef.IsNil() {
+	if valRef.Kind() == reflect.Pointer && !valRef.IsNil() {
 		return valRef.Elem().Interface()
 	}
 	return input

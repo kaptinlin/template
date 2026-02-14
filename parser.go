@@ -21,10 +21,7 @@ func NewParser(tokens []*Token) *Parser {
 
 // Parse parses the entire template and returns AST statement nodes.
 func (p *Parser) Parse() ([]Statement, error) {
-	estimated := len(p.tokens) / 4
-	if estimated < 4 {
-		estimated = 4
-	}
+	estimated := max(len(p.tokens)/4, 4)
 	nodes := make([]Statement, 0, estimated)
 
 	for p.notEOF() {

@@ -39,7 +39,7 @@ func (v *Value) resolved() reflect.Value {
 		return reflect.Value{}
 	}
 	rv := reflect.ValueOf(v.val)
-	for rv.IsValid() && (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) {
+	for rv.IsValid() && (rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface) {
 		rv = rv.Elem()
 	}
 	return rv

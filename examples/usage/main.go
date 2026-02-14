@@ -15,7 +15,7 @@ func main() {
 {% endfor %}{% else %}No items.
 {% endif %}`
 
-	output, err := template.Render(source, map[string]interface{}{
+	output, err := template.Render(source, map[string]any{
 		"name":  "alice",
 		"items": []string{"foo", "bar", "baz"},
 	})

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -16,9 +17,7 @@ func saveTagRegistry() map[string]TagParser {
 	tagMu.RLock()
 	defer tagMu.RUnlock()
 	saved := make(map[string]TagParser, len(tagRegistry))
-	for k, v := range tagRegistry {
-		saved[k] = v
-	}
+	maps.Copy(saved, tagRegistry)
 	return saved
 }
 

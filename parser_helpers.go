@@ -1,6 +1,9 @@
 package template
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Current returns the current token without advancing the parser.
 func (p *Parser) Current() *Token {
@@ -95,12 +98,7 @@ func (p *Parser) isEndTag(tags ...string) bool {
 	if next == nil || next.Type != TokenIdentifier {
 		return false
 	}
-	for _, tag := range tags {
-		if next.Value == tag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(tags, next.Value)
 }
 
 // endTagName returns the tag name at the current position.

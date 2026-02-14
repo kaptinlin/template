@@ -86,7 +86,7 @@ func TestParseLiterals(t *testing.T) {
 		name          string
 		expr          string
 		expectedType  string
-		expectedValue interface{}
+		expectedValue any
 	}{
 		{
 			name:          "string literal",
@@ -864,37 +864,37 @@ func TestParseFilterArguments(t *testing.T) {
 	tests := []struct {
 		name         string
 		expr         string
-		expectedArgs []interface{}
+		expectedArgs []any
 	}{
 		{
 			name:         "string argument",
 			expr:         `name|default:"Anonymous"`,
-			expectedArgs: []interface{}{"Anonymous"},
+			expectedArgs: []any{"Anonymous"},
 		},
 		{
 			name:         "number argument",
 			expr:         "value|add:10",
-			expectedArgs: []interface{}{10.0},
+			expectedArgs: []any{10.0},
 		},
 		{
 			name:         "boolean argument true",
 			expr:         "flag|default:true",
-			expectedArgs: []interface{}{true},
+			expectedArgs: []any{true},
 		},
 		{
 			name:         "boolean argument false",
 			expr:         "flag|default:false",
-			expectedArgs: []interface{}{false},
+			expectedArgs: []any{false},
 		},
 		{
 			name:         "variable argument",
 			expr:         "text|slice:start,end",
-			expectedArgs: []interface{}{"start", "end"}, // Variable names as identifiers
+			expectedArgs: []any{"start", "end"}, // Variable names as identifiers
 		},
 		{
 			name:         "multiple mixed arguments",
 			expr:         `item|format:"Name: %s",name,true`,
-			expectedArgs: []interface{}{"Name: %s", "name", true},
+			expectedArgs: []any{"Name: %s", "name", true},
 		},
 	}
 
@@ -1377,39 +1377,39 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 	tests := []struct {
 		name     string
 		expr     string
-		context  map[string]interface{}
-		expected interface{}
+		context  map[string]any
+		expected any
 		wantErr  bool
 	}{
 		// || operator tests
 		{
 			name:     "|| with both false",
 			expr:     "false || false",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: false,
 		},
 		{
 			name:     "|| with first true",
 			expr:     "true || false",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "|| with second true",
 			expr:     "false || true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "|| with both true",
 			expr:     "true || true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "|| with variables",
 			expr:     "a || b",
-			context:  map[string]interface{}{"a": false, "b": true},
+			context:  map[string]any{"a": false, "b": true},
 			expected: true,
 		},
 
@@ -1417,31 +1417,31 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 		{
 			name:     "&& with both false",
 			expr:     "false && false",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: false,
 		},
 		{
 			name:     "&& with first false",
 			expr:     "false && true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: false,
 		},
 		{
 			name:     "&& with second false",
 			expr:     "true && false",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: false,
 		},
 		{
 			name:     "&& with both true",
 			expr:     "true && true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "&& with variables",
 			expr:     "a && b",
-			context:  map[string]interface{}{"a": true, "b": true},
+			context:  map[string]any{"a": true, "b": true},
 			expected: true,
 		},
 
@@ -1449,31 +1449,31 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 		{
 			name:     "! with true",
 			expr:     "!true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: false,
 		},
 		{
 			name:     "! with false",
 			expr:     "!false",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "! with variable",
 			expr:     "!flag",
-			context:  map[string]interface{}{"flag": false},
+			context:  map[string]any{"flag": false},
 			expected: true,
 		},
 		{
 			name:     "! with number 0",
 			expr:     "!0",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "! with number non-zero",
 			expr:     "!5",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: false,
 		},
 
@@ -1481,43 +1481,43 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 		{
 			name:     "Mixed && and ||",
 			expr:     "true && false || true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "! with &&",
 			expr:     "!false && true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "! with ||",
 			expr:     "!true || false",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: false,
 		},
 		{
 			name:     "Nested !",
 			expr:     "!!true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "Comparison with &&",
 			expr:     "score >= 80 && grade == 'A'",
-			context:  map[string]interface{}{"score": 85, "grade": "A"},
+			context:  map[string]any{"score": 85, "grade": "A"},
 			expected: true,
 		},
 		{
 			name:     "Comparison with ||",
 			expr:     "score < 50 || grade == 'F'",
-			context:  map[string]interface{}{"score": 40, "grade": "D"},
+			context:  map[string]any{"score": 40, "grade": "D"},
 			expected: true,
 		},
 		{
 			name:     "! with comparison",
 			expr:     "!(score < 60)",
-			context:  map[string]interface{}{"score": 85},
+			context:  map[string]any{"score": 85},
 			expected: true,
 		},
 
@@ -1525,19 +1525,19 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 		{
 			name:     "Parentheses with &&",
 			expr:     "(true && true) && true",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "Parentheses with ||",
 			expr:     "(false || true) || false",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 		{
 			name:     "Parentheses with !",
 			expr:     "!(true && false)",
-			context:  map[string]interface{}{},
+			context:  map[string]any{},
 			expected: true,
 		},
 	}
@@ -1871,31 +1871,31 @@ func TestKeywordAndSymbolEquivalence(t *testing.T) {
 		name        string
 		exprKeyword string
 		exprSymbol  string
-		context     map[string]interface{}
+		context     map[string]any
 	}{
 		{
 			name:        "and vs &&",
 			exprKeyword: "true and false",
 			exprSymbol:  "true && false",
-			context:     map[string]interface{}{},
+			context:     map[string]any{},
 		},
 		{
 			name:        "or vs ||",
 			exprKeyword: "true or false",
 			exprSymbol:  "true || false",
-			context:     map[string]interface{}{},
+			context:     map[string]any{},
 		},
 		{
 			name:        "not vs !",
 			exprKeyword: "not true",
 			exprSymbol:  "!true",
-			context:     map[string]interface{}{},
+			context:     map[string]any{},
 		},
 		{
 			name:        "Complex: and/or vs &&/||",
 			exprKeyword: "a and b or c",
 			exprSymbol:  "a && b || c",
-			context:     map[string]interface{}{"a": true, "b": false, "c": true},
+			context:     map[string]any{"a": true, "b": false, "c": true},
 		},
 	}
 

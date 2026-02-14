@@ -478,7 +478,7 @@ func TestContextComplexStruct(t *testing.T) {
 
 			// Normalize: dereference pointers, format time as RFC3339.
 			got := raw
-			if v := reflect.ValueOf(raw); v.Kind() == reflect.Ptr && !v.IsNil() {
+			if v := reflect.ValueOf(raw); v.Kind() == reflect.Pointer && !v.IsNil() {
 				got = v.Elem().Interface()
 			}
 			if ts, ok := got.(time.Time); ok {

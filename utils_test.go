@@ -18,7 +18,7 @@ func (s stringerImpl) String() string {
 func TestToString(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{
@@ -101,7 +101,7 @@ func TestToInteger(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		input       interface{}
+		input       any
 		expected    int
 		expectError bool
 	}{
@@ -223,8 +223,8 @@ func TestDereferenceIfNeeded(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    interface{}
-		expected interface{}
+		input    any
+		expected any
 	}{
 		{
 			name:     "non-pointer string unchanged",

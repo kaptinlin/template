@@ -12,7 +12,7 @@ import (
 
 func main() {
 	// Register a "repeat" filter: {{ text|repeat:3 }} → "texttexttext"
-	template.RegisterFilter("repeat", func(value interface{}, args ...string) (interface{}, error) {
+	template.RegisterFilter("repeat", func(value any, args ...string) (any, error) {
 		s := fmt.Sprintf("%v", value)
 		n := 2
 		if len(args) > 0 {
@@ -23,7 +23,7 @@ func main() {
 		return strings.Repeat(s, n), nil
 	})
 
-	output, err := template.Render(`{{ word|repeat:3 }}`, map[string]interface{}{
+	output, err := template.Render(`{{ word|repeat:3 }}`, map[string]any{
 		"word": "ha",
 	})
 	if err != nil {
