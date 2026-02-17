@@ -102,7 +102,7 @@ func TestRegistryList(t *testing.T) {
 		{
 			name:  "empty registry",
 			setup: func(_ *Registry) {},
-			want:  []string{},
+			want:  nil,
 		},
 		{
 			name: "single filter",
@@ -268,22 +268,22 @@ func withFreshRegistry(t *testing.T) {
 	t.Cleanup(func() { defaultRegistry = saved })
 }
 
-func TestRegisterFilterAndGetFilter(t *testing.T) {
+func TestRegisterFilterAndFilter(t *testing.T) {
 	withFreshRegistry(t)
 
 	RegisterFilter("testfilter", noopFilter)
 
-	fn, ok := GetFilter("testfilter")
+	fn, ok := Filter("testfilter")
 	if !ok {
-		t.Error("GetFilter(\"testfilter\") = _, false, want true")
+		t.Error("Filter(\"testfilter\") = _, false, want true")
 	}
 	if fn == nil {
-		t.Error("GetFilter(\"testfilter\") returned nil, want non-nil")
+		t.Error("Filter(\"testfilter\") returned nil, want non-nil")
 	}
 
-	_, ok = GetFilter("nonexistent")
+	_, ok = Filter("nonexistent")
 	if ok {
-		t.Error("GetFilter(\"nonexistent\") = _, true, want false")
+		t.Error("Filter(\"nonexistent\") = _, true, want false")
 	}
 }
 
@@ -358,8 +358,8 @@ func TestBuiltinFiltersRegistered(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, ok := GetFilter(name); !ok {
-				t.Errorf("GetFilter(%q) = _, false, want true", name)
+			if _, ok := Filter(name); !ok {
+				t.Errorf("Filter(%q) = _, false, want true", name)
 			}
 		})
 	}
@@ -377,7 +377,7 @@ func TestFilterRegistryConcurrentAccess(_ *testing.T) {
 			RegisterFilter(name, func(value any, _ ...string) (any, error) {
 				return value, nil
 			})
-			_, _ = GetFilter(name)
+			_, _ = Filter(name)
 			_ = ListFilters()
 			_ = HasFilter(name)
 		}(i)

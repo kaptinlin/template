@@ -153,7 +153,7 @@ func BenchmarkContextSet(b *testing.B) {
 
 // BenchmarkFilterApplication benchmarks filter application.
 func BenchmarkFilterApplication(b *testing.B) {
-	filter, _ := GetFilter("upper")
+	filter, _ := Filter("upper")
 
 	for b.Loop() {
 		_, err := filter("hello world", nil...)

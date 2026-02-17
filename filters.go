@@ -60,7 +60,7 @@ func (r *Registry) List() []string {
 	defer r.mu.RUnlock()
 
 	if len(r.filters) == 0 {
-		return []string{}
+		return nil
 	}
 	return slices.Sorted(maps.Keys(r.filters))
 }
@@ -83,8 +83,8 @@ func RegisterFilter(name string, fn FilterFunc) {
 	defaultRegistry.Register(name, fn)
 }
 
-// GetFilter retrieves a filter from the default registry.
-func GetFilter(name string) (FilterFunc, bool) {
+// Filter retrieves a filter from the default registry.
+func Filter(name string) (FilterFunc, bool) {
 	return defaultRegistry.Filter(name)
 }
 

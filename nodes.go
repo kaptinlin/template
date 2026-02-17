@@ -225,7 +225,7 @@ func (n *TextNode) String() string { return fmt.Sprintf("Text(%q)", n.Text) }
 
 // Execute writes the raw text to the output.
 func (n *TextNode) Execute(_ *ExecutionContext, w io.Writer) error {
-	_, err := w.Write([]byte(n.Text))
+	_, err := io.WriteString(w, n.Text)
 	return err
 }
 
@@ -243,7 +243,7 @@ func (n *OutputNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = w.Write([]byte(val.String()))
+	_, err = io.WriteString(w, val.String())
 	return err
 }
 
@@ -637,18 +637,18 @@ func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 		return nil, err
 	}
 
-	fn, ok := GetFilter(n.Name)
+	fn, ok := Filter(n.Name)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrFilterNotFound, n.Name)
 	}
 
-	args := make([]string, 0, len(n.Args))
-	for _, arg := range n.Args {
+	args := make([]string, len(n.Args))
+	for i, arg := range n.Args {
 		v, err := arg.Evaluate(ctx)
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, v.String())
+		args[i] = v.String()
 	}
 
 	result, err := fn(val.Interface(), args...)
