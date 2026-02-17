@@ -398,26 +398,11 @@ func (v *Value) Compare(other *Value) (int, error) {
 	vf, vErr := v.Float()
 	of, oErr := other.Float()
 	if vErr == nil && oErr == nil {
-		switch {
-		case vf < of:
-			return -1, nil
-		case vf > of:
-			return 1, nil
-		default:
-			return 0, nil
-		}
+		return cmp.Compare(vf, of), nil
 	}
 
 	// Fall back to string comparison.
-	vs, os := v.String(), other.String()
-	switch {
-	case vs < os:
-		return -1, nil
-	case vs > os:
-		return 1, nil
-	default:
-		return 0, nil
-	}
+	return cmp.Compare(v.String(), other.String()), nil
 }
 
 // Equals reports whether v and other represent the same value.

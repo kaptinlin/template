@@ -364,14 +364,13 @@ func (p *ExprParser) parseFilterArg() (Expression, error) {
 
 	case TokenIdentifier:
 		p.advance()
-		switch tok.Value {
-		case "true":
+		if tok.Value == "true" {
 			return NewLiteralNode(true, tok.Line, tok.Col), nil
-		case "false":
-			return NewLiteralNode(false, tok.Line, tok.Col), nil
-		default:
-			return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
 		}
+		if tok.Value == "false" {
+			return NewLiteralNode(false, tok.Line, tok.Col), nil
+		}
+		return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
 
 	case TokenError, TokenEOF, TokenText, TokenVarBegin, TokenVarEnd,
 		TokenTagBegin, TokenTagEnd, TokenSymbol:
@@ -404,14 +403,13 @@ func (p *ExprParser) parsePrimary() (Expression, error) {
 
 	case TokenIdentifier:
 		p.advance()
-		switch tok.Value {
-		case "true":
+		if tok.Value == "true" {
 			return NewLiteralNode(true, tok.Line, tok.Col), nil
-		case "false":
-			return NewLiteralNode(false, tok.Line, tok.Col), nil
-		default:
-			return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
 		}
+		if tok.Value == "false" {
+			return NewLiteralNode(false, tok.Line, tok.Col), nil
+		}
+		return NewVariableNode(tok.Value, tok.Line, tok.Col), nil
 
 	case TokenSymbol:
 		if tok.Value == "(" {

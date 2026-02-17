@@ -78,7 +78,8 @@ func (p *Parser) parseVariable() (Statement, error) {
 		return nil, newParseError("empty variable expression", start.Line, start.Col)
 	}
 
-	if cur := p.Current(); cur == nil || cur.Type != TokenVarEnd {
+	cur := p.Current()
+	if cur == nil || cur.Type != TokenVarEnd {
 		return nil, newParseError("expected }}", start.Line, start.Col)
 	}
 	p.Advance() // Consume }}.
@@ -115,7 +116,8 @@ func (p *Parser) parseTag() (Statement, error) {
 
 	args := p.collectUntil(TokenTagEnd)
 
-	if cur := p.Current(); cur == nil || cur.Type != TokenTagEnd {
+	cur := p.Current()
+	if cur == nil || cur.Type != TokenTagEnd {
 		return nil, newParseError("expected %}", start.Line, start.Col)
 	}
 	p.Advance() // Consume %}.

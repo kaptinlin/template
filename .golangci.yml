@@ -35,6 +35,8 @@ linters:
       rules:
         - name: var-naming
           disabled: true
+    staticcheck:
+      checks: ["all", "-SA5011"]
 
 formatters:
   enable:

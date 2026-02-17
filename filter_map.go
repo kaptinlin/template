@@ -24,13 +24,11 @@ func extractFilter(value any, args ...string) (any, error) {
 		return result, nil
 	}
 
-	switch {
-	case errors.Is(err, filter.ErrKeyNotFound),
-		errors.Is(err, filter.ErrIndexOutOfRange):
+	if errors.Is(err, filter.ErrKeyNotFound) || errors.Is(err, filter.ErrIndexOutOfRange) {
 		return "", nil
-	case errors.Is(err, filter.ErrInvalidKeyType):
-		return nil, ErrContextInvalidKeyType
-	default:
-		return nil, err
 	}
+	if errors.Is(err, filter.ErrInvalidKeyType) {
+		return nil, ErrContextInvalidKeyType
+	}
+	return nil, err
 }

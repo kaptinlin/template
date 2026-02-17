@@ -68,13 +68,12 @@ func (c Context) Set(key string, value any) {
 	current := c
 	last := len(parts) - 1
 	for _, part := range parts[:last] {
-		if next, ok := current[part].(map[string]any); ok {
-			current = next
-		} else {
+		next, ok := current[part].(map[string]any)
+		if !ok {
 			next = make(map[string]any)
 			current[part] = next
-			current = next
 		}
+		current = next
 	}
 	current[parts[last]] = value
 }

@@ -75,7 +75,6 @@ func (p *Parser) collectUntil(typ TokenType) []*Token {
 	if p.pos >= len(p.tokens) {
 		return nil
 	}
-	// Preallocate with a small estimate to reduce grow-copies.
 	tokens := make([]*Token, 0, 4)
 	for tok := p.Current(); tok != nil && tok.Type != typ; tok = p.Current() {
 		tokens = append(tokens, tok)

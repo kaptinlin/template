@@ -332,12 +332,10 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 				continue
 			}
 			if err := s.Execute(ctx, w); err != nil {
-				var brk *BreakError
-				if errors.As(err, &brk) {
+				if _, ok := errors.AsType[*BreakError](err); ok {
 					return false
 				}
-				var cont *ContinueError
-				if errors.As(err, &cont) {
+				if _, ok := errors.AsType[*ContinueError](err); ok {
 					return true
 				}
 				execErr = err
@@ -500,33 +498,21 @@ func (n *BinaryOpNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	case "!=":
 		return NewValue(!left.Equals(right)), nil
 
-	case "<":
+	case "<", ">", "<=", ">=":
 		cmp, err := left.Compare(right)
 		if err != nil {
 			return nil, err
 		}
-		return NewValue(cmp < 0), nil
-
-	case ">":
-		cmp, err := left.Compare(right)
-		if err != nil {
-			return nil, err
+		switch n.Operator {
+		case "<":
+			return NewValue(cmp < 0), nil
+		case ">":
+			return NewValue(cmp > 0), nil
+		case "<=":
+			return NewValue(cmp <= 0), nil
+		case ">=":
+			return NewValue(cmp >= 0), nil
 		}
-		return NewValue(cmp > 0), nil
-
-	case "<=":
-		cmp, err := left.Compare(right)
-		if err != nil {
-			return nil, err
-		}
-		return NewValue(cmp <= 0), nil
-
-	case ">=":
-		cmp, err := left.Compare(right)
-		if err != nil {
-			return nil, err
-		}
-		return NewValue(cmp >= 0), nil
 
 	case "and":
 		if !left.IsTrue() {
@@ -539,10 +525,9 @@ func (n *BinaryOpNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 			return NewValue(true), nil
 		}
 		return NewValue(right.IsTrue()), nil
-
-	default:
-		return nil, fmt.Errorf("%w: %q", ErrUnsupportedOperator, n.Operator)
 	}
+
+	return nil, fmt.Errorf("%w: %q", ErrUnsupportedOperator, n.Operator)
 }
 
 // UnaryOpNode Methods
