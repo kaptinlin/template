@@ -7,16 +7,16 @@ A lightweight Go template engine (`github.com/kaptinlin/template`) with Liquid/D
 ## Build & Test Commands
 
 ```sh
-make test          # Run all tests (96.3% coverage)
-make lint          # Run golangci-lint + go mod tidy check
-make verify        # deps + fmt + vet + lint + test (full CI pipeline)
+task test          # Run all tests (96.3% coverage)
+task lint          # Run golangci-lint + go mod tidy check
+task verify        # deps + fmt + vet + lint + test (full CI pipeline)
 make fmt           # Format code
 make vet           # Run go vet
 go test ./...      # Run tests directly
 go test -cover ./. # Run tests with coverage
 ```
 
-CI runs `make test` and `make lint` on push/PR to main.
+CI runs `task test` and `task lint` on push/PR to main.
 
 ## Code Style
 

@@ -9,24 +9,20 @@ The template engine supports:
 
 Basic Usage:
 
-	source := "Hello, {{ name|upper }}!"
-	parser := template.NewParser()
-	tpl, err := parser.Parse(source)
+	tmpl, err := template.Compile("Hello, {{ name|upper }}!")
 	if err != nil {
 		panic(err)
 	}
 
-	ctx := template.NewContext()
-	ctx.Set("name", "world")
-
-	output, err := tpl.Execute(ctx)
+	output, err := tmpl.Render(map[string]any{"name": "world"})
 	// Output: "Hello, WORLD!"
 
 Architecture:
 
 The package is organized into several key components:
-  - Parser: Converts template strings into an AST (Abstract Syntax Tree)
-  - Grammar: Parses and evaluates conditional expressions
+  - Lexer: Tokenizes template source into a token stream
+  - Parser: Converts tokens into an AST (Abstract Syntax Tree)
+  - Expression Parser: Parses expressions with operator precedence
   - Template: Executes the AST with a given context
   - Filters: Transforms values during template execution
   - Context: Stores and retrieves template variables
