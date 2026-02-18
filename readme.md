@@ -1,16 +1,16 @@
-# Template
+# Template Engine
 
-一个轻量级 Go 模板引擎，采用类似 Liquid/Django 的语法，支持变量插值、过滤器、条件判断和循环控制。
+A lightweight Go template engine with Liquid/Django-style syntax, supporting variable interpolation, filters, conditionals, and loop control.
 
-## 安装
+## Installation
 
 ```sh
 go get github.com/kaptinlin/template
 ```
 
-## 快速开始
+## Quick Start
 
-### 一步渲染
+### One-Step Rendering
 
 ```go
 output, err := template.Render("Hello, {{ name|upper }}!", map[string]any{
@@ -19,9 +19,9 @@ output, err := template.Render("Hello, {{ name|upper }}!", map[string]any{
 // output: "Hello, ALICE!"
 ```
 
-### 编译后复用
+### Compile and Reuse
 
-对于需要多次渲染的模板，先编译一次，后续复用：
+For templates that need to be rendered multiple times, compile once and reuse:
 
 ```go
 tmpl, err := template.Compile("Hello, {{ name }}!")
@@ -33,7 +33,7 @@ output, err := tmpl.Render(map[string]any{"name": "World"})
 // output: "Hello, World!"
 ```
 
-### 使用 io.Writer
+### Using io.Writer
 
 ```go
 tmpl, _ := template.Compile("Hello, {{ name }}!")
@@ -41,11 +41,11 @@ ctx := template.NewExecutionContext(map[string]any{"name": "World"})
 tmpl.Execute(ctx, os.Stdout)
 ```
 
-## 模板语法
+## Template Syntax
 
-### 变量
+### Variables
 
-用 `{{ }}` 输出变量，支持点号访问嵌套属性：
+Use `{{ }}` to output variables, with dot notation for nested properties:
 
 ```
 {{ user.name }}
@@ -53,11 +53,11 @@ tmpl.Execute(ctx, os.Stdout)
 {{ items.0 }}
 ```
 
-详见 [变量文档](docs/variables.md)。
+See [Variables Documentation](docs/variables.md) for details.
 
-### 过滤器
+### Filters
 
-用管道符 `|` 对变量应用过滤器，支持链式调用和参数传递：
+Use pipe `|` to apply filters to variables, supporting chaining and arguments:
 
 ```
 {{ name|upper }}
@@ -66,21 +66,21 @@ tmpl.Execute(ctx, os.Stdout)
 {{ price|plus:10|times:2 }}
 ```
 
-详见 [过滤器文档](docs/filters.md)。
+See [Filters Documentation](docs/filters.md) for details.
 
-### 条件判断
+### Conditionals
 
 ```
 {% if score > 80 %}
-    优秀
+    Excellent
 {% elif score > 60 %}
-    及格
+    Pass
 {% else %}
-    不及格
+    Fail
 {% endif %}
 ```
 
-### 循环
+### Loops
 
 ```
 {% for item in items %}
@@ -92,137 +92,137 @@ tmpl.Execute(ctx, os.Stdout)
 {% endfor %}
 ```
 
-循环内可使用 `loop` 变量：
+The `loop` variable is available inside loops:
 
-| 属性 | 说明 |
-|------|------|
-| `loop.Index` | 当前索引（从 0 开始） |
-| `loop.Revindex` | 反向索引 |
-| `loop.First` | 是否第一次迭代 |
-| `loop.Last` | 是否最后一次迭代 |
-| `loop.Length` | 集合总长度 |
+| Property | Description |
+|----------|-------------|
+| `loop.Index` | Current index (starting from 0) |
+| `loop.Revindex` | Reverse index |
+| `loop.First` | Whether this is the first iteration |
+| `loop.Last` | Whether this is the last iteration |
+| `loop.Length` | Total length of the collection |
 
-支持 `{% break %}` 和 `{% continue %}` 控制循环流程。
+Supports `{% break %}` and `{% continue %}` for loop control.
 
-详见 [控制结构文档](docs/control-structure.md)。
+See [Control Structure Documentation](docs/control-structure.md) for details.
 
-### 注释
+### Comments
 
 ```
-{# 这段内容不会出现在输出中 #}
+{# This content will not appear in the output #}
 ```
 
-### 表达式
+### Expressions
 
-支持以下运算符（按优先级从低到高）：
+Supports the following operators (from lowest to highest precedence):
 
-| 运算符 | 说明 |
-|--------|------|
-| `or`, `\|\|` | 逻辑或 |
-| `and`, `&&` | 逻辑与 |
-| `==`, `!=`, `<`, `>`, `<=`, `>=` | 比较 |
-| `+`, `-` | 加减 |
-| `*`, `/`, `%` | 乘除取模 |
-| `not`, `-`, `+` | 一元运算 |
+| Operator | Description |
+|----------|-------------|
+| `or`, `\|\|` | Logical OR |
+| `and`, `&&` | Logical AND |
+| `==`, `!=`, `<`, `>`, `<=`, `>=` | Comparison |
+| `+`, `-` | Addition, Subtraction |
+| `*`, `/`, `%` | Multiplication, Division, Modulo |
+| `not`, `-`, `+` | Unary operators |
 
-字面量支持：字符串（`"text"` / `'text'`）、数字（`42`、`3.14`）、布尔值（`true` / `false`）、空值（`null`）。
+Literal support: strings (`"text"` / `'text'`), numbers (`42`, `3.14`), booleans (`true` / `false`), null (`null`).
 
-## 内置过滤器
+## Built-in Filters
 
-### 字符串
+### String
 
-| 过滤器 | 说明 | 示例 |
-|--------|------|------|
-| `default` | 值为空时返回默认值 | `{{ name\|default:"匿名" }}` |
-| `upper` | 转大写 | `{{ name\|upper }}` |
-| `lower` | 转小写 | `{{ name\|lower }}` |
-| `capitalize` | 首字母大写 | `{{ name\|capitalize }}` |
-| `titleize` | 每个单词首字母大写 | `{{ title\|titleize }}` |
-| `trim` | 去除首尾空白 | `{{ text\|trim }}` |
-| `truncate` | 截断到指定长度 | `{{ text\|truncate:20 }}` |
-| `truncateWords` | 截断到指定单词数 | `{{ text\|truncateWords:5 }}` |
-| `replace` | 替换子串 | `{{ text\|replace:"old","new" }}` |
-| `remove` | 移除子串 | `{{ text\|remove:"bad" }}` |
-| `append` | 追加字符串 | `{{ name\|append:"!" }}` |
-| `prepend` | 前置字符串 | `{{ name\|prepend:"Hi " }}` |
-| `split` | 按分隔符拆分 | `{{ csv\|split:"," }}` |
-| `length` | 获取长度 | `{{ name\|length }}` |
-| `slugify` | 转为 URL 友好格式 | `{{ title\|slugify }}` |
-| `camelize` | 转为 camelCase | `{{ name\|camelize }}` |
-| `pascalize` | 转为 PascalCase | `{{ name\|pascalize }}` |
-| `dasherize` | 转为短横线分隔 | `{{ name\|dasherize }}` |
-| `pluralize` | 单复数选择 | `{{ count\|pluralize:"item","items" }}` |
-| `ordinalize` | 转为序数词 | `{{ num\|ordinalize }}` |
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `default` | Return default value if empty | `{{ name\|default:"Anonymous" }}` |
+| `upper` | Convert to uppercase | `{{ name\|upper }}` |
+| `lower` | Convert to lowercase | `{{ name\|lower }}` |
+| `capitalize` | Capitalize first letter | `{{ name\|capitalize }}` |
+| `titleize` | Capitalize first letter of each word | `{{ title\|titleize }}` |
+| `trim` | Remove leading/trailing whitespace | `{{ text\|trim }}` |
+| `truncate` | Truncate to specified length | `{{ text\|truncate:20 }}` |
+| `truncateWords` | Truncate to specified word count | `{{ text\|truncateWords:5 }}` |
+| `replace` | Replace substring | `{{ text\|replace:"old","new" }}` |
+| `remove` | Remove substring | `{{ text\|remove:"bad" }}` |
+| `append` | Append string | `{{ name\|append:"!" }}` |
+| `prepend` | Prepend string | `{{ name\|prepend:"Hi " }}` |
+| `split` | Split by delimiter | `{{ csv\|split:"," }}` |
+| `length` | Get length | `{{ name\|length }}` |
+| `slugify` | Convert to URL-friendly format | `{{ title\|slugify }}` |
+| `camelize` | Convert to camelCase | `{{ name\|camelize }}` |
+| `pascalize` | Convert to PascalCase | `{{ name\|pascalize }}` |
+| `dasherize` | Convert to dash-separated | `{{ name\|dasherize }}` |
+| `pluralize` | Singular/plural selection | `{{ count\|pluralize:"item","items" }}` |
+| `ordinalize` | Convert to ordinal | `{{ num\|ordinalize }}` |
 
-### 数学
+### Math
 
-| 过滤器 | 说明 | 示例 |
-|--------|------|------|
-| `plus` | 加法 | `{{ price\|plus:10 }}` |
-| `minus` | 减法 | `{{ price\|minus:5 }}` |
-| `times` | 乘法 | `{{ price\|times:2 }}` |
-| `divide` | 除法 | `{{ total\|divide:3 }}` |
-| `modulo` | 取模 | `{{ num\|modulo:2 }}` |
-| `abs` | 绝对值 | `{{ num\|abs }}` |
-| `round` | 四舍五入 | `{{ pi\|round:2 }}` |
-| `floor` | 向下取整 | `{{ num\|floor }}` |
-| `ceil` | 向上取整 | `{{ num\|ceil }}` |
-| `atLeast` | 确保最小值 | `{{ num\|atLeast:0 }}` |
-| `atMost` | 确保最大值 | `{{ num\|atMost:100 }}` |
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `plus` | Addition | `{{ price\|plus:10 }}` |
+| `minus` | Subtraction | `{{ price\|minus:5 }}` |
+| `times` | Multiplication | `{{ price\|times:2 }}` |
+| `divide` | Division | `{{ total\|divide:3 }}` |
+| `modulo` | Modulo | `{{ num\|modulo:2 }}` |
+| `abs` | Absolute value | `{{ num\|abs }}` |
+| `round` | Round | `{{ pi\|round:2 }}` |
+| `floor` | Floor | `{{ num\|floor }}` |
+| `ceil` | Ceiling | `{{ num\|ceil }}` |
+| `atLeast` | Ensure minimum value | `{{ num\|atLeast:0 }}` |
+| `atMost` | Ensure maximum value | `{{ num\|atMost:100 }}` |
 
-### 数组
+### Array
 
-| 过滤器 | 说明 | 示例 |
-|--------|------|------|
-| `join` | 用分隔符连接 | `{{ items\|join:", " }}` |
-| `first` | 第一个元素 | `{{ items\|first }}` |
-| `last` | 最后一个元素 | `{{ items\|last }}` |
-| `size` | 集合长度 | `{{ items\|size }}` |
-| `reverse` | 反转顺序 | `{{ items\|reverse }}` |
-| `unique` | 去重 | `{{ items\|unique }}` |
-| `shuffle` | 随机排列 | `{{ items\|shuffle }}` |
-| `random` | 随机取一个 | `{{ items\|random }}` |
-| `max` | 最大值 | `{{ scores\|max }}` |
-| `min` | 最小值 | `{{ scores\|min }}` |
-| `sum` | 求和 | `{{ scores\|sum }}` |
-| `average` | 平均值 | `{{ scores\|average }}` |
-| `map` | 提取每个元素的指定键 | `{{ users\|map:"name" }}` |
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `join` | Join with delimiter | `{{ items\|join:", " }}` |
+| `first` | First element | `{{ items\|first }}` |
+| `last` | Last element | `{{ items\|last }}` |
+| `size` | Collection length | `{{ items\|size }}` |
+| `reverse` | Reverse order | `{{ items\|reverse }}` |
+| `unique` | Remove duplicates | `{{ items\|unique }}` |
+| `shuffle` | Random shuffle | `{{ items\|shuffle }}` |
+| `random` | Random element | `{{ items\|random }}` |
+| `max` | Maximum value | `{{ scores\|max }}` |
+| `min` | Minimum value | `{{ scores\|min }}` |
+| `sum` | Sum | `{{ scores\|sum }}` |
+| `average` | Average | `{{ scores\|average }}` |
+| `map` | Extract specified key from each element | `{{ users\|map:"name" }}` |
 
 ### Map
 
-| 过滤器 | 说明 | 示例 |
-|--------|------|------|
-| `extract` | 按点号路径提取嵌套值 | `{{ data\|extract:"user.name" }}` |
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `extract` | Extract nested value by dot path | `{{ data\|extract:"user.name" }}` |
 
-### 日期
+### Date
 
-| 过滤器 | 说明 | 示例 |
-|--------|------|------|
-| `date` | 格式化日期 | `{{ timestamp\|date:"Y-m-d" }}` |
-| `year` | 提取年份 | `{{ timestamp\|year }}` |
-| `month` | 提取月份数字 | `{{ timestamp\|month }}` |
-| `monthFull` / `month_full` | 月份全名 | `{{ timestamp\|monthFull }}` |
-| `day` | 提取日 | `{{ timestamp\|day }}` |
-| `week` | ISO 周数 | `{{ timestamp\|week }}` |
-| `weekday` | 星期几 | `{{ timestamp\|weekday }}` |
-| `timeAgo` / `timeago` | 相对时间 | `{{ timestamp\|timeAgo }}` |
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `date` | Format date | `{{ timestamp\|date:"Y-m-d" }}` |
+| `year` | Extract year | `{{ timestamp\|year }}` |
+| `month` | Extract month number | `{{ timestamp\|month }}` |
+| `monthFull` / `month_full` | Full month name | `{{ timestamp\|monthFull }}` |
+| `day` | Extract day | `{{ timestamp\|day }}` |
+| `week` | ISO week number | `{{ timestamp\|week }}` |
+| `weekday` | Day of week | `{{ timestamp\|weekday }}` |
+| `timeAgo` / `timeago` | Relative time | `{{ timestamp\|timeAgo }}` |
 
-### 数字格式化
+### Number Formatting
 
-| 过滤器 | 说明 | 示例 |
-|--------|------|------|
-| `number` | 数字格式化 | `{{ price\|number:"0.00" }}` |
-| `bytes` | 转为可读字节单位 | `{{ fileSize\|bytes }}` |
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `number` | Number formatting | `{{ price\|number:"0.00" }}` |
+| `bytes` | Convert to readable byte units | `{{ fileSize\|bytes }}` |
 
-### 序列化
+### Serialization
 
-| 过滤器 | 说明 | 示例 |
-|--------|------|------|
-| `json` | 序列化为 JSON | `{{ data\|json }}` |
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `json` | Serialize to JSON | `{{ data\|json }}` |
 
-## 扩展
+## Extension
 
-### 自定义过滤器
+### Custom Filters
 
 ```go
 template.RegisterFilter("repeat", func(value any, args ...string) (any, error) {
@@ -239,9 +239,9 @@ template.RegisterFilter("repeat", func(value any, args ...string) (any, error) {
 // {{ "ha"|repeat:3 }} -> "hahaha"
 ```
 
-### 自定义标签
+### Custom Tags
 
-通过实现 `Statement` 接口并调用 `RegisterTag` 注册自定义标签。以下是一个 `{% set %}` 标签的示例：
+Register custom tags by implementing the `Statement` interface and calling `RegisterTag`. Here's an example of a `{% set %}` tag:
 
 ```go
 type SetNode struct {
@@ -282,18 +282,18 @@ template.RegisterTag("set", func(doc *template.Parser, start *template.Token, ar
 })
 ```
 
-更多示例见 [examples](examples/) 目录。
+See [examples](examples/) directory for more examples.
 
-## Context 构建
+## Context Building
 
 ```go
-// 直接使用 map
+// Using map directly
 output, _ := template.Render(source, map[string]any{
     "name": "Alice",
     "age":  30,
 })
 
-// 使用 ContextBuilder（支持 struct 展开）
+// Using ContextBuilder (supports struct expansion)
 ctx, err := template.NewContextBuilder().
     KeyValue("name", "Alice").
     Struct(user).
@@ -301,9 +301,9 @@ ctx, err := template.NewContextBuilder().
 output, _ := tmpl.Render(ctx)
 ```
 
-## 错误报告
+## Error Reporting
 
-所有错误都包含精确的行列位置信息：
+All errors include precise line and column position information:
 
 ```
 lexer error at line 1, col 7: unclosed variable tag, expected '}}'
@@ -311,14 +311,14 @@ parse error at line 1, col 4: unknown tag: unknown
 parse error at line 1, col 19: unexpected EOF, expected one of: [elif else endif]
 ```
 
-## 架构
+## Architecture
 
-详见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
-## 贡献
+## Contributing
 
-欢迎贡献代码，请参阅 [贡献指南](CONTRIBUTING.md)。
+Contributions are welcome. Please see [Contributing Guide](CONTRIBUTING.md).
 
-## 许可证
+## License
 
-MIT License - 详见 [LICENSE](LICENSE)。
+MIT License - see [LICENSE](LICENSE) for details.
