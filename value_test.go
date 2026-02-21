@@ -6,11 +6,6 @@ import (
 	"testing"
 )
 
-// Test helpers to reduce repetition in pointer construction.
-
-//go:fix inline
-func float64Ptr(v float64) *float64 { return new(v) }
-
 func TestValue_IsNil(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -71,7 +66,7 @@ func TestValue_IsTrue(t *testing.T) {
 		{"float32 non-zero", float32(3.14), true},
 		{"float64 zero", float64(0), false},
 		{"float64 non-zero", float64(3.14), true},
-		{"pointer to float64 zero", float64Ptr(0), false},
+		{"pointer to float64 zero", new(float64(0)), false},
 		{"pointer to float64 non-zero", new(3.14), true},
 		{"empty string", "", false},
 		{"non-empty string", "hello", true},
