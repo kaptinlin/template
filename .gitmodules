@@ -1,3 +1,6 @@
 [submodule ".agents/skills"]
 	path = .agents/skills
 	url = https://github.com/agentable/golang-skills.git
+[submodule ".references/liquid"]
+	path = .references/liquid
+	url = https://github.com/Shopify/liquid.git

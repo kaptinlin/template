@@ -79,12 +79,6 @@ func TestDateFilters(t *testing.T) {
 			expected: "Current month: March",
 		},
 		{
-			name:     "FullMonthNameCamelCase",
-			template: "Current month: {{ current | monthFull }}",
-			context:  map[string]any{"current": current},
-			expected: "Current month: March",
-		},
-		{
 			name:     "Year",
 			template: "Current year: {{ current | year }}",
 			context:  map[string]any{"current": current},
@@ -103,18 +97,18 @@ func TestDateFilters(t *testing.T) {
 			expected: "Current day of the week: Saturday",
 		},
 		{
-			name:     "TimeAgoCamelCase",
-			template: "Time ago: {{ past | timeAgo }}",
-			context: map[string]any{
-				"past": time.Now().Add(-5 * 24 * time.Hour),
-			},
-			expected: "Time ago: 5 days ago",
-		},
-		{
 			name:     "WeekFilter",
 			template: "Week: {{ current | week }}",
 			context:  map[string]any{"current": current},
 			expected: "Week: 13",
+		},
+		{
+			name:     "TimeAgoSnakeCase",
+			template: "Time ago: {{ past | time_ago }}",
+			context: map[string]any{
+				"past": time.Now().Add(-5 * 24 * time.Hour),
+			},
+			expected: "Time ago: 5 days ago",
 		},
 	}
 

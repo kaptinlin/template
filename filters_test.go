@@ -8,7 +8,7 @@ import (
 )
 
 // noopFilter is a no-op filter used in registry tests.
-func noopFilter(value any, _ ...string) (any, error) {
+func noopFilter(value any, _ ...any) (any, error) {
 	return value, nil
 }
 
@@ -345,13 +345,43 @@ func TestBuiltinFiltersRegistered(t *testing.T) {
 	t.Parallel()
 
 	builtins := []string{
-		"upper", "lower", "capitalize", "length",
-		"default", "trim", "join", "first", "last",
-		"reverse", "abs", "round", "floor", "ceil",
-		"plus", "minus", "times", "divide", "modulo",
-		"date", "json", "number", "bytes",
-		"unique", "shuffle", "size",
-		"max", "min", "sum", "average", "extract",
+		// String filters
+		"default", "strip", "lstrip", "rstrip", "split",
+		"replace", "replace_first", "replace_last",
+		"remove", "remove_first", "remove_last",
+		"append", "prepend", "length",
+		"upcase", "downcase", "capitalize",
+		"escape", "escape_once", "h",
+		"strip_html", "strip_newlines",
+		"url_encode", "url_decode",
+		"base64_encode", "base64_decode",
+		"truncate", "truncatewords", "truncate_words",
+		"slice",
+		"trim", "trim_left", "trim_right",
+		"upper", "lower",
+		"titleize", "camelize", "pascalize", "dasherize",
+		"slugify", "pluralize", "ordinalize",
+		// Array filters
+		"uniq", "join", "first", "last",
+		"reverse", "size",
+		"sort", "sort_natural", "compact", "concat",
+		"where", "reject", "find", "find_index", "has",
+		"map", "sum",
+		"unique",
+		"random", "shuffle", "max", "min", "average",
+		// Math filters
+		"abs", "at_least", "at_most", "round", "floor", "ceil",
+		"plus", "minus", "times", "divided_by", "modulo",
+		"divide",
+		// Date filters
+		"date", "month", "month_full", "year", "day",
+		"week", "weekday", "time_ago", "timeago",
+		// Number filters
+		"number", "bytes",
+		// Format filters
+		"json",
+		// Map filters
+		"extract",
 	}
 
 	for _, name := range builtins {
@@ -374,7 +404,7 @@ func TestFilterRegistryConcurrentAccess(_ *testing.T) {
 		go func(id int) {
 			defer func() { done <- struct{}{} }()
 			name := fmt.Sprintf("concurrent_filter_%d", id)
-			RegisterFilter(name, func(value any, _ ...string) (any, error) {
+			RegisterFilter(name, func(value any, _ ...any) (any, error) {
 				return value, nil
 			})
 			_, _ = Filter(name)

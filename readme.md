@@ -2,6 +2,8 @@
 
 A lightweight Go template engine with Liquid/Django-style syntax, supporting variable interpolation, filters, conditionals, and loop control.
 
+This engine implements the [Liquid](https://shopify.github.io/liquid/) filter standard with 41 out of 46 filters fully compliant, plus 20 extension filters. See [Liquid Compatibility](docs/liquid-compatibility.md) for details.
+
 ## Installation
 
 ```sh
@@ -13,7 +15,7 @@ go get github.com/kaptinlin/template
 ### One-Step Rendering
 
 ```go
-output, err := template.Render("Hello, {{ name|upper }}!", map[string]any{
+output, err := template.Render("Hello, {{ name|upcase }}!", map[string]any{
     "name": "alice",
 })
 // output: "Hello, ALICE!"
@@ -60,9 +62,9 @@ See [Variables Documentation](docs/variables.md) for details.
 Use pipe `|` to apply filters to variables, supporting chaining and arguments:
 
 ```
-{{ name|upper }}
+{{ name|upcase }}
 {{ title|truncate:20 }}
-{{ name|lower|capitalize }}
+{{ name|downcase|capitalize }}
 {{ price|plus:10|times:2 }}
 ```
 
@@ -133,26 +135,46 @@ Literal support: strings (`"text"` / `'text'`), numbers (`42`, `3.14`), booleans
 
 | Filter | Description | Example |
 |--------|-------------|---------|
-| `default` | Return default value if empty | `{{ name\|default:"Anonymous" }}` |
-| `upper` | Convert to uppercase | `{{ name\|upper }}` |
-| `lower` | Convert to lowercase | `{{ name\|lower }}` |
+| `default` | Return default value if empty | `{{ name\|default:'Anonymous' }}` |
+| `upcase` | Convert to uppercase | `{{ name\|upcase }}` |
+| `downcase` | Convert to lowercase | `{{ name\|downcase }}` |
 | `capitalize` | Capitalize first letter | `{{ name\|capitalize }}` |
+| `strip` | Remove leading/trailing whitespace | `{{ text\|strip }}` |
+| `lstrip` | Remove leading whitespace | `{{ text\|lstrip }}` |
+| `rstrip` | Remove trailing whitespace | `{{ text\|rstrip }}` |
+| `truncate` | Truncate to length (default 50) | `{{ text\|truncate:20 }}` |
+| `truncatewords` | Truncate to word count (default 15) | `{{ text\|truncatewords:5 }}` |
+| `replace` | Replace all occurrences | `{{ text\|replace:'old','new' }}` |
+| `replace_first` | Replace first occurrence | `{{ text\|replace_first:'old','new' }}` |
+| `replace_last` | Replace last occurrence | `{{ text\|replace_last:'old','new' }}` |
+| `remove` | Remove all occurrences | `{{ text\|remove:'bad' }}` |
+| `remove_first` | Remove first occurrence | `{{ text\|remove_first:'x' }}` |
+| `remove_last` | Remove last occurrence | `{{ text\|remove_last:'x' }}` |
+| `append` | Append string | `{{ name\|append:'!' }}` |
+| `prepend` | Prepend string | `{{ name\|prepend:'Hi ' }}` |
+| `split` | Split by delimiter | `{{ csv\|split:',' }}` |
+| `slice` | Extract substring by offset and length | `{{ text\|slice:1,3 }}` |
+| `escape` | Escape HTML characters | `{{ html\|escape }}` |
+| `escape_once` | Escape without double-escaping | `{{ html\|escape_once }}` |
+| `strip_html` | Remove HTML tags | `{{ html\|strip_html }}` |
+| `strip_newlines` | Remove newline characters | `{{ text\|strip_newlines }}` |
+| `url_encode` | Percent-encode for URLs | `{{ text\|url_encode }}` |
+| `url_decode` | Decode percent-encoded string | `{{ text\|url_decode }}` |
+| `base64_encode` | Encode to Base64 | `{{ text\|base64_encode }}` |
+| `base64_decode` | Decode from Base64 | `{{ text\|base64_decode }}` |
+
+**String extensions** (not in Liquid standard):
+
+| Filter | Description | Example |
+|--------|-------------|---------|
 | `titleize` | Capitalize first letter of each word | `{{ title\|titleize }}` |
-| `trim` | Remove leading/trailing whitespace | `{{ text\|trim }}` |
-| `truncate` | Truncate to specified length | `{{ text\|truncate:20 }}` |
-| `truncateWords` | Truncate to specified word count | `{{ text\|truncateWords:5 }}` |
-| `replace` | Replace substring | `{{ text\|replace:"old","new" }}` |
-| `remove` | Remove substring | `{{ text\|remove:"bad" }}` |
-| `append` | Append string | `{{ name\|append:"!" }}` |
-| `prepend` | Prepend string | `{{ name\|prepend:"Hi " }}` |
-| `split` | Split by delimiter | `{{ csv\|split:"," }}` |
-| `length` | Get length | `{{ name\|length }}` |
-| `slugify` | Convert to URL-friendly format | `{{ title\|slugify }}` |
 | `camelize` | Convert to camelCase | `{{ name\|camelize }}` |
 | `pascalize` | Convert to PascalCase | `{{ name\|pascalize }}` |
 | `dasherize` | Convert to dash-separated | `{{ name\|dasherize }}` |
-| `pluralize` | Singular/plural selection | `{{ count\|pluralize:"item","items" }}` |
+| `slugify` | Convert to URL-friendly format | `{{ title\|slugify }}` |
+| `pluralize` | Singular/plural selection | `{{ count\|pluralize:'item','items' }}` |
 | `ordinalize` | Convert to ordinal | `{{ num\|ordinalize }}` |
+| `length` | Get string/array/map length | `{{ name\|length }}` |
 
 ### Math
 
@@ -161,57 +183,65 @@ Literal support: strings (`"text"` / `'text'`), numbers (`42`, `3.14`), booleans
 | `plus` | Addition | `{{ price\|plus:10 }}` |
 | `minus` | Subtraction | `{{ price\|minus:5 }}` |
 | `times` | Multiplication | `{{ price\|times:2 }}` |
-| `divide` | Division | `{{ total\|divide:3 }}` |
+| `divided_by` | Division | `{{ total\|divided_by:3 }}` |
 | `modulo` | Modulo | `{{ num\|modulo:2 }}` |
 | `abs` | Absolute value | `{{ num\|abs }}` |
-| `round` | Round | `{{ pi\|round:2 }}` |
+| `round` | Round (default precision 0) | `{{ pi\|round:2 }}` |
 | `floor` | Floor | `{{ num\|floor }}` |
 | `ceil` | Ceiling | `{{ num\|ceil }}` |
-| `atLeast` | Ensure minimum value | `{{ num\|atLeast:0 }}` |
-| `atMost` | Ensure maximum value | `{{ num\|atMost:100 }}` |
+| `at_least` | Ensure minimum value | `{{ num\|at_least:0 }}` |
+| `at_most` | Ensure maximum value | `{{ num\|at_most:100 }}` |
 
 ### Array
 
 | Filter | Description | Example |
 |--------|-------------|---------|
-| `join` | Join with delimiter | `{{ items\|join:", " }}` |
+| `join` | Join with separator (default `" "`) | `{{ items\|join:', ' }}` |
 | `first` | First element | `{{ items\|first }}` |
 | `last` | Last element | `{{ items\|last }}` |
-| `size` | Collection length | `{{ items\|size }}` |
+| `size` | Collection or string length | `{{ items\|size }}` |
 | `reverse` | Reverse order | `{{ items\|reverse }}` |
-| `unique` | Remove duplicates | `{{ items\|unique }}` |
+| `sort` | Sort elements | `{{ items\|sort }}` |
+| `sort_natural` | Case-insensitive sort | `{{ items\|sort_natural }}` |
+| `uniq` | Remove duplicates | `{{ items\|uniq }}` |
+| `compact` | Remove nil values | `{{ items\|compact }}` |
+| `concat` | Combine two arrays | `{{ items\|concat:more }}` |
+| `map` | Extract key from each element | `{{ users\|map:'name' }}` |
+| `where` | Select items matching key/value | `{{ users\|where:'active','true' }}` |
+| `reject` | Reject items matching key/value | `{{ users\|reject:'active','false' }}` |
+| `find` | Find first matching item | `{{ users\|find:'name','Bob' }}` |
+| `find_index` | Find index of first match | `{{ users\|find_index:'name','Bob' }}` |
+| `has` | Check if any item matches | `{{ users\|has:'name','Alice' }}` |
+| `sum` | Sum values (supports property) | `{{ scores\|sum }}` |
+
+**Array extensions** (not in Liquid standard):
+
+| Filter | Description | Example |
+|--------|-------------|---------|
 | `shuffle` | Random shuffle | `{{ items\|shuffle }}` |
 | `random` | Random element | `{{ items\|random }}` |
 | `max` | Maximum value | `{{ scores\|max }}` |
 | `min` | Minimum value | `{{ scores\|min }}` |
-| `sum` | Sum | `{{ scores\|sum }}` |
 | `average` | Average | `{{ scores\|average }}` |
-| `map` | Extract specified key from each element | `{{ users\|map:"name" }}` |
-
-### Map
-
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `extract` | Extract nested value by dot path | `{{ data\|extract:"user.name" }}` |
 
 ### Date
 
 | Filter | Description | Example |
 |--------|-------------|---------|
-| `date` | Format date | `{{ timestamp\|date:"Y-m-d" }}` |
-| `year` | Extract year | `{{ timestamp\|year }}` |
-| `month` | Extract month number | `{{ timestamp\|month }}` |
-| `monthFull` / `month_full` | Full month name | `{{ timestamp\|monthFull }}` |
+| `date` | Format date (PHP-style) | `{{ timestamp\|date:'Y-m-d' }}` |
 | `day` | Extract day | `{{ timestamp\|day }}` |
+| `month` | Extract month number | `{{ timestamp\|month }}` |
+| `month_full` | Full month name | `{{ timestamp\|month_full }}` |
+| `year` | Extract year | `{{ timestamp\|year }}` |
 | `week` | ISO week number | `{{ timestamp\|week }}` |
 | `weekday` | Day of week | `{{ timestamp\|weekday }}` |
-| `timeAgo` / `timeago` | Relative time | `{{ timestamp\|timeAgo }}` |
+| `time_ago` | Relative time | `{{ timestamp\|time_ago }}` |
 
 ### Number Formatting
 
 | Filter | Description | Example |
 |--------|-------------|---------|
-| `number` | Number formatting | `{{ price\|number:"0.00" }}` |
+| `number` | Number formatting | `{{ price\|number:'0.00' }}` |
 | `bytes` | Convert to readable byte units | `{{ fileSize\|bytes }}` |
 
 ### Serialization
@@ -220,16 +250,22 @@ Literal support: strings (`"text"` / `'text'`), numbers (`42`, `3.14`), booleans
 |--------|-------------|---------|
 | `json` | Serialize to JSON | `{{ data\|json }}` |
 
+### Map
+
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `extract` | Extract nested value by dot path | `{{ data\|extract:'user.name' }}` |
+
 ## Extension
 
 ### Custom Filters
 
 ```go
-template.RegisterFilter("repeat", func(value any, args ...string) (any, error) {
+template.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
     s := fmt.Sprintf("%v", value)
     n := 2
     if len(args) > 0 {
-        if parsed, err := strconv.Atoi(args[0]); err == nil {
+        if parsed, err := strconv.Atoi(fmt.Sprintf("%v", args[0])); err == nil {
             n = parsed
         }
     }
@@ -310,6 +346,12 @@ lexer error at line 1, col 7: unclosed variable tag, expected '}}'
 parse error at line 1, col 4: unknown tag: unknown
 parse error at line 1, col 19: unexpected EOF, expected one of: [elif else endif]
 ```
+
+## Liquid Compatibility
+
+This engine targets compatibility with the [Liquid](https://shopify.github.io/liquid/) template standard. Filter names follow Liquid conventions (`upcase`, `downcase`, `strip`, `at_least`, `divided_by`, etc.).
+
+For a complete comparison including behavioral differences, missing filters, extension filters, and convenience aliases, see [Liquid Compatibility](docs/liquid-compatibility.md).
 
 ## Architecture
 

@@ -642,13 +642,13 @@ func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 		return nil, fmt.Errorf("%w: %s", ErrFilterNotFound, n.Name)
 	}
 
-	args := make([]string, len(n.Args))
+	args := make([]any, len(n.Args))
 	for i, arg := range n.Args {
 		v, err := arg.Evaluate(ctx)
 		if err != nil {
 			return nil, err
 		}
-		args[i] = v.String()
+		args[i] = v.Interface()
 	}
 
 	result, err := fn(val.Interface(), args...)

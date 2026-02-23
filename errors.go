@@ -152,6 +152,7 @@ var (
 	ErrCannotConvertToInt      = errors.New("cannot convert value to int")
 	ErrCannotConvertNilToFloat = errors.New("cannot convert nil to float")
 	ErrCannotConvertToFloat    = errors.New("cannot convert value to float")
+	ErrExpectedSliceOrArray    = errors.New("expected slice or array")
 )
 
 // ErrBreakOutsideLoop indicates a break statement was used outside of a loop.

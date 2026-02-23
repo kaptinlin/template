@@ -8,7 +8,7 @@ import (
 )
 
 // FilterFunc represents the signature of functions that can be applied as filters.
-type FilterFunc func(value any, args ...string) (any, error)
+type FilterFunc func(value any, args ...any) (any, error)
 
 // Registry is a concurrency-safe collection of named filter functions.
 // Use [NewRegistry] to create an instance, or use the package-level

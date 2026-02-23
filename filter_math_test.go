@@ -22,25 +22,25 @@ func TestMathFilters(t *testing.T) {
 		},
 		{
 			name:     "AtLeastFilter",
-			template: "{{ value | atLeast:10 }}",
+			template: "{{ value | at_least:10 }}",
 			context:  map[string]any{"value": 5},
 			expected: "10",
 		},
 		{
 			name:     "AtLeastFilterNoClamp",
-			template: "{{ value | atLeast:3 }}",
+			template: "{{ value | at_least:3 }}",
 			context:  map[string]any{"value": 5},
 			expected: "5",
 		},
 		{
 			name:     "AtMostFilter",
-			template: "{{ value | atMost:10 }}",
+			template: "{{ value | at_most:10 }}",
 			context:  map[string]any{"value": 15},
 			expected: "10",
 		},
 		{
 			name:     "AtMostFilterNoClamp",
-			template: "{{ value | atMost:20 }}",
+			template: "{{ value | at_most:20 }}",
 			context:  map[string]any{"value": 15},
 			expected: "15",
 		},
@@ -49,6 +49,12 @@ func TestMathFilters(t *testing.T) {
 			template: "{{ value | round:2 }}",
 			context:  map[string]any{"value": 3.14159},
 			expected: "3.14",
+		},
+		{
+			name:     "RoundFilterDefault",
+			template: "{{ value | round }}",
+			context:  map[string]any{"value": 3.7},
+			expected: "4",
 		},
 		{
 			name:     "FloorFilter",
@@ -83,6 +89,12 @@ func TestMathFilters(t *testing.T) {
 		{
 			name:     "DivideFilter",
 			template: "{{ value | divide:4 }}",
+			context:  map[string]any{"value": 20},
+			expected: "5",
+		},
+		{
+			name:     "DividedByFilter",
+			template: "{{ value | divided_by:4 }}",
 			context:  map[string]any{"value": 20},
 			expected: "5",
 		},
@@ -124,10 +136,10 @@ func TestMathFilterErrors(t *testing.T) {
 		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
-	t.Run("RoundMissingArg", func(t *testing.T) {
-		_, err := roundFilter(3.14)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrInsufficientArgs)
+	t.Run("RoundDefaultPrecision", func(t *testing.T) {
+		got, err := roundFilter(3.14)
+		require.NoError(t, err)
+		assert.Equal(t, float64(3), got)
 	})
 
 	t.Run("PlusMissingArg", func(t *testing.T) {
