@@ -171,9 +171,9 @@ func (cb *ContextBuilder) Build() (Context, error) {
 }
 
 // NewExecutionContext creates a new [ExecutionContext] from user data.
-func NewExecutionContext(data map[string]any) *ExecutionContext {
+func NewExecutionContext(data Context) *ExecutionContext {
 	return &ExecutionContext{
-		Public:  Context(data),
+		Public:  data,
 		Private: NewContext(),
 	}
 }

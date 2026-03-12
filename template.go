@@ -36,7 +36,7 @@ func (t *Template) Execute(ctx *ExecutionContext, w io.Writer) error {
 //
 // Render is a convenience wrapper around [Template.Execute] for the common case
 // where a string result is needed.
-func (t *Template) Render(data map[string]any) (string, error) {
+func (t *Template) Render(data Context) (string, error) {
 	var buf bytes.Buffer
 	ctx := NewExecutionContext(data)
 	if err := t.Execute(ctx, &buf); err != nil {
