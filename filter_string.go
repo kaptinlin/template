@@ -264,14 +264,33 @@ func truncateWordsFilter(value any, args ...any) (any, error) {
 	return filter.TruncateWords(toString(value), maxWords), nil
 }
 
-// escapeFilter escapes HTML special characters.
+// escapeFilter escapes HTML special characters. This is the global
+// variant: it returns a plain string so callers of Compile(src) get
+// the same behavior as before the layout work landed.
+//
+// Sets override this with escapeFilterSafe (which returns SafeString)
+// so the auto-escape pipeline in NewHTMLSet does not double-escape.
 func escapeFilter(value any, _ ...any) (any, error) {
 	return filter.Escape(toString(value)), nil
 }
 
-// escapeOnceFilter escapes HTML without double-escaping already-escaped entities.
+// escapeOnceFilter escapes HTML without double-escaping already-escaped
+// entities. Global variant, returns plain string.
 func escapeOnceFilter(value any, _ ...any) (any, error) {
 	return filter.EscapeOnce(toString(value)), nil
+}
+
+// escapeFilterSafe is the HTML-mode variant registered only in a
+// NewHTMLSet's private filter registry. It returns SafeString so the
+// per-template auto-escaper treats the already-escaped content as
+// trusted and does not escape it a second time.
+func escapeFilterSafe(value any, _ ...any) (any, error) {
+	return SafeString(filter.Escape(toString(value))), nil
+}
+
+// escapeOnceFilterSafe mirrors escapeFilterSafe for escape_once.
+func escapeOnceFilterSafe(value any, _ ...any) (any, error) {
+	return SafeString(filter.EscapeOnce(toString(value))), nil
 }
 
 // stripHTMLFilter removes all HTML tags from a string.

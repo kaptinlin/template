@@ -4,3 +4,9 @@
 [submodule ".references/liquid"]
 	path = .references/liquid
 	url = https://github.com/Shopify/liquid.git
+[submodule ".references/jinja"]
+	path = .references/jinja
+	url = https://github.com/pallets/jinja.git
+[submodule ".references/pongo2"]
+	path = .references/pongo2
+	url = https://github.com/flosch/pongo2.git

@@ -125,7 +125,9 @@ func (p *Parser) consumeEndTag() (string, *Parser, error) {
 	}
 	p.Advance() // Consume %}.
 
-	return tag, NewParser(args), nil
+	argParser := NewParser(args)
+	argParser.set = p.set
+	return tag, argParser, nil
 }
 
 // Error creates a parse error at the current token position.

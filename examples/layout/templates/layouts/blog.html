@@ -1,0 +1,25 @@
+{% extends "layouts/base.html" %}
+
+{% block head %}
+  {{ block.super }}
+  <meta name="description" content="{{ page.title }}">
+{% endblock %}
+
+{% block content %}
+  <article>
+    <h1>{{ page.title }}</h1>
+    <p class="byline">by {{ page.author }} · {{ page.date }}</p>
+
+    {{ page.content | safe }}
+
+    {% if page.tags %}
+      <ul class="tags">
+        {% for tag in page.tags %}
+          <li>{{ tag }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </article>
+
+  {% include "partials/share.html" with url=site.url title=page.title %}
+{% endblock content %}

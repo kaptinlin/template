@@ -12,20 +12,20 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// saveTagRegistry returns a snapshot of the current tag registry.
+// saveTagRegistry returns a snapshot of the current global tag registry.
 func saveTagRegistry() map[string]TagParser {
-	tagMu.RLock()
-	defer tagMu.RUnlock()
-	saved := make(map[string]TagParser, len(tagRegistry))
-	maps.Copy(saved, tagRegistry)
+	defaultTagRegistry.mu.RLock()
+	defer defaultTagRegistry.mu.RUnlock()
+	saved := make(map[string]TagParser, len(defaultTagRegistry.tags))
+	maps.Copy(saved, defaultTagRegistry.tags)
 	return saved
 }
 
-// restoreTagRegistry restores the tag registry from a snapshot.
+// restoreTagRegistry restores the global tag registry from a snapshot.
 func restoreTagRegistry(saved map[string]TagParser) {
-	tagMu.Lock()
-	defer tagMu.Unlock()
-	tagRegistry = saved
+	defaultTagRegistry.mu.Lock()
+	defer defaultTagRegistry.mu.Unlock()
+	defaultTagRegistry.tags = saved
 }
 
 func TestRegisterTag(t *testing.T) {
@@ -42,7 +42,7 @@ func TestRegisterTag(t *testing.T) {
 		{
 			name: "new tag",
 			setup: func() {
-				tagRegistry = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]TagParser)
 			},
 			tagName: "customtag",
 			parser:  parseIfTag,
@@ -50,8 +50,8 @@ func TestRegisterTag(t *testing.T) {
 		{
 			name: "duplicate tag",
 			setup: func() {
-				tagRegistry = make(map[string]TagParser)
-				tagRegistry["duplicate"] = parseIfTag
+				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags["duplicate"] = parseIfTag
 			},
 			tagName: "duplicate",
 			parser:  parseForTag,
@@ -60,7 +60,7 @@ func TestRegisterTag(t *testing.T) {
 		{
 			name: "multiple different tags",
 			setup: func() {
-				tagRegistry = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]TagParser)
 			},
 			tagName: "tag1",
 			parser:  parseIfTag,
@@ -80,7 +80,7 @@ func TestRegisterTag(t *testing.T) {
 			if err != nil {
 				t.Fatalf("RegisterTag(%q) = %v, want nil", tt.tagName, err)
 			}
-			if _, ok := tagRegistry[tt.tagName]; !ok {
+			if _, ok := defaultTagRegistry.tags[tt.tagName]; !ok {
 				t.Errorf("RegisterTag(%q) did not register tag", tt.tagName)
 			}
 		})
@@ -100,8 +100,8 @@ func TestTag(t *testing.T) {
 		{
 			name: "existing tag",
 			setup: func() {
-				tagRegistry = make(map[string]TagParser)
-				tagRegistry["if"] = parseIfTag
+				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags["if"] = parseIfTag
 			},
 			tagName: "if",
 			want:    true,
@@ -109,15 +109,15 @@ func TestTag(t *testing.T) {
 		{
 			name: "non-existing tag",
 			setup: func() {
-				tagRegistry = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]TagParser)
 			},
 			tagName: "nonexistent",
 		},
 		{
 			name: "built-in for tag",
 			setup: func() {
-				tagRegistry = make(map[string]TagParser)
-				tagRegistry["for"] = parseForTag
+				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags["for"] = parseForTag
 			},
 			tagName: "for",
 			want:    true,

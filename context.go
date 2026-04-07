@@ -29,6 +29,22 @@ type ContextBuilder struct {
 type ExecutionContext struct {
 	Public  Context // user-provided variables
 	Private Context // internal variables (e.g., loop counters)
+
+	// set is the owning Set when rendering via Set.Render; nil for
+	// standalone Template.Execute calls.
+	set *Set
+
+	// autoescape controls whether {{ expr }} output is HTML-escaped.
+	// True only for NewHTMLSet-rendered templates.
+	autoescape bool
+
+	// includeDepth tracks the current {% include %} nesting depth to
+	// defend against runaway recursion.
+	includeDepth int
+
+	// currentLeaf is the "most-child" template in the current extends
+	// chain, used by BlockNode.Execute to walk up through overrides.
+	currentLeaf *Template
 }
 
 // NewContext creates and returns a new empty [Context].

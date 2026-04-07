@@ -13,9 +13,15 @@ type FilterFunc func(value any, args ...any) (any, error)
 // Registry is a concurrency-safe collection of named filter functions.
 // Use [NewRegistry] to create an instance, or use the package-level
 // functions that operate on the default registry.
+//
+// Registry supports an optional parent: when a lookup misses in this
+// registry, the parent is consulted. This allows a Set to layer its
+// own private filters (like safe and the HTML-aware escape) over the
+// global registry without copying entries.
 type Registry struct {
 	mu      sync.RWMutex
 	filters map[string]FilterFunc
+	parent  *Registry
 }
 
 // NewRegistry creates an empty filter registry.
@@ -38,19 +44,25 @@ func (r *Registry) Register(name string, fn FilterFunc) {
 }
 
 // Filter returns the filter registered under name and a boolean
-// indicating whether it was found.
+// indicating whether it was found. If not found locally and a parent
+// registry is set, the parent is consulted.
 func (r *Registry) Filter(name string) (FilterFunc, bool) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
 	fn, ok := r.filters[name]
-	return fn, ok
+	r.mu.RUnlock()
+	if ok {
+		return fn, true
+	}
+	if r.parent != nil {
+		return r.parent.Filter(name)
+	}
+	return nil, false
 }
 
-// Has reports whether a filter with the given name is registered.
+// Has reports whether a filter with the given name is registered
+// (including in ancestor registries).
 func (r *Registry) Has(name string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	_, ok := r.filters[name]
+	_, ok := r.Filter(name)
 	return ok
 }
 

@@ -4,6 +4,23 @@ package template
 type Parser struct {
 	tokens []*Token
 	pos    int
+
+	// set is the owning template set, if this parser is being used by
+	// Set.Get to compile a template loaded from a Loader. nil for
+	// templates compiled directly via Compile(src).
+	set *Set
+
+	// parent is populated by parseExtendsTag when the template being
+	// compiled starts with {% extends "name" %}.
+	parent *Template
+
+	// blocks collects {% block %} definitions as they are parsed.
+	blocks map[string]*BlockNode
+
+	// hasNonTrivialContent tracks whether any non-whitespace text,
+	// variable output, or non-extends tag has been seen. Used to enforce
+	// the "extends must be first" rule.
+	hasNonTrivialContent bool
 }
 
 // misusedTagHints maps end/branch tags to hints explaining correct usage.
@@ -17,6 +34,14 @@ var misusedTagHints = map[string]string{
 // NewParser creates a new Parser.
 func NewParser(tokens []*Token) *Parser {
 	return &Parser{tokens: tokens}
+}
+
+// Set returns the template set associated with this parser, if any.
+// Tag parsers can use this to load referenced templates at parse time
+// (e.g., {% include %}, {% extends %}). Returns nil for parsers that
+// were constructed via NewParser without an owning Set.
+func (p *Parser) Set() *Set {
+	return p.set
 }
 
 // Parse parses the entire template and returns AST statement nodes.
@@ -65,11 +90,27 @@ func (p *Parser) parseNext() (Statement, error) {
 func (p *Parser) parseText() Statement {
 	tok := p.Current()
 	p.Advance()
+	if !isAllWhitespace(tok.Value) {
+		p.hasNonTrivialContent = true
+	}
 	return NewTextNode(tok.Value, tok.Line, tok.Col)
+}
+
+func isAllWhitespace(s string) bool {
+	for _, r := range s {
+		switch r {
+		case ' ', '\t', '\r', '\n':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // parseVariable parses a variable output: {{ expression }}.
 func (p *Parser) parseVariable() (Statement, error) {
+	p.hasNonTrivialContent = true
 	start := p.Current()
 	p.Advance() // Skip {{.
 
@@ -104,8 +145,23 @@ func (p *Parser) parseTag() (Statement, error) {
 	}
 	p.Advance() // Consume tag name.
 
-	// Look up the tag parser in the registry.
-	fn, ok := Tag(name.Value)
+	// Any tag other than extends marks the template as "has content",
+	// so a later {% extends %} will be rejected as not-first.
+	if name.Value != "extends" {
+		p.hasNonTrivialContent = true
+	}
+
+	// Look up the tag parser. Templates loaded via a Set consult the
+	// Set's private registry first (which is layered over the global
+	// one), giving access to layout tags (include/extends/block).
+	// Standalone Compile(src) sees only the global registry.
+	var fn TagParser
+	var ok bool
+	if p.set != nil && p.set.tags != nil {
+		fn, ok = p.set.tags.Get(name.Value)
+	} else {
+		fn, ok = defaultTagRegistry.Get(name.Value)
+	}
 	if !ok {
 		msg := "unknown tag: " + name.Value
 		if hint, found := misusedTagHints[name.Value]; found {
@@ -122,7 +178,9 @@ func (p *Parser) parseTag() (Statement, error) {
 	}
 	p.Advance() // Consume %}.
 
-	return fn(p, name, NewParser(args))
+	argParser := NewParser(args)
+	argParser.set = p.set
+	return fn(p, name, argParser)
 }
 
 // ParseUntil parses nodes until one of the given end tags is encountered.

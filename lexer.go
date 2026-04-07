@@ -33,6 +33,13 @@ type Lexer struct {
 	col    int // 1-based
 	tokens []*Token
 	len    int // cached len(input)
+
+	// allowRaw enables {% raw %}...{% endraw %} block scanning. It is
+	// false by default so Compile(src) retains its original behavior
+	// (raw is treated as an unknown tag). Set.Get enables it via
+	// compileForSet so templates loaded via NewHTMLSet/NewTextSet get
+	// the raw feature.
+	allowRaw bool
 }
 
 // NewLexer creates a new Lexer for the given input.
@@ -63,6 +70,18 @@ func (l *Lexer) Tokenize() ([]*Token, error) {
 				}
 				continue
 			case '%':
+				// Intercept {% raw %}...{% endraw %} at the lexer level
+				// — but only when allowRaw is enabled. Compile(src)
+				// leaves it off, so raw is treated as an unknown tag in
+				// that path.
+				if l.allowRaw {
+					if n := l.matchRawOpen(); n > 0 {
+						if err := l.scanRawBlock(n); err != nil {
+							return nil, err
+						}
+						continue
+					}
+				}
 				if err := l.scanBlockTag(); err != nil {
 					return nil, err
 				}
@@ -77,6 +96,91 @@ func (l *Lexer) Tokenize() ([]*Token, error) {
 
 	l.emit(TokenEOF, "")
 	return l.tokens, nil
+}
+
+// matchRawOpen reports the byte length of a {% raw %} opener at the
+// current position, allowing for flexible whitespace. Returns 0 if the
+// current position is not a raw opener.
+func (l *Lexer) matchRawOpen() int {
+	return l.matchBlockTagKeyword("raw")
+}
+
+// matchBlockTagKeyword returns the byte length (including "%}") of a
+// block tag "{% kw %}" at the current position, or 0 on no match.
+// It tolerates whitespace around the keyword.
+func (l *Lexer) matchBlockTagKeyword(kw string) int {
+	i := l.pos
+	if i+2 > l.len || l.input[i] != '{' || l.input[i+1] != '%' {
+		return 0
+	}
+	i += 2
+	// Skip whitespace after {%.
+	for i < l.len && isSpace(l.input[i]) {
+		i++
+	}
+	// Match keyword.
+	if i+len(kw) > l.len || l.input[i:i+len(kw)] != kw {
+		return 0
+	}
+	j := i + len(kw)
+	// Must be followed by whitespace or %}.
+	if j >= l.len {
+		return 0
+	}
+	if !isSpace(l.input[j]) && (j+1 >= l.len || l.input[j] != '%' || l.input[j+1] != '}') {
+		return 0
+	}
+	// Skip whitespace after keyword.
+	for j < l.len && isSpace(l.input[j]) {
+		j++
+	}
+	// Expect %}.
+	if j+1 >= l.len || l.input[j] != '%' || l.input[j+1] != '}' {
+		return 0
+	}
+	return j + 2 - l.pos
+}
+
+// scanRawBlock consumes everything from the current {% raw %} opener
+// (openerLen bytes long) up to a matching {% endraw %}, emitting a
+// single TokenText for the body. Returns ErrUnclosedRaw if no endraw
+// is found.
+func (l *Lexer) scanRawBlock(openerLen int) error {
+	startLine, startCol := l.line, l.col
+	// Skip the {% raw %} opener, tracking line/col.
+	l.advance(openerLen)
+
+	bodyStart := l.pos
+	bodyLine, bodyCol := l.line, l.col
+
+	for l.pos < l.len {
+		if n := l.matchBlockTagKeyword("endraw"); n > 0 {
+			body := l.input[bodyStart:l.pos]
+			if len(body) > 0 {
+				l.emitAt(TokenText, body, bodyLine, bodyCol)
+			}
+			l.advance(n)
+			return nil
+		}
+		if l.input[l.pos] == '\n' {
+			l.line++
+			l.col = 1
+		} else {
+			l.col++
+		}
+		l.pos++
+	}
+	return l.errorAtErr(startLine, startCol, ErrUnclosedRaw)
+}
+
+// errorAtErr wraps a sentinel error with position info as a LexerError.
+func (l *Lexer) errorAtErr(line, col int, sentinel error) error {
+	return &LexerError{Message: sentinel.Error(), Line: line, Col: col}
+}
+
+// isSpace reports whether b is ASCII whitespace.
+func isSpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
 }
 
 // scanText scans plain text until a tag opener is encountered.

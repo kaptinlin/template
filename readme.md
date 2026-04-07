@@ -1,8 +1,20 @@
 # Template Engine
 
-A lightweight Go template engine with Liquid/Django-style syntax, supporting variable interpolation, filters, conditionals, and loop control.
+A lightweight Go template engine with Django-inspired control flow and Liquid-compatible filter syntax. Supports variable interpolation, 80+ built-in filters, conditionals, loops, and — when you opt in — multi-file templates with inheritance, includes, raw blocks, and HTML auto-escape.
 
-This engine implements the [Liquid](https://shopify.github.io/liquid/) filter standard with 41 out of 46 filters fully compliant, plus 20 extension filters. See [Liquid Compatibility](docs/liquid-compatibility.md) for details.
+This engine implements the [Liquid](https://shopify.github.io/liquid/) filter standard with 41 out of 46 filters fully compliant, plus 20+ extension filters. See [Liquid Compatibility](docs/liquid-compatibility.md) for details.
+
+## Two Modes, One Package
+
+Like Go's own `text/template` vs `html/template`, this library exposes two complementary APIs:
+
+| Mode | API | Use for |
+|---|---|---|
+| **Single-string** | `template.Compile(src)` / `template.Render(src, ctx)` | Log lines, nested config snippets, quick interpolation. Zero dependencies on loaders. |
+| **Multi-file text** | `template.NewTextSet(loader)` | Code generation, YAML/TOML/Taskfile, plain-text emails. Supports `include` / `extends` / `block` / `raw`, no HTML escape. |
+| **Multi-file HTML** | `template.NewHTMLSet(loader)` | Web pages, HTML emails, PDF reports. Everything `NewTextSet` does, **plus automatic HTML escape** with `SafeString` / `{{ x \| safe }}`. |
+
+**Guiding principle**: if you only use `Compile(src)`, the engine behaves exactly as before the layout features landed — no new tags, no new filters, no surprises. Layout features live in Set-scoped registries and never leak into the global path.
 
 ## Installation
 
@@ -12,18 +24,20 @@ go get github.com/kaptinlin/template
 
 ## Quick Start
 
-### One-Step Rendering
+### Single-string rendering
+
+For log lines, config snippets, and anything where you just want to interpolate a few values into a string:
 
 ```go
-output, err := template.Render("Hello, {{ name|upcase }}!", map[string]any{
+output, err := template.Render("Hello, {{ name|upcase }}!", template.Context{
     "name": "alice",
 })
 // output: "Hello, ALICE!"
 ```
 
-### Compile and Reuse
+### Compile and reuse
 
-For templates that need to be rendered multiple times, compile once and reuse:
+For templates rendered multiple times:
 
 ```go
 tmpl, err := template.Compile("Hello, {{ name }}!")
@@ -31,16 +45,98 @@ if err != nil {
     log.Fatal(err)
 }
 
-output, err := tmpl.Render(map[string]any{"name": "World"})
+output, err := tmpl.Render(template.Context{"name": "World"})
 // output: "Hello, World!"
+```
+
+### Multi-file HTML with layout inheritance
+
+For web pages with shared layouts, includes, and auto-escape:
+
+```go
+import (
+    "embed"
+    "os"
+
+    "github.com/kaptinlin/template"
+)
+
+//go:embed themes/default/*
+var themeFS embed.FS
+
+func main() {
+    user, _ := template.NewDirLoader("./templates")               // os.Root sandbox
+    theme  := template.NewFSLoader(themeFS)                        // embed.FS
+    loader := template.NewChainLoader(user, theme)                 // user > theme
+
+    set := template.NewHTMLSet(loader,
+        template.WithGlobals(template.Context{"site": siteData}),
+    )
+
+    _ = set.Render("layouts/blog.html", template.Context{
+        "page": map[string]any{
+            "title":   "Hello <world>",                            // auto-escaped
+            "content": template.SafeString("<p>trusted HTML</p>"), // rendered as-is
+        },
+    }, os.Stdout)
+}
+```
+
+The templates in `./themes/default/`:
+
+```django
+{# layouts/base.html #}
+<!DOCTYPE html>
+<html>
+<head>{% block head %}<title>{{ site.title }}</title>{% endblock %}</head>
+<body>
+  {% include "partials/header.html" %}
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>
+```
+
+```django
+{# layouts/blog.html #}
+{% extends "layouts/base.html" %}
+
+{% block head %}
+  {{ block.super }}
+  <meta name="description" content="{{ page.title }}">
+{% endblock %}
+
+{% block content %}
+  <article>
+    <h1>{{ page.title }}</h1>
+    {{ page.content | safe }}
+  </article>
+{% endblock content %}
+```
+
+See [docs/layout.md](docs/layout.md) for the full layout guide, [docs/loaders.md](docs/loaders.md) for loader configuration, and [docs/security.md](docs/security.md) for the security model.
+
+### Multi-file text generation
+
+For generating code, config files, or anything that should NOT be HTML-escaped:
+
+```go
+loader, _ := template.NewDirLoader("./scaffold")
+
+set := template.NewTextSet(loader,
+    template.WithGlobals(template.Context{"project": projectMeta}),
+)
+
+// Generates Taskfile.yml with {{.GOBIN}}/bin intact — no HTML escape would
+// turn & into &amp; and break the YAML.
+_ = set.Render("Taskfile.yml.tmpl", nil, &buf)
 ```
 
 ### Using io.Writer
 
 ```go
 tmpl, _ := template.Compile("Hello, {{ name }}!")
-ctx := template.NewExecutionContext(map[string]any{"name": "World"})
-tmpl.Execute(ctx, os.Stdout)
+ctx := template.NewExecutionContext(template.Context{"name": "World"})
+_ = tmpl.Execute(ctx, os.Stdout)
 ```
 
 ## Template Syntax
@@ -113,6 +209,56 @@ See [Control Structure Documentation](docs/control-structure.md) for details.
 ```
 {# This content will not appear in the output #}
 ```
+
+### Layout & inheritance (Set-scoped)
+
+Available when the template is loaded via `NewHTMLSet` or `NewTextSet`:
+
+```django
+{# Include a partial #}
+{% include "partials/header.html" %}
+{% include "partials/card.html" with title="Hi" count=3 %}      {# pass variables #}
+{% include "partials/card.html" with title="Hi" only %}         {# isolate context #}
+{% include "partials/optional.html" if_exists %}                {# missing is no-op #}
+{% include page.widget %}                                        {# dynamic path #}
+
+{# Inherit from a parent template #}
+{% extends "layouts/base.html" %}
+
+{# Define/override blocks #}
+{% block content %}
+  {{ block.super }}             {# call the parent block's output #}
+  <p>My override</p>
+{% endblock content %}
+
+{# Output literal template syntax, no interpolation #}
+{% raw %}
+  Literal: {{ not_a_variable }}  {% for x in items %}
+{% endraw %}
+```
+
+`{% include %}`, `{% extends %}`, `{% block %}`, and `{% raw %}` are **not** available to `template.Compile(src)`. They exist only in templates loaded through a `Set`. See [docs/layout.md](docs/layout.md).
+
+### Auto-escape & `safe` (HTMLSet only)
+
+`NewHTMLSet` auto-escapes every `{{ expr }}` output:
+
+```django
+{{ page.title }}                 {# auto-escaped: < becomes &lt; #}
+{{ page.content | safe }}        {# marked trusted — rendered as-is #}
+{{ user_input | escape }}        {# explicit escape #}
+```
+
+Go code can mark values as trusted using `template.SafeString`:
+
+```go
+set.Render("page.html", template.Context{
+    "title":   "Hello <world>",                            // escaped
+    "content": template.SafeString("<p>pre-rendered</p>"), // NOT escaped
+}, w)
+```
+
+`NewTextSet` and `template.Compile` do not escape anything — they treat `SafeString` as a plain string.
 
 ### Expressions
 
@@ -318,7 +464,19 @@ template.RegisterTag("set", func(doc *template.Parser, start *template.Token, ar
 })
 ```
 
-See [examples](examples/) directory for more examples.
+## Examples
+
+Runnable examples live in the [`examples/`](examples/) directory:
+
+| Directory | Demonstrates |
+|---|---|
+| [`examples/usage`](examples/usage) | Single-string `Compile` / `Render` basics |
+| [`examples/custom_filters`](examples/custom_filters) | Registering a custom filter via `RegisterFilter` |
+| [`examples/custom_tags`](examples/custom_tags) | Registering a custom tag via `RegisterTag` |
+| [`examples/layout`](examples/layout) | Multi-file HTML site with `{% extends %}` / `{% block %}` / `{% include %}` / `block.super` / auto-escape |
+| [`examples/multifile_text`](examples/multifile_text) | Code generation with `NewTextSet` (no HTML escape) and multi-file includes |
+
+Run any example with `go run ./examples/<name>`.
 
 ## Context Building
 

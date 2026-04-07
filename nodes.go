@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+
+	"github.com/kaptinlin/filter"
 )
 
 // Interfaces
@@ -238,12 +240,28 @@ func (n *OutputNode) Position() (int, int) { return n.Line, n.Col }
 func (n *OutputNode) String() string { return fmt.Sprintf("Output(%s)", n.Expr) }
 
 // Execute evaluates the expression and writes its string value.
+//
+// When the execution context has autoescape enabled (HTMLSet rendering),
+// the output is HTML-escaped UNLESS the underlying Go value is a
+// [SafeString]. In the non-autoescape path (TextSet or standalone
+// Compile), SafeString is treated as a plain string.
 func (n *OutputNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = io.WriteString(w, val.String())
+	// Detect SafeString at the raw-value level: the filter pipeline
+	// downgrades to plain string when any non-safe-aware filter runs,
+	// which is exactly the behavior we want.
+	if s, ok := val.Interface().(SafeString); ok {
+		_, err = io.WriteString(w, string(s))
+		return err
+	}
+	out := val.String()
+	if ctx.autoescape {
+		out = filter.Escape(out)
+	}
+	_, err = io.WriteString(w, out)
 	return err
 }
 
@@ -631,13 +649,24 @@ func (n *FilterNode) String() string {
 }
 
 // Evaluate applies the named filter to the expression value.
+//
+// Filter lookup consults the per-Set filter registry first (if the
+// template was loaded via a Set), falling back to the global registry.
+// This gives Set-loaded templates access to the safe filter and the
+// HTML-aware escape variants without exposing them to Compile(src).
 func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	fn, ok := Filter(n.Name)
+	var fn FilterFunc
+	var ok bool
+	if ctx.set != nil && ctx.set.filters != nil {
+		fn, ok = ctx.set.filters.Filter(n.Name)
+	} else {
+		fn, ok = Filter(n.Name)
+	}
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrFilterNotFound, n.Name)
 	}

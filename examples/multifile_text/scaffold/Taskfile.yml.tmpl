@@ -1,0 +1,35 @@
+version: '3'
+
+vars:
+  PROJECT_ROOT:
+    sh: pwd
+  GOBIN: '{{ "{{.PROJECT_ROOT}}" }}/bin'
+  BINARY: {{ project.binary }}
+
+{% include "header.tmpl" %}
+
+tasks:
+  default:
+    desc: Build and test {{ project.name }}
+    cmds:
+      - task: build
+      - task: test
+
+  build:
+    desc: Build {{ project.binary }}
+    cmds:
+      - go build -o {{ "{{.GOBIN}}" }}/{{ "{{.BINARY}}" }} .
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -race ./...
+
+{% if project.lint %}
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+{% endif %}
+
+{% include "footer.tmpl" %}

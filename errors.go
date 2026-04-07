@@ -2,6 +2,30 @@ package template
 
 import "errors"
 
+// ErrTemplateNotFound indicates a loader could not locate the named template.
+// ErrInvalidTemplateName indicates the template name failed fs.ValidPath validation
+// (contains "..", is absolute, contains NUL, backslash, or similar).
+// ErrIncludeDepthExceeded indicates include nesting exceeded the hard limit.
+// ErrExtendsDepthExceeded indicates the extends chain exceeded the hard limit.
+// ErrCircularExtends indicates a cycle was detected in the extends chain.
+// ErrExtendsNotFirst indicates an extends tag appeared after other content.
+// ErrExtendsPathNotLiteral indicates an extends path was an expression, not a string literal.
+// ErrBlockRedefined indicates the same block name appeared twice in one template.
+// ErrUnclosedRaw indicates a raw block was not terminated with endraw.
+// ErrIncludePathNotString indicates a dynamic include path evaluated to a non-string value.
+var (
+	ErrTemplateNotFound      = errors.New("template not found")
+	ErrInvalidTemplateName   = errors.New("invalid template name")
+	ErrIncludeDepthExceeded  = errors.New("include depth exceeded")
+	ErrExtendsDepthExceeded  = errors.New("extends depth exceeded")
+	ErrCircularExtends       = errors.New("circular extends detected")
+	ErrExtendsNotFirst       = errors.New("extends must be the first tag")
+	ErrExtendsPathNotLiteral = errors.New("extends path must be a string literal")
+	ErrBlockRedefined        = errors.New("block redefined in same template")
+	ErrUnclosedRaw           = errors.New("unclosed raw block")
+	ErrIncludePathNotString  = errors.New("include path did not evaluate to string")
+)
+
 // ErrContextKeyNotFound indicates a key was not found in the execution context.
 // ErrContextInvalidKeyType indicates an invalid key type during context navigation.
 // ErrContextIndexOutOfRange indicates an index out of range during context navigation.
