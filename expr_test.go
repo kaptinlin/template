@@ -1076,10 +1076,13 @@ func TestExprParserErrorMethods(t *testing.T) {
 			},
 		},
 		{
-			name: "parseErr at end returns error with zero position",
+			name: "parseErr at end falls back to previous token position",
 			test: func(t *testing.T) {
-				tokens := []*Token{}
+				tokens := []*Token{
+					{Type: TokenIdentifier, Value: "name", Line: 7, Col: 11},
+				}
 				parser := NewExprParser(tokens)
+				parser.advance()
 				err := parser.parseErr("test error")
 				var parseErr *ParseError
 				if !errors.As(err, &parseErr) {
@@ -1089,10 +1092,10 @@ func TestExprParserErrorMethods(t *testing.T) {
 				if got, want := parseErr.Message, "test error"; got != want {
 					t.Errorf("parseErr().Message = %v, want %v", got, want)
 				}
-				if got, want := parseErr.Line, 0; got != want {
+				if got, want := parseErr.Line, 7; got != want {
 					t.Errorf("parseErr().Line = %v, want %v", got, want)
 				}
-				if got, want := parseErr.Col, 0; got != want {
+				if got, want := parseErr.Col, 11; got != want {
 					t.Errorf("parseErr().Col = %v, want %v", got, want)
 				}
 			},

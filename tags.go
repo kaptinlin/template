@@ -23,7 +23,7 @@ import (
 type TagParser func(doc *Parser, start *Token, arguments *Parser) (Statement, error)
 
 // TagRegistry stores tag parsers. An optional parent registry is
-// consulted when a lookup misses, enabling a Set to layer its own
+// consulted when a lookup misses, enabling an Engine to layer its own
 // private tags over the global registry without copying entries.
 //
 // TagRegistry is safe for concurrent use.
@@ -38,8 +38,15 @@ func NewTagRegistry() *TagRegistry {
 	return &TagRegistry{tags: make(map[string]TagParser)}
 }
 
+func (r *TagRegistry) validate(name string, parser TagParser) {
+	if parser == nil {
+		panic(fmt.Sprintf("template: nil tag parser for %q", name))
+	}
+}
+
 // Register adds a tag parser. Duplicate names return [ErrTagAlreadyRegistered].
 func (r *TagRegistry) Register(name string, parser TagParser) error {
+	r.validate(name, parser)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.tags[name]; exists {
@@ -47,6 +54,24 @@ func (r *TagRegistry) Register(name string, parser TagParser) error {
 	}
 	r.tags[name] = parser
 	return nil
+}
+
+// Replace stores parser under name, overwriting any direct existing entry.
+//
+// Replace panics if parser is nil.
+func (r *TagRegistry) Replace(name string, parser TagParser) {
+	r.validate(name, parser)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tags[name] = parser
+}
+
+// MustRegister registers parser under name and panics on duplicate
+// registration or nil parser.
+func (r *TagRegistry) MustRegister(name string, parser TagParser) {
+	if err := r.Register(name, parser); err != nil {
+		panic(err)
+	}
 }
 
 // Get looks up a tag parser by name. If not found and a parent registry
@@ -85,40 +110,21 @@ func (r *TagRegistry) Unregister(name string) {
 	delete(r.tags, name)
 }
 
-// defaultTagRegistry is the package-wide global tag registry.
+// Clone returns a shallow copy of the registry and its direct entries.
+// The parent registry reference is preserved.
+func (r *TagRegistry) Clone() *TagRegistry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	cloned := NewTagRegistry()
+	maps.Copy(cloned.tags, r.tags)
+	cloned.parent = r.parent
+	return cloned
+}
+
+// defaultTagRegistry is the package-wide built-in tag registry used as the
+// parent layer for engine-local registries.
 var defaultTagRegistry = NewTagRegistry()
-
-// RegisterTag registers a tag parser in the global registry.
-// It is safe to call from multiple goroutines.
-func RegisterTag(name string, parser TagParser) error {
-	return defaultTagRegistry.Register(name, parser)
-}
-
-// Tag returns the parser registered in the global registry for the
-// given tag name.
-// It is safe to call from multiple goroutines.
-func Tag(name string) (TagParser, bool) {
-	return defaultTagRegistry.Get(name)
-}
-
-// ListTags returns a sorted list of all tag names in the global registry.
-// It is safe to call from multiple goroutines.
-func ListTags() []string {
-	return defaultTagRegistry.List()
-}
-
-// HasTag checks if a tag with the given name is registered in the
-// global registry.
-// It is safe to call from multiple goroutines.
-func HasTag(name string) bool {
-	return defaultTagRegistry.Has(name)
-}
-
-// UnregisterTag removes a tag from the global registry.
-// It is safe to call from multiple goroutines.
-func UnregisterTag(name string) {
-	defaultTagRegistry.Unregister(name)
-}
 
 // Built-in tag registration.
 
@@ -128,13 +134,12 @@ type builtinTag struct {
 	parser TagParser
 }
 
-// builtinTags lists tags that are registered into the global registry
-// when the package is imported. These are the tags available to any
-// template compiled via the Compile(src) path.
+// builtinTags lists tags that are registered into the built-in registry
+// when the package is imported. These are the tags available in every
+// engine by default.
 //
 // Layout tags (include, extends, block) are intentionally NOT in this
-// list — they are registered per-Set inside NewHTMLSet/NewTextSet so
-// Compile(src) retains its original "unknown tag" behavior for them.
+// list. They are registered per-engine only when FeatureLayout is enabled.
 var builtinTags = []builtinTag{
 	{"if", parseIfTag},
 	{"for", parseForTag},
@@ -142,9 +147,8 @@ var builtinTags = []builtinTag{
 	{"continue", parseContinueTag},
 }
 
-// layoutTags are the tags that become available only after a template
-// is loaded via a Set. NewHTMLSet/NewTextSet layers these into the
-// Set's private tag registry.
+// layoutTags are the tags that become available only after an engine
+// enables FeatureLayout.
 var layoutTags = []builtinTag{
 	{"include", parseIncludeTag},
 	{"extends", parseExtendsTag},
@@ -160,8 +164,6 @@ var layoutTags = []builtinTag{
 // prevents them from appearing outside of if blocks.
 func init() {
 	for _, bt := range builtinTags {
-		if err := RegisterTag(bt.name, bt.parser); err != nil {
-			panic(err)
-		}
+		defaultTagRegistry.MustRegister(bt.name, bt.parser)
 	}
 }

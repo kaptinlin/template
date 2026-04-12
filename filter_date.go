@@ -4,17 +4,17 @@ import "github.com/kaptinlin/filter"
 
 // registerDateFilters registers all date-related filters.
 func registerDateFilters() {
-	RegisterFilter("date", dateFilter)
-	RegisterFilter("month", monthFilter)
-	RegisterFilter("month_full", monthFullFilter)
-	RegisterFilter("year", yearFilter)
-	RegisterFilter("day", dayFilter)
-	RegisterFilter("week", weekFilter)
-	RegisterFilter("weekday", weekdayFilter)
-	RegisterFilter("time_ago", timeAgoFilter)
+	defaultRegistry.MustRegister("date", dateFilter)
+	defaultRegistry.MustRegister("month", monthFilter)
+	defaultRegistry.MustRegister("month_full", monthFullFilter)
+	defaultRegistry.MustRegister("year", yearFilter)
+	defaultRegistry.MustRegister("day", dayFilter)
+	defaultRegistry.MustRegister("week", weekFilter)
+	defaultRegistry.MustRegister("weekday", weekdayFilter)
+	defaultRegistry.MustRegister("time_ago", timeAgoFilter)
 
 	// Aliases
-	RegisterFilter("timeago", timeAgoFilter)
+	defaultRegistry.MustRegister("timeago", timeAgoFilter)
 }
 
 // dateFilter formats a timestamp into a specified format using PHP-style format strings.

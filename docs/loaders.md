@@ -1,15 +1,48 @@
 # Loaders
 
-A `Loader` resolves a template name to its source text. `NewHTMLSet`
-and `NewTextSet` both take a loader as their first argument:
+A `Loader` resolves a template name to its source text. The preferred
+engine API takes a loader via `WithLoader(...)`:
 
 ```go
-set := template.NewHTMLSet(loader)
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatHTML),
+)
 ```
 
 The package ships four loader constructors, each suited to a different
 use case. Most real projects wire several together with
 `NewChainLoader` to build an override chain (user > theme > builtin).
+
+## Choose a loader
+
+Use the most restrictive loader that matches the job:
+
+| Need | Recommended loader | Why |
+|---|---|---|
+| Templates on local disk | `NewDirLoader(dir)` | Default choice. Sandboxed with `os.Root`, blocks symlink escape |
+| Templates embedded in the binary | `NewFSLoader(embed.FS)` | The embedded FS is already the trust boundary |
+| In-memory templates for tests | `NewMemoryLoader(map[string]string)` | Small, explicit, deterministic |
+| User overrides layered over theme/builtin templates | `NewChainLoader(...)` | Clear precedence with distinct cache keys |
+| Real directory with deliberate symlink following | `NewFSLoader(os.DirFS(dir))` | Escape hatch only; explicitly non-sandboxed |
+
+Recommended default for production HTML rendering:
+
+```go
+loader, err := template.NewDirLoader("./templates")
+if err != nil {
+    log.Fatal(err)
+}
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatHTML),
+)
+```
+
+If you are unsure, start with `NewDirLoader`. Reach for `NewFSLoader`
+only when the filesystem itself is already the boundary, such as
+`embed.FS`, `fstest.MapFS`, or another intentionally constrained
+`fs.FS`.
 
 ## The `Loader` interface
 
@@ -20,9 +53,10 @@ type Loader interface {
 ```
 
 - `source` — the raw template text
-- `resolved` — a stable, unique key used for the Set's compile cache
-  and circular-reference detection. For simple loaders this is usually
-  just the input name; `ChainLoader` prepends a layer index.
+- `resolved` — a stable, unique key used for the engine's compile cache,
+  alias mapping, in-flight compile dedup, and circular-reference
+  detection. For simple loaders this is usually just the input name;
+  `ChainLoader` prepends a layer index.
 - Errors:
   - `ErrInvalidTemplateName` — path failed validation
     (`fs.ValidPath`, no backslash, no NUL)
@@ -43,8 +77,12 @@ loader := template.NewMemoryLoader(map[string]string{
     "child.html": `{% extends "base.html" %}{% block body %}hi{% endblock %}`,
 })
 
-set := template.NewHTMLSet(loader)
-out, _ := set.RenderString("child.html", nil)
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatHTML),
+    template.WithFeatures(template.FeatureLayout),
+)
+out, _ := engine.RenderString("child.html", nil)
 // <html>hi</html>
 ```
 
@@ -62,7 +100,10 @@ Wraps any `fs.FS`:
 var themeFS embed.FS
 
 loader := template.NewFSLoader(themeFS)
-set := template.NewHTMLSet(loader)
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatHTML),
+)
 ```
 
 Works with:
@@ -85,6 +126,9 @@ Works with:
   you are explicitly opting into the non-sandboxed primitive and
   taking responsibility for the environment.
 
+Treat `NewFSLoader(os.DirFS(...))` as an advanced workflow tool, not as
+the default local-filesystem choice.
+
 ---
 
 ## `NewDirLoader`
@@ -96,6 +140,10 @@ loader, err := template.NewDirLoader("./templates")
 if err != nil {
     log.Fatal(err) // directory doesn't exist or is unreadable
 }
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatHTML),
+)
 ```
 
 ### Security guarantees
@@ -150,9 +198,10 @@ When the user requests `layouts/blog.html`:
 
 Same-name files in different layers **do not collide** in the cache:
 the `ChainLoader` prepends the layer index (`layer0:`, `layer1:`, ...)
-to the resolved name. So even on case-insensitive filesystems (macOS
-HFS+/APFS), templates with the same name in different layers get
-distinct cache entries.
+to the resolved name. The engine caches by `resolved`, not by the input
+name, so even on case-insensitive filesystems (macOS HFS+/APFS),
+templates with the same visible name in different layers get distinct
+cache entries.
 
 ### Empty chains
 
@@ -205,9 +254,11 @@ func (l *httpLoader) Open(name string) (string, string, error) {
   HTTP status is actually 404.
 - Prepend a scheme/host prefix to the resolved name so different
   backends get distinct cache keys in a `ChainLoader`.
-- Consider a timeout; the calling `Set.Render` will block on `Open`.
-- Remember that `Set.Get` caches the compiled template — the HTTP
-  request happens only once per name until `Set.Reset()` is called.
+- Consider a timeout; the calling `Engine.Render` will block on `Open`.
+- Remember that `Engine.Load` caches the compiled template by
+  `resolved` — the HTTP request happens only once per resolved template
+  identity until `Engine.Reset()` is called. Concurrent callers that hit
+  the same `resolved` name also share the same in-flight compile.
 
 ### Example: Database loader
 
@@ -236,8 +287,8 @@ func (l *dbLoader) Open(name string) (string, string, error) {
 
 ## Hot reload
 
-`Set` caches compiled templates indefinitely. To pick up on-disk
-changes, call `set.Reset()` after the file watcher fires:
+`Engine` caches compiled templates indefinitely. To pick up on-disk
+changes, call `engine.Reset()` after the file watcher fires:
 
 ```go
 watcher, _ := fsnotify.NewWatcher()
@@ -246,13 +297,13 @@ watcher.Add("./templates")
 go func() {
     for event := range watcher.Events {
         if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove) != 0 {
-            set.Reset()
+            engine.Reset()
         }
     }
 }()
 ```
 
-`Set.Reset()` clears the cache; in-flight renders finish using their
+`Engine.Reset()` clears the cache; in-flight renders finish using their
 already-loaded templates, and the next `Render` call recompiles.
 
 Do not call `Reset` from request-handler hot paths — it forces every

@@ -9,11 +9,11 @@ import (
 
 // registerMapFilters registers all map-related filters.
 func registerMapFilters() {
-	RegisterFilter("extract", extractFilter)
+	defaultRegistry.MustRegister("extract", extractFilter)
 }
 
 // extractFilter retrieves a nested value from a map, slice, or array using a dot-separated key path.
-// It returns an empty string for KeyNotFound and IndexOutOfRange errors to maintain backward compatibility.
+// It returns an empty string for KeyNotFound and IndexOutOfRange errors to preserve template ergonomics.
 func extractFilter(value any, args ...any) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: extract filter requires a key path argument", ErrInsufficientArgs)

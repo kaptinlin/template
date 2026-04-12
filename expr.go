@@ -449,6 +449,13 @@ func (p *ExprParser) current() *Token {
 	return p.tokens[p.pos]
 }
 
+func (p *ExprParser) previous() *Token {
+	if p.pos == 0 || p.pos-1 >= len(p.tokens) {
+		return nil
+	}
+	return p.tokens[p.pos-1]
+}
+
 // advance moves to the next token.
 func (p *ExprParser) advance() {
 	if p.pos < len(p.tokens) {
@@ -472,6 +479,13 @@ func (p *ExprParser) isAnd(tok *Token) bool {
 func (p *ExprParser) parseErr(msg string) error {
 	tok := p.current()
 	if tok != nil {
+		return &ParseError{
+			Message: msg,
+			Line:    tok.Line,
+			Col:     tok.Col,
+		}
+	}
+	if tok := p.previous(); tok != nil {
 		return &ParseError{
 			Message: msg,
 			Line:    tok.Line,

@@ -8,8 +8,8 @@ import (
 
 // registerNumberFilters registers all number-related filters.
 func registerNumberFilters() {
-	RegisterFilter("number", numberFilter)
-	RegisterFilter("bytes", bytesFilter)
+	defaultRegistry.MustRegister("number", numberFilter)
+	defaultRegistry.MustRegister("bytes", bytesFilter)
 }
 
 // numberFilter formats a numeric value according to the specified format string.

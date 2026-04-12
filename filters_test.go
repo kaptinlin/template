@@ -91,6 +91,44 @@ func TestRegistryRegisterNilPanics(t *testing.T) {
 	r.Register("nilfilter", nil)
 }
 
+func TestRegistryReplaceOverwrites(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+	r.Register("answer", func(_ any, _ ...any) (any, error) {
+		return "old", nil
+	})
+	r.Replace("answer", func(_ any, _ ...any) (any, error) {
+		return "new", nil
+	})
+
+	fn, ok := r.Filter("answer")
+	if !ok {
+		t.Fatal("Filter(\"answer\") = _, false, want true")
+	}
+	got, err := fn(nil)
+	if err != nil {
+		t.Fatalf("fn() err = %v", err)
+	}
+	if got != "new" {
+		t.Fatalf("fn() = %v, want %q", got, "new")
+	}
+}
+
+func TestRegistryMustRegisterNilPanics(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+
+	defer func() {
+		if recover() == nil {
+			t.Error("MustRegister(nil) did not panic, want panic")
+		}
+	}()
+
+	r.MustRegister("nilfilter", nil)
+}
+
 func TestRegistryList(t *testing.T) {
 	t.Parallel()
 
@@ -257,23 +295,13 @@ func TestRegistryUnregister(t *testing.T) {
 	}
 }
 
-// --- Package-level convenience function tests ---
+// --- Built-in registry tests ---
 
-// withFreshRegistry replaces the default registry for the duration of
-// the test and restores it on cleanup.
-func withFreshRegistry(t *testing.T) {
-	t.Helper()
-	saved := defaultRegistry
-	defaultRegistry = NewRegistry()
-	t.Cleanup(func() { defaultRegistry = saved })
-}
+func TestBuiltinRegistryRegisterAndFilter(t *testing.T) {
+	r := NewRegistry()
+	r.Register("testfilter", noopFilter)
 
-func TestRegisterFilterAndFilter(t *testing.T) {
-	withFreshRegistry(t)
-
-	RegisterFilter("testfilter", noopFilter)
-
-	fn, ok := Filter("testfilter")
+	fn, ok := r.Filter("testfilter")
 	if !ok {
 		t.Error("Filter(\"testfilter\") = _, false, want true")
 	}
@@ -281,63 +309,59 @@ func TestRegisterFilterAndFilter(t *testing.T) {
 		t.Error("Filter(\"testfilter\") returned nil, want non-nil")
 	}
 
-	_, ok = Filter("nonexistent")
+	_, ok = r.Filter("nonexistent")
 	if ok {
 		t.Error("Filter(\"nonexistent\") = _, true, want false")
 	}
 }
 
-func TestRegisterFilterNilPanics(t *testing.T) {
-	withFreshRegistry(t)
-
+func TestBuiltinRegistryRegisterNilPanics(t *testing.T) {
+	r := NewRegistry()
 	defer func() {
 		if recover() == nil {
-			t.Error("RegisterFilter(nil) did not panic, want panic")
+			t.Error("Register(nil) did not panic, want panic")
 		}
 	}()
 
-	RegisterFilter("nilfilter", nil)
+	r.Register("nilfilter", nil)
 }
 
-func TestListFilters(t *testing.T) {
-	withFreshRegistry(t)
+func TestBuiltinRegistryList(t *testing.T) {
+	r := NewRegistry()
+	r.Register("charlie", noopFilter)
+	r.Register("alpha", noopFilter)
+	r.Register("bravo", noopFilter)
 
-	RegisterFilter("charlie", noopFilter)
-	RegisterFilter("alpha", noopFilter)
-	RegisterFilter("bravo", noopFilter)
-
-	got := ListFilters()
+	got := r.List()
 	want := []string{"alpha", "bravo", "charlie"}
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("ListFilters() mismatch (-want +got):\n%s", diff)
+		t.Errorf("List() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestHasFilter(t *testing.T) {
-	withFreshRegistry(t)
+func TestBuiltinRegistryHas(t *testing.T) {
+	r := NewRegistry()
+	r.Register("myfilter", noopFilter)
 
-	RegisterFilter("myfilter", noopFilter)
-
-	if got := HasFilter("myfilter"); !got {
-		t.Errorf("HasFilter(\"myfilter\") = %v, want true", got)
+	if got := r.Has("myfilter"); !got {
+		t.Errorf("Has(\"myfilter\") = %v, want true", got)
 	}
-	if got := HasFilter("nonexistent"); got {
-		t.Errorf("HasFilter(\"nonexistent\") = %v, want false", got)
+	if got := r.Has("nonexistent"); got {
+		t.Errorf("Has(\"nonexistent\") = %v, want false", got)
 	}
 }
 
-func TestUnregisterFilter(t *testing.T) {
-	withFreshRegistry(t)
+func TestBuiltinRegistryUnregister(t *testing.T) {
+	r := NewRegistry()
+	r.Register("removeme", noopFilter)
+	r.Register("keepme", noopFilter)
+	r.Unregister("removeme")
 
-	RegisterFilter("removeme", noopFilter)
-	RegisterFilter("keepme", noopFilter)
-	UnregisterFilter("removeme")
-
-	if got := HasFilter("removeme"); got {
-		t.Errorf("HasFilter(\"removeme\") = %v, want false", got)
+	if got := r.Has("removeme"); got {
+		t.Errorf("Has(\"removeme\") = %v, want false", got)
 	}
-	if got := HasFilter("keepme"); !got {
-		t.Errorf("HasFilter(\"keepme\") = %v, want true", got)
+	if got := r.Has("keepme"); !got {
+		t.Errorf("Has(\"keepme\") = %v, want true", got)
 	}
 }
 
@@ -388,7 +412,7 @@ func TestBuiltinFiltersRegistered(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, ok := Filter(name); !ok {
+			if _, ok := defaultRegistry.Filter(name); !ok {
 				t.Errorf("Filter(%q) = _, false, want true", name)
 			}
 		})
@@ -399,17 +423,18 @@ func TestFilterRegistryConcurrentAccess(_ *testing.T) {
 	// Concurrent register and query to verify thread safety.
 	const goroutines = 10
 	done := make(chan struct{})
+	r := NewRegistry()
 
 	for i := range goroutines {
 		go func(id int) {
 			defer func() { done <- struct{}{} }()
 			name := fmt.Sprintf("concurrent_filter_%d", id)
-			RegisterFilter(name, func(value any, _ ...any) (any, error) {
+			r.Register(name, func(value any, _ ...any) (any, error) {
 				return value, nil
 			})
-			_, _ = Filter(name)
-			_ = ListFilters()
-			_ = HasFilter(name)
+			_, _ = r.Filter(name)
+			_ = r.List()
+			_ = r.Has(name)
 		}(i)
 	}
 

@@ -126,7 +126,9 @@ func (p *Parser) consumeEndTag() (string, *Parser, error) {
 	p.Advance() // Consume %}.
 
 	argParser := NewParser(args)
-	argParser.set = p.set
+	argParser.engine = p.engine
+	argParser.anchorLine = name.Line
+	argParser.anchorCol = name.Col
 	return tag, argParser, nil
 }
 
@@ -134,6 +136,9 @@ func (p *Parser) consumeEndTag() (string, *Parser, error) {
 func (p *Parser) Error(msg string) error {
 	if tok := p.Current(); tok != nil {
 		return newParseError(msg, tok.Line, tok.Col)
+	}
+	if p.anchorLine > 0 || p.anchorCol > 0 {
+		return newParseError(msg, p.anchorLine, p.anchorCol)
 	}
 	return &ParseError{Message: msg}
 }

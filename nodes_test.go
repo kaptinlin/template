@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 )
 
@@ -31,6 +32,26 @@ func (e *errExpr) Evaluate(_ *ExecutionContext) (*Value, error) { return nil, e.
 type errWriter struct{ err error }
 
 func (w *errWriter) Write(_ []byte) (int, error) { return 0, w.err }
+
+type captureLoopStmt struct {
+	last *LoopContext
+}
+
+func (s *captureLoopStmt) Position() (int, int) { return 1, 1 }
+func (s *captureLoopStmt) String() string       { return "captureLoopStmt" }
+func (s *captureLoopStmt) Execute(ctx *ExecutionContext, _ io.Writer) error {
+	v, ok := ctx.Get("loop")
+	if !ok {
+		return errors.New("loop context missing")
+	}
+	lc, ok := v.(*LoopContext)
+	if !ok {
+		return errors.New("loop context has unexpected type")
+	}
+	copy := *lc
+	s.last = &copy
+	return nil
+}
 
 func TestTextNode(t *testing.T) {
 	n := NewTextNode("hello", 1, 5)
@@ -793,12 +814,11 @@ func TestIfNodeString(t *testing.T) {
 }
 
 func TestForNodeLoopContextFields(t *testing.T) {
-	var captured *LoopContext
-	// We'll use a custom approach: iterate and capture loop context.
+	capture := &captureLoopStmt{}
 	n := &ForNode{
 		Vars:       []string{"item"},
 		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
-		Body:       []Node{NewTextNode(".", 1, 1)},
+		Body:       []Node{capture},
 		Line:       1, Col: 1,
 	}
 	var buf bytes.Buffer
@@ -806,23 +826,22 @@ func TestForNodeLoopContextFields(t *testing.T) {
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
-	// After the loop, check the last loop context set.
-	if v, ok := ctx.Get("loop"); ok {
-		captured = v.(*LoopContext)
+	if capture.last == nil {
+		t.Fatal("loop context was not captured during execution")
 	}
-	if captured == nil {
-		t.Fatal("loop context not found after execution")
+	if _, ok := ctx.Get("loop"); ok {
+		t.Fatal("loop context leaked after execution")
 	}
-	if captured.Length != 3 {
-		t.Errorf("Length = %d, want 3", captured.Length)
+	if capture.last.Length != 3 {
+		t.Errorf("Length = %d, want 3", capture.last.Length)
 	}
-	if captured.Index != 2 {
-		t.Errorf("Index = %d, want 2", captured.Index)
+	if capture.last.Index != 2 {
+		t.Errorf("Index = %d, want 2", capture.last.Index)
 	}
-	if captured.Counter != 3 {
-		t.Errorf("Counter = %d, want 3", captured.Counter)
+	if capture.last.Counter != 3 {
+		t.Errorf("Counter = %d, want 3", capture.last.Counter)
 	}
-	if !captured.Last {
+	if !capture.last.Last {
 		t.Error("Last = false, want true")
 	}
 }
@@ -1038,16 +1057,16 @@ func TestForNodeBodyError(t *testing.T) {
 func TestForNodeNestedLoop(t *testing.T) {
 	// Nested for loops to verify parent loop context restoration.
 	tmpl := `{% for i in outer %}{% for j in inner %}{{ i }}-{{ j }} {% endfor %}{% endfor %}`
-	compiled, err := Compile(tmpl)
+	compiled, err := parseSourceTemplate(tmpl)
 	if err != nil {
-		t.Fatalf("Compile() error: %v", err)
+		t.Fatalf("parseSourceTemplate() error: %v", err)
 	}
 	result, err := compiled.Render(map[string]any{
 		"outer": []int{1, 2},
 		"inner": []string{"a", "b"},
 	})
 	if err != nil {
-		t.Fatalf("Render() error: %v", err)
+		t.Fatalf("renderSourceTemplate() error: %v", err)
 	}
 	expected := "1-a 1-b 2-a 2-b "
 	if result != expected {

@@ -1,20 +1,44 @@
 # Template Engine
 
-A lightweight Go template engine with Django-inspired control flow and Liquid-compatible filter syntax. Supports variable interpolation, 80+ built-in filters, conditionals, loops, and — when you opt in — multi-file templates with inheritance, includes, raw blocks, and HTML auto-escape.
+A lightweight Go template engine with Django-inspired control flow and Liquid-compatible filter syntax. Supports variable interpolation, 80+ built-in filters, conditionals, loops, and — when you opt in — loader-backed templates with inheritance, includes, raw blocks, and HTML auto-escape.
 
 This engine implements the [Liquid](https://shopify.github.io/liquid/) filter standard with 41 out of 46 filters fully compliant, plus 20+ extension filters. See [Liquid Compatibility](docs/liquid-compatibility.md) for details.
 
-## Two Modes, One Package
+## Engine-First API
 
-Like Go's own `text/template` vs `html/template`, this library exposes two complementary APIs:
+This package now exposes one public model: `Engine`.
 
-| Mode | API | Use for |
+| If you need to... | Use | Why |
 |---|---|---|
-| **Single-string** | `template.Compile(src)` / `template.Render(src, ctx)` | Log lines, nested config snippets, quick interpolation. Zero dependencies on loaders. |
-| **Multi-file text** | `template.NewTextSet(loader)` | Code generation, YAML/TOML/Taskfile, plain-text emails. Supports `include` / `extends` / `block` / `raw`, no HTML escape. |
-| **Multi-file HTML** | `template.NewHTMLSet(loader)` | Web pages, HTML emails, PDF reports. Everything `NewTextSet` does, **plus automatic HTML escape** with `SafeString` / `{{ x \| safe }}`. |
+| Render plain text, YAML, TOML, code, or Taskfiles from files | `template.New(template.WithLoader(...), template.WithFormat(template.FormatText))` | Unified engine API with text output semantics |
+| Render HTML pages or HTML emails | `template.New(template.WithLoader(...), template.WithFormat(template.FormatHTML))` | Unified engine API with HTML output semantics |
+| Enable layout features | `template.WithFeatures(template.FeatureLayout)` | Explicitly turns on `include` / `extends` / `block` / `raw` |
+| Parse a one-off source string | `engine.ParseString(src)` | Same engine model, no second API surface |
 
-**Guiding principle**: if you only use `Compile(src)`, the engine behaves exactly as before the layout features landed — no new tags, no new filters, no surprises. Layout features live in Set-scoped registries and never leak into the global path.
+Recommended defaults:
+
+- Local filesystem templates: `NewDirLoader(...)`
+- Embedded templates: `NewFSLoader(embed.FS)`
+- HTML output: `New(..., WithFormat(FormatHTML))`
+- Non-HTML output: `New(..., WithFormat(FormatText))`
+- Layout features: `WithFeatures(FeatureLayout)` only when needed
+
+## Design Rules
+
+The public design is intentionally narrow:
+
+```go
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatHTML),
+    template.WithFeatures(template.FeatureLayout),
+)
+```
+
+1. `Engine` is the only entry point.
+2. `FormatHTML` and `FormatText` define output semantics.
+3. `FeatureLayout` is optional and must be enabled explicitly.
+4. Tags and filters belong to an engine instance, not to mutable package-global APIs.
 
 ## Installation
 
@@ -24,29 +48,17 @@ go get github.com/kaptinlin/template
 
 ## Quick Start
 
-### Single-string rendering
-
-For log lines, config snippets, and anything where you just want to interpolate a few values into a string:
+### Parse and render a source string
 
 ```go
-output, err := template.Render("Hello, {{ name|upcase }}!", template.Context{
-    "name": "alice",
-})
-// output: "Hello, ALICE!"
-```
-
-### Compile and reuse
-
-For templates rendered multiple times:
-
-```go
-tmpl, err := template.Compile("Hello, {{ name }}!")
+engine := template.New()
+tmpl, err := engine.ParseString("Hello, {{ name|upcase }}!")
 if err != nil {
     log.Fatal(err)
 }
 
-output, err := tmpl.Render(template.Context{"name": "World"})
-// output: "Hello, World!"
+output, err := tmpl.Render(template.Context{"name": "alice"})
+// output: "Hello, ALICE!"
 ```
 
 ### Multi-file HTML with layout inheritance
@@ -69,11 +81,14 @@ func main() {
     theme  := template.NewFSLoader(themeFS)                        // embed.FS
     loader := template.NewChainLoader(user, theme)                 // user > theme
 
-    set := template.NewHTMLSet(loader,
+    engine := template.New(
+        template.WithLoader(loader),
+        template.WithFormat(template.FormatHTML),
+        template.WithFeatures(template.FeatureLayout),
         template.WithGlobals(template.Context{"site": siteData}),
     )
 
-    _ = set.Render("layouts/blog.html", template.Context{
+    _ = engine.Render("layouts/blog.html", template.Context{
         "page": map[string]any{
             "title":   "Hello <world>",                            // auto-escaped
             "content": template.SafeString("<p>trusted HTML</p>"), // rendered as-is
@@ -122,19 +137,23 @@ For generating code, config files, or anything that should NOT be HTML-escaped:
 ```go
 loader, _ := template.NewDirLoader("./scaffold")
 
-set := template.NewTextSet(loader,
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatText),
+    template.WithFeatures(template.FeatureLayout),
     template.WithGlobals(template.Context{"project": projectMeta}),
 )
 
 // Generates Taskfile.yml with {{.GOBIN}}/bin intact — no HTML escape would
 // turn & into &amp; and break the YAML.
-_ = set.Render("Taskfile.yml.tmpl", nil, &buf)
+_ = engine.Render("Taskfile.yml.tmpl", nil, &buf)
 ```
 
 ### Using io.Writer
 
 ```go
-tmpl, _ := template.Compile("Hello, {{ name }}!")
+engine := template.New()
+tmpl, _ := engine.ParseString("Hello, {{ name }}!")
 ctx := template.NewExecutionContext(template.Context{"name": "World"})
 _ = tmpl.Execute(ctx, os.Stdout)
 ```
@@ -202,6 +221,10 @@ The `loop` variable is available inside loops:
 
 Supports `{% break %}` and `{% continue %}` for loop control.
 
+Loop bindings are scoped to the loop body. After `{% endfor %}`, `loop`
+and the loop variables are restored to their pre-loop values, or removed
+if they did not exist before the loop.
+
 See [Control Structure Documentation](docs/control-structure.md) for details.
 
 ### Comments
@@ -210,9 +233,9 @@ See [Control Structure Documentation](docs/control-structure.md) for details.
 {# This content will not appear in the output #}
 ```
 
-### Layout & inheritance (Set-scoped)
+### Layout & inheritance (`FeatureLayout`)
 
-Available when the template is loaded via `NewHTMLSet` or `NewTextSet`:
+Available when the engine enables `template.WithFeatures(template.FeatureLayout)`:
 
 ```django
 {# Include a partial #}
@@ -237,11 +260,11 @@ Available when the template is loaded via `NewHTMLSet` or `NewTextSet`:
 {% endraw %}
 ```
 
-`{% include %}`, `{% extends %}`, `{% block %}`, and `{% raw %}` are **not** available to `template.Compile(src)`. They exist only in templates loaded through a `Set`. See [docs/layout.md](docs/layout.md).
+`{% include %}`, `{% extends %}`, `{% block %}`, and `{% raw %}` exist only when an engine enables `FeatureLayout`. See [docs/layout.md](docs/layout.md).
 
-### Auto-escape & `safe` (HTMLSet only)
+### Auto-escape & `safe` (`FormatHTML` only)
 
-`NewHTMLSet` auto-escapes every `{{ expr }}` output:
+An engine using `FormatHTML` auto-escapes every `{{ expr }}` output:
 
 ```django
 {{ page.title }}                 {# auto-escaped: < becomes &lt; #}
@@ -252,13 +275,13 @@ Available when the template is loaded via `NewHTMLSet` or `NewTextSet`:
 Go code can mark values as trusted using `template.SafeString`:
 
 ```go
-set.Render("page.html", template.Context{
+engine.Render("page.html", template.Context{
     "title":   "Hello <world>",                            // escaped
     "content": template.SafeString("<p>pre-rendered</p>"), // NOT escaped
 }, w)
 ```
 
-`NewTextSet` and `template.Compile` do not escape anything — they treat `SafeString` as a plain string.
+Engines using `FormatText` do not escape anything — they treat `SafeString` as a plain string.
 
 ### Expressions
 
@@ -407,7 +430,8 @@ Literal support: strings (`"text"` / `'text'`), numbers (`42`, `3.14`), booleans
 ### Custom Filters
 
 ```go
-template.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
+engine := template.New()
+engine.Filters().Register("repeat", func(value any, args ...any) (any, error) {
     s := fmt.Sprintf("%v", value)
     n := 2
     if len(args) > 0 {
@@ -418,12 +442,18 @@ template.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
     return strings.Repeat(s, n), nil
 })
 
-// {{ "ha"|repeat:3 }} -> "hahaha"
+tpl, _ := engine.ParseString(`{{ "ha"|repeat:3 }}`)
+out, _ := tpl.Render(nil)
+// out == "hahaha"
 ```
+
+Use `Register` for new names, `Replace` when you intentionally override
+an existing engine-local filter, and `MustRegister` in bootstrap-style
+code where duplicate registration should panic.
 
 ### Custom Tags
 
-Register custom tags by implementing the `Statement` interface and calling `RegisterTag`. Here's an example of a `{% set %}` tag:
+Register custom tags by implementing the `Statement` interface and attaching the parser to an engine. Here's an example of a `{% set %}` tag:
 
 ```go
 type SetNode struct {
@@ -443,7 +473,7 @@ func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
     return nil
 }
 
-template.RegisterTag("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
+engine.Tags().Register("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
     varToken, err := arguments.ExpectIdentifier()
     if err != nil {
         return nil, arguments.Error("expected variable name after 'set'")
@@ -464,25 +494,31 @@ template.RegisterTag("set", func(doc *template.Parser, start *template.Token, ar
 })
 ```
 
+As with filters, prefer `Register` for new names and `Replace` only when
+you intentionally override an existing engine-local parser.
+
 ## Examples
 
 Runnable examples live in the [`examples/`](examples/) directory:
 
 | Directory | Demonstrates |
 |---|---|
-| [`examples/usage`](examples/usage) | Single-string `Compile` / `Render` basics |
-| [`examples/custom_filters`](examples/custom_filters) | Registering a custom filter via `RegisterFilter` |
-| [`examples/custom_tags`](examples/custom_tags) | Registering a custom tag via `RegisterTag` |
-| [`examples/layout`](examples/layout) | Multi-file HTML site with `{% extends %}` / `{% block %}` / `{% include %}` / `block.super` / auto-escape |
-| [`examples/multifile_text`](examples/multifile_text) | Code generation with `NewTextSet` (no HTML escape) and multi-file includes |
+| [`examples/usage`](examples/usage) | Parsing and rendering source strings through `Engine` |
+| [`examples/custom_filters`](examples/custom_filters) | Registering a custom filter on an `Engine` |
+| [`examples/custom_tags`](examples/custom_tags) | Registering a custom tag on an `Engine` |
+| [`examples/layout`](examples/layout) | Engine-based HTML site with `{% extends %}` / `{% block %}` / `{% include %}` / `block.super` / auto-escape |
+| [`examples/multifile_text`](examples/multifile_text) | Engine-based text generation with `FormatText` and `FeatureLayout` |
 
 Run any example with `go run ./examples/<name>`.
 
 ## Context Building
 
 ```go
+engine := template.New()
+tmpl, _ := engine.ParseString(source)
+
 // Using map directly
-output, _ := template.Render(source, map[string]any{
+output, _ := tmpl.Render(map[string]any{
     "name": "Alice",
     "age":  30,
 })

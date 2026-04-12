@@ -4,6 +4,27 @@ This document walks through a complete example to demonstrate the full pipeline
 from source to output, including actual output at each stage. It then covers
 precise error reporting and the plugin-based extensibility design.
 
+## Why One Engine Exists
+
+This package exposes one architectural model:
+
+- engine-based rendering via `New(...)`, `WithLoader(...)`, `WithFormat(...)`, and optional `WithFeatures(...)`
+
+That design serves two product goals at the same time:
+
+1. Keep the public API small and easy to learn.
+2. Add layout inheritance, include, raw, safe output, and HTML auto-escape
+   through explicit format and feature choices instead of parallel entry points.
+
+In practice, that means optional behavior lives in engine-private
+registries and engine-owned execution state.
+
+If you are reading this document with a design question in mind, start
+with this rule:
+
+> When adding a feature, first ask whether it belongs in `Engine`,
+> `Format`, or `Feature`. The default answer should be feature-gated.
+
 ---
 
 ## Part 1: Source to Output — Full Pipeline
@@ -216,19 +237,14 @@ Hello ALICE!
 Grade: A
 ```
 
-### Convenience Wrappers
+### Engine Entry Point
 
-The three stages above are wrapped into convenience functions:
+The same stages are typically reached through `Engine.ParseString`:
 
 ```go
-// Compile = Lex + Parse + create Template
-tmpl, err := template.Compile("Hello {{ name|upper }}!")
-
-// Render = create ExecutionContext + Execute + extract string
+engine := template.New()
+tmpl, err := engine.ParseString("Hello {{ name|upper }}!")
 output, err := tmpl.Render(map[string]interface{}{"name": "alice"})
-
-// One-step shortcut:
-output, err := template.Render("Hello {{ name|upper }}!", data)
 ```
 
 ---
@@ -381,12 +397,12 @@ type TagParser func(doc *Parser, start *Token, arguments *Parser) (Statement, er
 ```
 
 Parameters:
-- `doc` — Document-level parser, used to parse nested content within tag bodies via `ParseUntil` / `ParseUntilWithArgs`. Tag parsers can reach the owning `Set` via `doc.Set()` (returns `nil` for standalone `Compile(src)`).
+- `doc` — Document-level parser, used to parse nested content within tag bodies via `ParseUntil` / `ParseUntilWithArgs`. Tag parsers can reach the owning engine via `doc.Engine()`.
 - `start` — Tag name token, carries source position for error reporting
 - `arguments` — Dedicated parser scoped to the tokens between the tag name and `%}`
 
-When the parser encounters `{% tagname ... %}`, it first checks `p.set.tags`
-(the per-Set private registry) and falls back to `defaultTagRegistry`. If
+When the parser encounters `{% tagname ... %}`, it first checks `p.engine.tags`
+(the per-engine private registry) and falls back to `defaultTagRegistry`. If
 no parser is found, it reports a parse error.
 
 Built-in tags register themselves via `init()`:
@@ -401,17 +417,17 @@ var builtinTags = []builtinTag{
 }
 
 var layoutTags = []builtinTag{
-    {"include", parseIncludeTag}, // tag_include.go — Set-only
-    {"extends", parseExtendsTag}, // tag_extends.go — Set-only
-    {"block", parseBlockTag},     // tag_block.go — Set-only
+    {"include", parseIncludeTag}, // tag_include.go — FeatureLayout only
+    {"extends", parseExtendsTag}, // tag_extends.go — FeatureLayout only
+    {"block", parseBlockTag},     // tag_block.go — FeatureLayout only
 }
 
 func init() {
     for _, bt := range builtinTags {
-        _ = RegisterTag(bt.name, bt.parser)  // global registry
+        defaultTagRegistry.MustRegister(bt.name, bt.parser)
     }
-    // layoutTags are NOT registered globally — they are layered into
-    // Set-private registries by newSet() in set.go.
+    // layoutTags are layered into engine-private registries when
+    // FeatureLayout is enabled.
 }
 ```
 
@@ -434,18 +450,18 @@ type FilterFunc func(value any, args ...any) (any, error)
 
 Built-in filters register themselves via `init()` across multiple files
 (`filter_string.go`, `filter_math.go`, `filter_array.go`, etc.). The
-`safe` filter and HTMLSet's `SafeString`-returning `escape`/`escape_once`
-overrides are **not** in the global registry — they live in Set-private
-layers, same as layout tags.
+`safe` filter and `FormatHTML`'s `SafeString`-returning
+`escape`/`escape_once` overrides are **not** in the global registry —
+they live in engine-private layers, same as feature-gated tags.
 
-`FilterNode.Evaluate` consults `ctx.set.filters` first (if the template
-was loaded via a Set), falling back to the global `defaultRegistry`.
+`FilterNode.Evaluate` consults `ctx.engine.filters` first (if the template
+was loaded via an engine), falling back to the global `defaultRegistry`.
 
 ### 3.3 Example: Adding a `{% set %}` Tag
 
 The `Statement` and `Expression` interfaces are fully open to external packages.
 External packages can implement custom AST nodes directly and register them
-via `RegisterTag()`.
+on an engine instance.
 
 Here is a complete example showing how to add a `{% set x = expr %}` tag
 from an external package:
@@ -482,7 +498,9 @@ func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
 }
 
 func main() {
-    template.RegisterTag("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
+    engine := template.New()
+
+    engine.Tags().Register("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
         varToken, err := arguments.ExpectIdentifier()
         if err != nil {
             return nil, arguments.Error("expected variable name after 'set'")
@@ -509,8 +527,8 @@ func main() {
         }, nil
     })
 
-    source := `{% set greeting = "Hello" %}{{ greeting }}, {{ name }}!`
-    output, _ := template.Render(source, map[string]interface{}{
+    tpl, _ := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}, {{ name }}!`)
+    output, _ := tpl.Render(map[string]interface{}{
         "name": "World",
     })
     fmt.Println(output) // Hello, World!
@@ -530,7 +548,7 @@ func main() {
 
 ### 3.4 Example: Adding a Custom Filter
 
-Adding filters is even simpler — just a single function call, and it works from external packages.
+Adding filters is even simpler — just a single engine-local registration call.
 
 `FilterFunc` signature:
 
@@ -554,8 +572,10 @@ import (
 )
 
 func init() {
+    engine := template.New()
+
     // Register a repeat filter: {{ text|repeat:3 }} -> "texttexttext"
-    template.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
+    engine.Filters().Register("repeat", func(value any, args ...any) (any, error) {
         s := fmt.Sprintf("%v", value)
         n := 2 // default: repeat 2 times
         if len(args) > 0 {
@@ -568,39 +588,43 @@ func init() {
 }
 ```
 
+Use `Register` for new engine-local names, `Replace` for intentional
+overrides, and `MustRegister` in bootstrap code where duplicate
+registration should panic.
+
 #### Usage
 
 ```go
 import _ "myproject/myfilters" // init() registers automatically
 
 func main() {
-    output, _ := template.Render(`{{ word|repeat:3 }}`, map[string]interface{}{
+    tpl, _ := engine.ParseString(`{{ word|repeat:3 }}`)
+    output, _ := tpl.Render(map[string]interface{}{
         "word": "ha",
     })
     fmt.Println(output) // hahaha
 }
 ```
 
-Using Go's `init()` mechanism and blank imports (`import _ "pkg"`),
-filters are registered before the first template is compiled.
+In most applications, tag and filter registration should happen during
+engine construction rather than through package-global side effects.
 
 ### 3.5 Architecture Overview
 
 ```
-+----------------------------------------------------------+
-|                    template.Compile()                     |
+|                  Engine.ParseString()                    |
 |                                                          |
-|  Source --> Lexer --> Tokens --> Parser --> AST            |
+|  Source --> Lexer --> Tokens --> Parser --> AST          |
 |                                  |                       |
 |                   +--------------+                       |
 |                   v                                      |
-|           tagRegistry[name]  <-- RegisterTag()           |
+|     Engine.tags[name] / defaultTagRegistry               |
 |                   |                                      |
 |                   v                                      |
 |           TagParser(doc, start, args) -> Statement       |
 |                                                          |
 +----------------------------------------------------------+
-|                    template.Render()                      |
+|             Template.Render / Engine.Render              |
 |                                                          |
 |  AST --> Execute(ctx, writer)                            |
 |               |                                          |
@@ -609,106 +633,99 @@ filters are registered before the first template is compiled.
 |               |      |                                   |
 |               |      +-- FilterNode                      |
 |               |             |                            |
-|               |      filterRegistry[name]                |
-|               |             |  <-- RegisterFilter()      |
+|               |      Engine.filters[name]                |
 |               |             v                            |
 |               |      FilterFunc(value, args) -> result   |
 |               |                                          |
 |               +-- IfNode       -> evaluate branches      |
-|               +-- ForNode      -> iterate collection     |
+|               +-- ForNode      -> iterate collection,    |
+|               |                    restore loop scope    |
 |               +-- SetNode      -> your custom tag        |
 +----------------------------------------------------------+
 ```
 
 ### 3.6 Core Design Principles
 
-1. **Open/Closed Principle** — Open for extension, closed for modification. Add new tags by calling `RegisterTag()`; add new filters by calling `RegisterFilter()`.
+1. **Open/Closed Principle** — Open for extension, closed for modification. Add new tags and filters through engine-local registries.
 2. **Unified Interface** — Custom tags use the exact same `Parser` and `ExecutionContext` API as built-in tags, with full access to expression parsing, nested body parsing, and error reporting.
 3. **One Tag Per File** — The engine itself follows this convention. New tags simply follow the same pattern.
 4. **Fully Open Extension Points**:
-   - **Tags**: The `Statement` and `Expression` interfaces are open to external packages. External packages can implement `Statement` directly and register via `RegisterTag`.
-   - **Filters**: `FilterFunc` is a plain function type that any external package can register freely.
+   - **Tags**: The `Statement` and `Expression` interfaces are open to external packages. External packages can implement `Statement` directly and register it on an engine.
+   - **Filters**: `FilterFunc` is a plain function type that any external package can register on an engine.
    - **Loaders**: The `Loader` interface (Part 4) is open to external implementations.
 
 ---
 
-## Part 4: Multi-file Template System (Set)
+## Part 4: Loader-Backed Engine Features
 
-When a project outgrows single-string rendering — layouts, partials, theme
-overrides, HTML auto-escape — the engine provides a second API path: the
-`Set`. This part explains how the Set layers on top of the primitives
-covered in Parts 1–3 **without disturbing the single-string contract**.
+When a project needs named templates, layouts, partials, or theme
+overrides, HTML auto-escape — the engine provides a loader-backed path via
+`Engine`. This part explains how `Engine`, `Format`, and `FeatureLayout`
+layer on top of the primitives covered in Parts 1–3 through one coherent
+engine model.
 
-### 4.1 Two API paths, one package
+### 4.1 One engine, explicit options
 
 ```
 +----------------------------------------------------+
-|  Path A: Compile(src) / Render(src, ctx)           |
+|  Engine + loader + optional features               |
 |  ─────────────────────────────────────────────────  |
-|  For log lines, config snippets, simple text.      |
-|  Lexer:    allowRaw = false                        |
-|  Parser:   p.set = nil                             |
-|  Tags:     defaultTagRegistry only                 |
-|  Filters:  defaultRegistry only                    |
-|  Escape:   off                                     |
+|  For named templates, layout, and HTML semantics.  |
+|  Lexer:    allowRaw = FeatureLayout only           |
+|  Parser:   p.engine = the owning Engine            |
+|  Tags:     Engine.tags (private) → global tags     |
+|  Filters:  Engine.filters (private) → global       |
+|  Escape:   FormatHTML only                         |
 |                                                    |
-|  → Sees only: if / for / break / continue          |
-|    + all global filters (escape returns string)    |
-+----------------------------------------------------+
-
-+----------------------------------------------------+
-|  Path B: NewTextSet(loader) / NewHTMLSet(loader)   |
-|  ─────────────────────────────────────────────────  |
-|  For multi-file layouts, includes, inheritance.    |
-|  Lexer:    allowRaw = true                         |
-|  Parser:   p.set = the owning Set                  |
-|  Tags:     Set.tags (private) → defaultTagRegistry |
-|  Filters:  Set.filters (private) → defaultRegistry |
-|  Escape:   HTMLSet only                            |
-|                                                    |
-|  → Adds: include / extends / block / raw / safe    |
-|    HTMLSet also overrides escape/escape_once/h     |
+|  → Adds named-template loading, cache, globals     |
+|    FeatureLayout adds include/extends/block/raw    |
+|    FormatHTML overrides escape/escape_once/h       |
 |    to return SafeString.                           |
 +----------------------------------------------------+
 ```
 
-This mirrors Go's own `text/template` vs `html/template` split, inside a
-single package via the **layered registry pattern**.
+This keeps the product model compact: one engine, one format decision,
+and optional features.
 
-### 4.2 The Set type
+### 4.2 The Engine type
 
 ```go
-// set.go
-type Set struct {
-    loader     Loader
-    autoescape bool
-    globals    Context
+// engine.go
+type Engine struct {
+    loader   Loader
+    format   Format
+    features Feature
+    globals  Context
 
     tags    *TagRegistry  // private, parent = defaultTagRegistry
     filters *Registry     // private, parent = defaultRegistry
 
     mu      sync.RWMutex
-    cache   map[string]*Template  // loaded & compiled templates
+    cache   map[string]*Template  // keyed by resolved name
+    aliases map[string]string     // input name -> resolved name
+    loading map[string]*loadCall  // in-flight compile dedup by resolved name
     parsing map[string]bool       // resolved names currently mid-compile
 }
 
-func NewHTMLSet(loader Loader, opts ...SetOption) *Set  // autoescape = true
-func NewTextSet(loader Loader, opts ...SetOption) *Set  // autoescape = false
+func New(opts ...EngineOption) *Engine
+func WithLoader(loader Loader) EngineOption
+func WithFormat(format Format) EngineOption
+func WithFeatures(features ...Feature) EngineOption
 ```
 
-The Set's three responsibilities:
+The engine's responsibilities in this path:
 
-1. **Template resolution** — `Get(name)` loads the source via `loader`,
-   compiles it, caches the result, and returns it.
+1. **Template resolution** — `Load(name)` loads the source via `loader`,
+   resolves it to a stable `resolved` identity, compiles it once, caches
+   it by `resolved`, and returns it.
 2. **Dependency graph** — During parse, `{% include "x" %}` and
-   `{% extends "x" %}` call `Set.Get(x)` recursively. The `parsing`
+   `{% extends "x" %}` call `Engine.Load(x)` recursively. The `parsing`
    map detects cycles so `include` can downgrade to lazy mode
    (supports recursive tree rendering) and `extends` can error out
    (cycles in inheritance are never valid).
-3. **Registry layering** — At construction, the Set builds private tag
+3. **Registry layering** — At construction, the engine builds private tag
    and filter registries layered over the global ones, then registers
-   layout tags and (for HTMLSet) the `SafeString`-returning escape
-   variants.
+   feature-gated tags and format-specific filter overrides.
 
 ### 4.3 Loader interface
 
@@ -743,11 +760,11 @@ monorepo theme sharing), the escape hatch is
 `NewFSLoader(os.DirFS(dir))` — the caller explicitly opts into Go's
 non-sandboxed primitive.
 
-### 4.4 Layout syntax overview
+### 4.4 FeatureLayout overview
 
 All four layout features (`include`, `extends`, `block`, `raw`) are
-**only** available when the template is loaded through a Set. From
-`Compile(src)` they remain unknown tags.
+**only** available when the engine enables `FeatureLayout`. From
+engines without `FeatureLayout` they remain unknown tags.
 
 #### `{% include %}`
 
@@ -834,24 +851,24 @@ naturally supports multi-level super calls.
 #### `{% raw %}...{% endraw %}`
 
 Implemented in the lexer. When `Lexer.allowRaw` is true (set only by
-`compileForSet(src, set)` when `set != nil`), the lexer intercepts
+`compileForEngine(src, engine)` when `FeatureLayout` is enabled), the lexer intercepts
 `{% raw %}` at the token level and emits everything up to `{% endraw %}`
 as a single `TEXT` token. No parser or tag machinery sees the raw body.
 
-### 4.5 HTML auto-escape (HTMLSet only)
+### 4.5 HTML auto-escape (`FormatHTML`)
 
 `OutputNode.Execute` checks two things before writing:
 
 1. Is the raw value a `SafeString`? → write as-is, no escape.
 2. Is `ctx.autoescape` true? → run through `filter.Escape` before writing.
 
-`ctx.autoescape` is set by `Set.Render` to mirror `s.autoescape`.
-`NewHTMLSet` sets it to `true`, `NewTextSet` to `false`.
+`ctx.autoescape` is set by `Engine.Render` to mirror the engine's
+format. `FormatHTML` sets it to `true`, `FormatText` to `false`.
 
 **Filter chain safety:**
 
 - `{{ x | safe }}` wraps the value in `SafeString`.
-- `{{ x | escape }}` runs HTML-escape. In HTMLSet, the override returns
+- `{{ x | escape }}` runs HTML-escape. In `FormatHTML`, the override returns
   `SafeString` so the auto-escape path won't double-escape.
 - `{{ x | safe | upper }}` — `upper` is not safe-aware, so it
   stringifies the input and returns plain `string`. The
@@ -859,72 +876,94 @@ as a single `TEXT` token. No parser or tag machinery sees the raw body.
   downgrade prevents "I thought I was safe" bugs (matches Jinja2's `Markup`
   semantics).
 
-### 4.6 Set-level options
+### 4.6 Engine options
 
 ```go
-func WithGlobals(g Context) SetOption    // shared variables for every Render
-func WithFilters(r *Registry) SetOption  // custom filter registry (replaces Set.filters)
-func WithTags(r *TagRegistry) SetOption  // custom tag registry (replaces Set.tags)
+func WithGlobals(g Context) EngineOption
+func WithFilters(r *Registry) EngineOption
+func WithTags(r *TagRegistry) EngineOption
+func WithLoader(loader Loader) EngineOption
+func WithFormat(format Format) EngineOption
+func WithFeatures(features ...Feature) EngineOption
 ```
 
 `WithGlobals` merges into every render's context. Render-time ctx keys
 take precedence over globals.
 
+When an engine spawns child execution contexts for includes, runtime
+state such as `engine`, `autoescape`, `includeDepth`, and `currentLeaf`
+is preserved automatically. The child gets either:
+
+- shared `Public` + cloned `Private` (`NewChildContext`)
+- isolated `Public`/`Private` with the same runtime state (`NewIsolatedChildContext`)
+
 ### 4.7 Concurrency and hot reload
 
-Compiled `*Template` instances are treated as read-only after `Set.Get`
+Compiled `*Template` instances are treated as read-only after `Engine.Load`
 returns them. Multiple goroutines can render the same cached template
 concurrently without locks.
 
-`Set.Reset()` clears the cache. Dev servers wire it into a file watcher
-to pick up template edits on the next render.
+Concurrent `Load(name)` calls that resolve to the same `resolved` name
+are also deduplicated internally. Only one goroutine compiles the template;
+other callers wait for and reuse the same result.
 
-### 4.8 Full Set pipeline diagram
+`Engine.Reset()` clears the cache. Dev servers wire it into a file watcher
+to pick up template edits on the next render. It also clears the alias and
+in-flight bookkeeping tied to the cache.
+
+### 4.8 Full engine pipeline diagram
 
 ```
 +--------------------------------------------------------------+
-|  set := NewHTMLSet(loader, WithGlobals(...))                 |
+|  engine := New(                                              |
+|      WithLoader(loader),                                     |
+|      WithFormat(FormatHTML),                                 |
+|      WithFeatures(FeatureLayout),                            |
+|      WithGlobals(...),                                       |
+|  )                                                           |
 |                                                              |
-|  set.Render("layouts/blog.html", ctx, w)                     |
+|  engine.Render("layouts/blog.html", ctx, w)                  |
 |        │                                                     |
 |        ▼                                                     |
-|  Set.Get("layouts/blog.html")                                |
+|  Engine.Load("layouts/blog.html")                            |
 |        │                                                     |
-|        ├── cache hit? → return cached *Template              |
+|        ├── cache hit by resolved/alias? → return *Template   |
 |        │                                                     |
 |        ├── loader.Open(name) → source + resolved name        |
 |        │      │                                              |
 |        │      └── ValidateName, os.Root (dir), ChainLoader   |
 |        │                                                     |
-|        ├── s.markParsing(resolved) = true                    |
+|        ├── in-flight compile for resolved? → wait + reuse    |
 |        │                                                     |
-|        ├── compileForSet(source, s)                          |
+|        ├── engine.markParsing(resolved) = true               |
+|        │                                                     |
+|        ├── compileForEngine(source, engine)                  |
 |        │      │                                              |
-|        │      ├── Lexer (allowRaw=true) → Tokens             |
+|        │      ├── Lexer (allowRaw if FeatureLayout) → Tokens |
 |        │      │                                              |
-|        │      ├── Parser (p.set = s)                         |
+|        │      ├── Parser (p.engine = engine)                 |
 |        │      │      │                                       |
 |        │      │      ├── {% include %}                       |
-|        │      │      │     → s.tags.Get("include")            |
+|        │      │      │     → engine.tags.Get("include")      |
 |        │      │      │     → parseIncludeTag resolves        |
-|        │      │      │       sub-templates via s.Get()       |
+|        │      │      │       sub-templates via engine.Load() |
 |        │      │      │                                       |
 |        │      │      ├── {% extends %}                       |
 |        │      │      │     → parseExtendsTag loads parent    |
-|        │      │      │       via s.Get(); sets p.parent      |
+|        │      │      │       via engine.Load(); sets p.parent|
 |        │      │      │                                       |
 |        │      │      └── {% block %}                         |
 |        │      │            → parseBlockTag stores in         |
 |        │      │              p.blocks                        |
 |        │      │                                              |
 |        │      └── NewTemplate(ast); tpl.parent=p.parent;     |
-|        │          tpl.blocks=p.blocks; tpl.set=s             |
+|        │          tpl.blocks=p.blocks; tpl.engine=engine     |
 |        │                                                     |
-|        ├── cache[name] = tpl                                 |
-|        ├── s.markParsing(resolved) = false                   |
+|        ├── cache[resolved] = tpl                             |
+|        ├── engine.markParsing(resolved) = false              |
 |        │                                                     |
 |        ▼                                                     |
-|  tpl.Execute(ec, w)  where ec.set=s, ec.autoescape=true      |
+|  tpl.Execute(ec, w) where ec.engine=engine                   |
 |        │                                                     |
 |        ├── walk tpl.parent chain to find root                |
 |        ├── ec.currentLeaf = tpl                              |
@@ -935,7 +974,9 @@ to pick up template edits on the next render.
 |        │     ├── OutputNode     → evaluate, SafeString check,|
 |        │     │                    then auto-escape if needed |
 |        │     ├── IfNode         → evaluate branches          |
-|        │     ├── ForNode        → iterate collection         |
+|        │     ├── ForNode        → iterate collection, bind   |
+|        │     │                    loop vars, then restore    |
+|        │     │                    prior loop scope           |
 |        │     ├── IncludeNode    → resolveChild +             |
 |        │     │                    buildChildContext +        |
 |        │     │                    child.Execute              |
@@ -962,11 +1003,10 @@ layered:
 | 1. `ValidateName` | Every `Loader.Open` | `..`, absolute paths, backslash, NUL |
 | 2. `os.Root` | `NewDirLoader` only | Symlink escape across root boundary |
 | 3. FS loader contract | `NewFSLoader` docs | Caller must supply a sandboxed `fs.FS` |
-| 4. Resolved-name cache keys | `Set.cache`, `ChainLoader` prefix | Cross-layer cache collisions (macOS case-insensitivity) |
-| 5. Parse-time circular set + runtime depth cap | `Set.parsing`, `maxIncludeDepth`, `maxExtendsDepth` | Stack exhaustion, infinite recursion |
+| 4. Resolved-name cache keys | `Engine.cache`, `ChainLoader` prefix | Cross-layer cache collisions (macOS case-insensitivity) |
+| 5. Parse-time circular set + runtime depth cap | `Engine.parsing`, `maxIncludeDepth`, `maxExtendsDepth` | Stack exhaustion, infinite recursion |
 | 6. HTML auto-escape + `SafeString` | `OutputNode.Execute` | XSS via `{{ user_input }}` |
 
-These layers are enforced unconditionally for Set-loaded templates.
-They do not apply to `Compile(src)` because that path has no loader,
-no HTML context, and no input other than the source string — the
-caller is directly responsible for whatever they feed in.
+These layers are enforced unconditionally for loader-backed engine templates.
+They do not apply to engines without a loader because those engines have
+no template name, no loader boundary, and no parent-template resolution path.

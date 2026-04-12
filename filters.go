@@ -15,7 +15,7 @@ type FilterFunc func(value any, args ...any) (any, error)
 // functions that operate on the default registry.
 //
 // Registry supports an optional parent: when a lookup misses in this
-// registry, the parent is consulted. This allows a Set to layer its
+// registry, the parent is consulted. This allows an Engine to layer its
 // own private filters (like safe and the HTML-aware escape) over the
 // global registry without copying entries.
 type Registry struct {
@@ -29,18 +29,37 @@ func NewRegistry() *Registry {
 	return &Registry{filters: make(map[string]FilterFunc)}
 }
 
-// Register adds a filter function under the given name.
-// If a filter with the same name already exists, it is overwritten.
-//
-// Register panics if fn is nil.
-func (r *Registry) Register(name string, fn FilterFunc) {
+func (r *Registry) validate(name string, fn FilterFunc) {
 	if fn == nil {
 		panic(fmt.Sprintf("template: nil filter function for %q", name))
 	}
+}
 
+// Register adds or replaces a filter function under the given name.
+//
+// Register preserves the original Registry behavior for compatibility.
+// For new code, prefer [Registry.Replace] when overwrite semantics are
+// intentional, or introduce a higher-level guard before calling Register.
+func (r *Registry) Register(name string, fn FilterFunc) {
+	r.Replace(name, fn)
+}
+
+// Replace stores fn under name, overwriting any direct existing entry.
+//
+// Replace panics if fn is nil.
+func (r *Registry) Replace(name string, fn FilterFunc) {
+	r.validate(name, fn)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.filters[name] = fn
+}
+
+// MustRegister is an explicit panic-on-failure registration helper.
+//
+// For Registry this currently matches [Registry.Replace], and exists to make
+// bootstrap code read consistently with [TagRegistry.MustRegister].
+func (r *Registry) MustRegister(name string, fn FilterFunc) {
+	r.Replace(name, fn)
 }
 
 // Filter returns the filter registered under name and a boolean
@@ -85,37 +104,21 @@ func (r *Registry) Unregister(name string) {
 	delete(r.filters, name)
 }
 
-// defaultRegistry is the package-level registry used by the convenience
-// functions below and by the built-in filter registrations in init.
+// Clone returns a shallow copy of the registry and its direct entries.
+// The parent registry reference is preserved.
+func (r *Registry) Clone() *Registry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	cloned := NewRegistry()
+	maps.Copy(cloned.filters, r.filters)
+	cloned.parent = r.parent
+	return cloned
+}
+
+// defaultRegistry is the package-level built-in filter registry used as the
+// parent layer for engine-local registries.
 var defaultRegistry = NewRegistry()
-
-// RegisterFilter registers a filter in the default registry.
-// It panics if fn is nil.
-func RegisterFilter(name string, fn FilterFunc) {
-	defaultRegistry.Register(name, fn)
-}
-
-// Filter retrieves a filter from the default registry.
-func Filter(name string) (FilterFunc, bool) {
-	return defaultRegistry.Filter(name)
-}
-
-// ListFilters returns a sorted list of all filter names in the
-// default registry.
-func ListFilters() []string {
-	return defaultRegistry.List()
-}
-
-// HasFilter reports whether the default registry contains a filter
-// with the given name.
-func HasFilter(name string) bool {
-	return defaultRegistry.Has(name)
-}
-
-// UnregisterFilter removes a filter from the default registry.
-func UnregisterFilter(name string) {
-	defaultRegistry.Unregister(name)
-}
 
 // init registers all built-in filters when the package is imported.
 // The register*Filters functions are implemented in filter_*.go files.

@@ -10,52 +10,52 @@ import (
 // registerStringFilters registers all string-related filters.
 func registerStringFilters() {
 	// Liquid-standard primary names
-	RegisterFilter("default", defaultFilter)
-	RegisterFilter("strip", trimFilter)
-	RegisterFilter("lstrip", trimLeftFilter)
-	RegisterFilter("rstrip", trimRightFilter)
-	RegisterFilter("split", splitFilter)
-	RegisterFilter("replace", replaceFilter)
-	RegisterFilter("replace_first", replaceFirstFilter)
-	RegisterFilter("replace_last", replaceLastFilter)
-	RegisterFilter("remove", removeFilter)
-	RegisterFilter("remove_first", removeFirstFilter)
-	RegisterFilter("remove_last", removeLastFilter)
-	RegisterFilter("append", appendFilter)
-	RegisterFilter("prepend", prependFilter)
-	RegisterFilter("length", lengthFilter)
-	RegisterFilter("upcase", upperFilter)
-	RegisterFilter("downcase", lowerFilter)
-	RegisterFilter("capitalize", capitalizeFilter)
-	RegisterFilter("escape", escapeFilter)
-	RegisterFilter("escape_once", escapeOnceFilter)
-	RegisterFilter("strip_html", stripHTMLFilter)
-	RegisterFilter("strip_newlines", stripNewlinesFilter)
-	RegisterFilter("url_encode", urlEncodeFilter)
-	RegisterFilter("url_decode", urlDecodeFilter)
-	RegisterFilter("base64_encode", base64EncodeFilter)
-	RegisterFilter("base64_decode", base64DecodeFilter)
-	RegisterFilter("truncate", truncateFilter)
-	RegisterFilter("truncatewords", truncateWordsFilter)
-	RegisterFilter("slice", sliceFilter)
+	defaultRegistry.MustRegister("default", defaultFilter)
+	defaultRegistry.MustRegister("strip", trimFilter)
+	defaultRegistry.MustRegister("lstrip", trimLeftFilter)
+	defaultRegistry.MustRegister("rstrip", trimRightFilter)
+	defaultRegistry.MustRegister("split", splitFilter)
+	defaultRegistry.MustRegister("replace", replaceFilter)
+	defaultRegistry.MustRegister("replace_first", replaceFirstFilter)
+	defaultRegistry.MustRegister("replace_last", replaceLastFilter)
+	defaultRegistry.MustRegister("remove", removeFilter)
+	defaultRegistry.MustRegister("remove_first", removeFirstFilter)
+	defaultRegistry.MustRegister("remove_last", removeLastFilter)
+	defaultRegistry.MustRegister("append", appendFilter)
+	defaultRegistry.MustRegister("prepend", prependFilter)
+	defaultRegistry.MustRegister("length", lengthFilter)
+	defaultRegistry.MustRegister("upcase", upperFilter)
+	defaultRegistry.MustRegister("downcase", lowerFilter)
+	defaultRegistry.MustRegister("capitalize", capitalizeFilter)
+	defaultRegistry.MustRegister("escape", escapeFilter)
+	defaultRegistry.MustRegister("escape_once", escapeOnceFilter)
+	defaultRegistry.MustRegister("strip_html", stripHTMLFilter)
+	defaultRegistry.MustRegister("strip_newlines", stripNewlinesFilter)
+	defaultRegistry.MustRegister("url_encode", urlEncodeFilter)
+	defaultRegistry.MustRegister("url_decode", urlDecodeFilter)
+	defaultRegistry.MustRegister("base64_encode", base64EncodeFilter)
+	defaultRegistry.MustRegister("base64_decode", base64DecodeFilter)
+	defaultRegistry.MustRegister("truncate", truncateFilter)
+	defaultRegistry.MustRegister("truncatewords", truncateWordsFilter)
+	defaultRegistry.MustRegister("slice", sliceFilter)
 
 	// Extension filters (non-Liquid)
-	RegisterFilter("titleize", titleizeFilter)
-	RegisterFilter("camelize", camelizeFilter)
-	RegisterFilter("pascalize", pascalizeFilter)
-	RegisterFilter("dasherize", dasherizeFilter)
-	RegisterFilter("slugify", slugifyFilter)
-	RegisterFilter("pluralize", pluralizeFilter)
-	RegisterFilter("ordinalize", ordinalizeFilter)
+	defaultRegistry.MustRegister("titleize", titleizeFilter)
+	defaultRegistry.MustRegister("camelize", camelizeFilter)
+	defaultRegistry.MustRegister("pascalize", pascalizeFilter)
+	defaultRegistry.MustRegister("dasherize", dasherizeFilter)
+	defaultRegistry.MustRegister("slugify", slugifyFilter)
+	defaultRegistry.MustRegister("pluralize", pluralizeFilter)
+	defaultRegistry.MustRegister("ordinalize", ordinalizeFilter)
 
 	// Aliases
-	RegisterFilter("trim", trimFilter)
-	RegisterFilter("trim_left", trimLeftFilter)
-	RegisterFilter("trim_right", trimRightFilter)
-	RegisterFilter("upper", upperFilter)
-	RegisterFilter("lower", lowerFilter)
-	RegisterFilter("h", escapeFilter)
-	RegisterFilter("truncate_words", truncateWordsFilter)
+	defaultRegistry.MustRegister("trim", trimFilter)
+	defaultRegistry.MustRegister("trim_left", trimLeftFilter)
+	defaultRegistry.MustRegister("trim_right", trimRightFilter)
+	defaultRegistry.MustRegister("upper", upperFilter)
+	defaultRegistry.MustRegister("lower", lowerFilter)
+	defaultRegistry.MustRegister("h", escapeFilter)
+	defaultRegistry.MustRegister("truncate_words", truncateWordsFilter)
 }
 
 // defaultFilter returns a default value if the input is falsy.
@@ -264,12 +264,11 @@ func truncateWordsFilter(value any, args ...any) (any, error) {
 	return filter.TruncateWords(toString(value), maxWords), nil
 }
 
-// escapeFilter escapes HTML special characters. This is the global
-// variant: it returns a plain string so callers of Compile(src) get
-// the same behavior as before the layout work landed.
+// escapeFilter escapes HTML special characters. This built-in variant
+// returns a plain string.
 //
-// Sets override this with escapeFilterSafe (which returns SafeString)
-// so the auto-escape pipeline in NewHTMLSet does not double-escape.
+// Engines using FormatHTML override this with escapeFilterSafe (which
+// returns SafeString) so the auto-escape pipeline does not double-escape.
 func escapeFilter(value any, _ ...any) (any, error) {
 	return filter.Escape(toString(value)), nil
 }
@@ -280,8 +279,8 @@ func escapeOnceFilter(value any, _ ...any) (any, error) {
 	return filter.EscapeOnce(toString(value)), nil
 }
 
-// escapeFilterSafe is the HTML-mode variant registered only in a
-// NewHTMLSet's private filter registry. It returns SafeString so the
+// escapeFilterSafe is the HTML-mode variant registered only in an
+// engine's private filter registry when FormatHTML is enabled. It returns SafeString so the
 // per-template auto-escaper treats the already-escaped content as
 // trusted and does not escape it a second time.
 func escapeFilterSafe(value any, _ ...any) (any, error) {

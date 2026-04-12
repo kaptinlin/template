@@ -5,10 +5,15 @@ type Parser struct {
 	tokens []*Token
 	pos    int
 
-	// set is the owning template set, if this parser is being used by
-	// Set.Get to compile a template loaded from a Loader. nil for
-	// templates compiled directly via Compile(src).
-	set *Set
+	// anchorLine/anchorCol provide a fallback source position when this parser
+	// is asked to report an error after its token stream has been fully consumed.
+	anchorLine int
+	anchorCol  int
+
+	// engine is the owning template engine, if this parser is being used by
+	// Engine.Load or Engine.ParseString. It is nil only for internal parsers
+	// constructed without an owning engine.
+	engine *Engine
 
 	// parent is populated by parseExtendsTag when the template being
 	// compiled starts with {% extends "name" %}.
@@ -36,12 +41,10 @@ func NewParser(tokens []*Token) *Parser {
 	return &Parser{tokens: tokens}
 }
 
-// Set returns the template set associated with this parser, if any.
-// Tag parsers can use this to load referenced templates at parse time
-// (e.g., {% include %}, {% extends %}). Returns nil for parsers that
-// were constructed via NewParser without an owning Set.
-func (p *Parser) Set() *Set {
-	return p.set
+// Engine returns the template engine associated with this parser, if any.
+// Tag parsers can use this to load referenced templates at parse time.
+func (p *Parser) Engine() *Engine {
+	return p.engine
 }
 
 // Parse parses the entire template and returns AST statement nodes.
@@ -151,14 +154,12 @@ func (p *Parser) parseTag() (Statement, error) {
 		p.hasNonTrivialContent = true
 	}
 
-	// Look up the tag parser. Templates loaded via a Set consult the
-	// Set's private registry first (which is layered over the global
-	// one), giving access to layout tags (include/extends/block).
-	// Standalone Compile(src) sees only the global registry.
+	// Look up the tag parser. Templates compiled through an Engine consult
+	// the engine-local registry first, layered over the built-in registry.
 	var fn TagParser
 	var ok bool
-	if p.set != nil && p.set.tags != nil {
-		fn, ok = p.set.tags.Get(name.Value)
+	if p.engine != nil && p.engine.tags != nil {
+		fn, ok = p.engine.tags.Get(name.Value)
 	} else {
 		fn, ok = defaultTagRegistry.Get(name.Value)
 	}
@@ -179,7 +180,9 @@ func (p *Parser) parseTag() (Statement, error) {
 	p.Advance() // Consume %}.
 
 	argParser := NewParser(args)
-	argParser.set = p.set
+	argParser.engine = p.engine
+	argParser.anchorLine = name.Line
+	argParser.anchorCol = name.Col
 	return fn(p, name, argParser)
 }
 
@@ -234,6 +237,9 @@ func (p *Parser) ParseUntilWithArgs(endTags ...string) ([]Statement, string, *Pa
 
 // ParseExpression parses an expression from the current token position.
 func (p *Parser) ParseExpression() (Expression, error) {
+	if p.Remaining() == 0 {
+		return nil, p.Error("unexpected end of expression")
+	}
 	ep := NewExprParser(p.tokens[p.pos:])
 	expr, err := ep.ParseExpression()
 	if err != nil {

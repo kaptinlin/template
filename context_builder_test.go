@@ -3,6 +3,7 @@ package template
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -110,6 +111,11 @@ func TestContextBuilderStruct(t *testing.T) {
 		} `json:"profile"`
 	}
 
+	type OmitemptyUser struct {
+		Name  string `json:"name"`
+		Email string `json:"email,omitempty"`
+	}
+
 	tests := []struct {
 		name  string
 		input any
@@ -150,6 +156,13 @@ func TestContextBuilderStruct(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "omitempty matches json semantics",
+			input: OmitemptyUser{Name: "Jane"},
+			want: Context{
+				"name": "Jane",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -162,6 +175,23 @@ func TestContextBuilderStruct(t *testing.T) {
 				t.Errorf("Build() mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestContextBuilderStructPreservesCustomJSONSemantics(t *testing.T) {
+	type Event struct {
+		At time.Time `json:"at"`
+	}
+
+	got, err := NewContextBuilder().Struct(Event{
+		At: time.Date(2026, 4, 12, 10, 30, 0, 0, time.UTC),
+	}).Build()
+	if err != nil {
+		t.Fatalf("Build() unexpected error: %v", err)
+	}
+
+	if _, ok := got["at"].(string); !ok {
+		t.Fatalf("at = %T, want string", got["at"])
 	}
 }
 
@@ -372,6 +402,60 @@ func TestNewChildContextSharesPublic(t *testing.T) {
 	}
 	if got != "modified" {
 		t.Errorf("parent.Get(\"shared\") = %v, want %q", got, "modified")
+	}
+}
+
+func TestNewChildContextPreservesRuntimeState(t *testing.T) {
+	parent := NewExecutionContext(map[string]any{"shared": "value"})
+	parent.Set("private", "secret")
+	parent.engine = New(WithFormat(FormatHTML))
+	parent.autoescape = true
+	parent.includeDepth = 3
+	parent.currentLeaf = &Template{name: "leaf.txt"}
+
+	child := NewChildContext(parent)
+
+	if child.engine != parent.engine {
+		t.Fatal("child.engine was not preserved")
+	}
+	if child.autoescape != parent.autoescape {
+		t.Fatalf("child.autoescape = %v, want %v", child.autoescape, parent.autoescape)
+	}
+	if child.includeDepth != parent.includeDepth {
+		t.Fatalf("child.includeDepth = %d, want %d", child.includeDepth, parent.includeDepth)
+	}
+	if child.currentLeaf != parent.currentLeaf {
+		t.Fatal("child.currentLeaf was not preserved")
+	}
+}
+
+func TestNewIsolatedChildContextPreservesRuntimeState(t *testing.T) {
+	parent := NewExecutionContext(map[string]any{"shared": "value"})
+	parent.Set("private", "secret")
+	parent.engine = New(WithFormat(FormatHTML))
+	parent.autoescape = true
+	parent.includeDepth = 2
+	parent.currentLeaf = &Template{name: "leaf.txt"}
+
+	child := NewIsolatedChildContext(parent)
+
+	if child.Public != nil {
+		t.Fatalf("child.Public = %v, want nil", child.Public)
+	}
+	if len(child.Private) != 0 {
+		t.Fatalf("len(child.Private) = %d, want 0", len(child.Private))
+	}
+	if child.engine != parent.engine {
+		t.Fatal("child.engine was not preserved")
+	}
+	if child.autoescape != parent.autoescape {
+		t.Fatalf("child.autoescape = %v, want %v", child.autoescape, parent.autoescape)
+	}
+	if child.includeDepth != parent.includeDepth {
+		t.Fatalf("child.includeDepth = %d, want %d", child.includeDepth, parent.includeDepth)
+	}
+	if child.currentLeaf != parent.currentLeaf {
+		t.Fatal("child.currentLeaf was not preserved")
 	}
 }
 

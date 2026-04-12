@@ -241,9 +241,9 @@ func (n *OutputNode) String() string { return fmt.Sprintf("Output(%s)", n.Expr) 
 
 // Execute evaluates the expression and writes its string value.
 //
-// When the execution context has autoescape enabled (HTMLSet rendering),
+// When the execution context has autoescape enabled (FormatHTML engine rendering),
 // the output is HTML-escaped UNLESS the underlying Go value is a
-// [SafeString]. In the non-autoescape path (TextSet or standalone
+// [SafeString]. In the non-autoescape path (text engine or standalone
 // Compile), SafeString is treated as a plain string.
 func (n *OutputNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	val, err := n.Expr.Evaluate(ctx)
@@ -311,12 +311,32 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	rv := col.resolved()
 	bindToKey := rv.IsValid() && rv.Kind() == reflect.Map
 
+	prevLoop, hadLoop := ctx.Private["loop"]
 	var parent *LoopContext
-	if v, ok := ctx.Get("loop"); ok {
-		if lc, ok := v.(*LoopContext); ok {
-			parent = lc
-		}
+	if lc, ok := prevLoop.(*LoopContext); ok {
+		parent = lc
 	}
+
+	prevBindings := make(map[string]any, len(n.Vars))
+	hadBindings := make(map[string]bool, len(n.Vars))
+	for _, name := range n.Vars {
+		prevBindings[name], hadBindings[name] = ctx.Private[name]
+	}
+
+	defer func() {
+		if hadLoop {
+			ctx.Private["loop"] = prevLoop
+		} else {
+			delete(ctx.Private, "loop")
+		}
+		for _, name := range n.Vars {
+			if hadBindings[name] {
+				ctx.Private[name] = prevBindings[name]
+			} else {
+				delete(ctx.Private, name)
+			}
+		}
+	}()
 
 	var execErr error
 
@@ -362,11 +382,6 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 		}
 		return true
 	})
-
-	// Restore parent loop context.
-	if parent != nil {
-		ctx.Set("loop", parent)
-	}
 
 	if execErr != nil {
 		return execErr
@@ -650,10 +665,9 @@ func (n *FilterNode) String() string {
 
 // Evaluate applies the named filter to the expression value.
 //
-// Filter lookup consults the per-Set filter registry first (if the
-// template was loaded via a Set), falling back to the global registry.
-// This gives Set-loaded templates access to the safe filter and the
-// HTML-aware escape variants without exposing them to Compile(src).
+// Filter lookup consults the per-engine filter registry first, falling
+// back to the built-in registry. This gives each engine access to its own
+// feature-gated filters and format-specific overrides.
 func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
@@ -662,10 +676,10 @@ func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 
 	var fn FilterFunc
 	var ok bool
-	if ctx.set != nil && ctx.set.filters != nil {
-		fn, ok = ctx.set.filters.Filter(n.Name)
+	if ctx.engine != nil && ctx.engine.filters != nil {
+		fn, ok = ctx.engine.filters.Filter(n.Name)
 	} else {
-		fn, ok = Filter(n.Name)
+		fn, ok = defaultRegistry.Filter(n.Name)
 	}
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrFilterNotFound, n.Name)

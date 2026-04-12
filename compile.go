@@ -1,47 +1,64 @@
 // Package template provides a lightweight template engine with Django/Jinja-style syntax.
 package template
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
-// Compile compiles a template source string and returns an executable [Template].
-//
-// Compile performs lexical analysis, parsing, and template creation in sequence.
-// On failure, the returned error wraps the underlying lexer or parser error.
-//
-//	tmpl, err := template.Compile("Hello {{ name }}!")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	output, _ := tmpl.Render(map[string]any{"name": "World"})
-func Compile(source string) (*Template, error) {
-	return compileForSet(source, nil)
+type templateSourceError struct {
+	name string
+	err  error
 }
 
-// compileForSet compiles a template source, wiring the parser to the given
-// Set so tag parsers (include, extends) can resolve referenced templates
-// at parse time. Pass set = nil to compile a standalone template.
+func (e *templateSourceError) Error() string {
+	var parseErr *ParseError
+	if errors.As(e.err, &parseErr) {
+		return fmt.Sprintf("%s:%d:%d: %s", e.name, parseErr.Line, parseErr.Col, parseErr.Message)
+	}
+	return fmt.Sprintf("%s: %v", e.name, e.err)
+}
+
+func (e *templateSourceError) Unwrap() error {
+	return e.err
+}
+
+func wrapTemplateSourceError(name string, err error) error {
+	if err == nil || name == "" {
+		return err
+	}
+	var sourceErr *templateSourceError
+	if errors.As(err, &sourceErr) {
+		return err
+	}
+	return &templateSourceError{name: name, err: err}
+}
+
+// compileForEngine compiles a template source, wiring the parser to the given
+// Engine so tag parsers can resolve referenced templates at parse time.
 //
-// Templates compiled via a Set have {% raw %}...{% endraw %} lexer
-// support enabled, whereas standalone Compile(src) does not — this
-// keeps the Compile(src) path byte-identical to its pre-layout
-// behavior.
-func compileForSet(source string, set *Set) (*Template, error) {
+// When FeatureLayout is enabled, the lexer also accepts {% raw %}...{% endraw %}
+// blocks and the parser can resolve layout tags against the engine loader.
+func compileForEngine(source string, engine *Engine) (*Template, error) {
+	return compileNamedForEngine("", source, engine)
+}
+
+func compileNamedForEngine(name, source string, engine *Engine) (*Template, error) {
 	l := NewLexer(source)
-	// Only enable raw-block lexer mode when loading via a Set.
-	// Compile(src) passes set=nil and keeps its original behavior.
-	if set != nil {
+	// Only enable raw-block lexer mode when layout is enabled.
+	if engine != nil && engine.HasFeature(FeatureLayout) {
 		l.allowRaw = true
 	}
 	tokens, err := l.Tokenize()
 	if err != nil {
-		return nil, fmt.Errorf("tokenizing template: %w", err)
+		return nil, wrapTemplateSourceError(name, fmt.Errorf("tokenizing template: %w", err))
 	}
 
 	p := NewParser(tokens)
-	p.set = set
+	p.engine = engine
 	ast, err := p.Parse()
 	if err != nil {
-		return nil, fmt.Errorf("parsing template: %w", err)
+		return nil, wrapTemplateSourceError(name, fmt.Errorf("parsing template: %w", err))
 	}
 
 	tpl := NewTemplate(ast)

@@ -70,7 +70,7 @@ func (n *IncludeNode) String() string {
 const maxIncludeDepth = 32
 
 // Execute renders the included template. The parser only produces
-// IncludeNode inside a Set, so ctx.set is guaranteed non-nil by the
+// IncludeNode inside an Engine with layout enabled, so ctx.engine is guaranteed non-nil by the
 // time we reach here.
 func (n *IncludeNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	if ctx.includeDepth >= maxIncludeDepth {
@@ -107,7 +107,7 @@ func (n *IncludeNode) resolveChild(ctx *ExecutionContext) (*Template, error) {
 		}
 		return nil, err
 	}
-	tpl, err := ctx.set.Get(name)
+	tpl, err := ctx.engine.Load(name)
 	if err != nil {
 		if n.ifExists && errors.Is(err, ErrTemplateNotFound) {
 			return nil, nil
@@ -124,13 +124,12 @@ func (n *IncludeNode) buildChildContext(ctx *ExecutionContext) (*ExecutionContex
 	var childCtx *ExecutionContext
 	if n.only {
 		// Fully isolated: only the with-pairs are visible.
-		childCtx = NewExecutionContext(nil)
+		childCtx = NewIsolatedChildContext(ctx)
 	} else {
-		// Inherit parent's Public; fresh Private for scope isolation.
+		// Inherit parent's public variables and runtime state with isolated
+		// private scope for the child render.
 		childCtx = NewChildContext(ctx)
 	}
-	childCtx.set = ctx.set
-	childCtx.autoescape = ctx.autoescape
 	childCtx.includeDepth = ctx.includeDepth + 1
 
 	// Evaluate "with" bindings in the PARENT context, then insert them
@@ -207,9 +206,9 @@ func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
 		return nil, err
 	}
 
-	// parseIncludeTag is only reachable when a Set is present (the tag
-	// is not in the global registry), so args.Set() is non-nil here.
-	set := args.Set()
+	// parseIncludeTag is only reachable when a layout-enabled engine is present
+	// (the tag is not in the global registry), so args.Engine() is non-nil here.
+	engine := args.Engine()
 
 	// Dynamic paths always resolve at runtime.
 	if node.pathExpr != nil {
@@ -219,12 +218,12 @@ func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
 
 	// Detect parse-time circular reference and downgrade to lazy.
 	// Without this, mutual includes (A→B→A) cause infinite parse recursion.
-	if set.isParsing(node.staticName) {
+	if engine.isParsing(node.staticName) {
 		node.lazy = true
 		return node, nil
 	}
 
-	prepared, err := set.Get(node.staticName)
+	prepared, err := engine.Load(node.staticName)
 	if err != nil {
 		if errors.Is(err, ErrTemplateNotFound) {
 			if node.ifExists {

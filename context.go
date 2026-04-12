@@ -1,9 +1,12 @@
 package template
 
 import (
+	"encoding"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -30,12 +33,12 @@ type ExecutionContext struct {
 	Public  Context // user-provided variables
 	Private Context // internal variables (e.g., loop counters)
 
-	// set is the owning Set when rendering via Set.Render; nil for
+	// engine is the owning Engine when rendering via Engine.Render; nil for
 	// standalone Template.Execute calls.
-	set *Set
+	engine *Engine
 
 	// autoescape controls whether {{ expr }} output is HTML-escaped.
-	// True only for NewHTMLSet-rendered templates.
+	// True only for HTML-format engine renders.
 	autoescape bool
 
 	// includeDepth tracks the current {% include %} nesting depth to
@@ -160,6 +163,11 @@ func (cb *ContextBuilder) KeyValue(key string, value any) *ContextBuilder {
 // dot notation. If serialization fails, the error is collected and
 // returned by [ContextBuilder.Build].
 func (cb *ContextBuilder) Struct(v any) *ContextBuilder {
+	if temp, ok := contextFromStructFast(v); ok {
+		maps.Copy(cb.context, temp)
+		return cb
+	}
+
 	jsonData, err := json.Marshal(v)
 	if err != nil {
 		cb.errors = append(cb.errors, fmt.Errorf("marshal struct: %w", err))
@@ -174,6 +182,185 @@ func (cb *ContextBuilder) Struct(v any) *ContextBuilder {
 
 	maps.Copy(cb.context, temp)
 	return cb
+}
+
+var (
+	jsonMarshalerType = reflect.TypeOf((*stdjson.Marshaler)(nil)).Elem()
+	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+)
+
+func contextFromStructFast(v any) (Context, bool) {
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() {
+		return nil, false
+	}
+
+	rv = indirectValue(rv)
+	if !rv.IsValid() || rv.Kind() != reflect.Struct {
+		return nil, false
+	}
+	if hasCustomJSONSemantics(rv.Type()) {
+		return nil, false
+	}
+
+	out, ok := structToMapValue(rv)
+	if !ok {
+		return nil, false
+	}
+	return Context(out), true
+}
+
+func structToMapValue(rv reflect.Value) (map[string]any, bool) {
+	rt := rv.Type()
+	out := make(map[string]any, rt.NumField())
+
+	for i := range rt.NumField() {
+		field := rt.Field(i)
+		if field.Anonymous {
+			return nil, false
+		}
+		if !field.IsExported() {
+			continue
+		}
+
+		name, opts := parseJSONTag(field.Tag.Get("json"))
+		if name == "-" {
+			continue
+		}
+		if name == "" {
+			name = field.Name
+		}
+
+		value, ok := valueToContextValue(rv.Field(i))
+		if !ok {
+			return nil, false
+		}
+		if opts.omitEmpty && isEmptyJSONValue(rv.Field(i)) {
+			continue
+		}
+		out[name] = value
+	}
+
+	return out, true
+}
+
+func valueToContextValue(rv reflect.Value) (any, bool) {
+	rv = indirectValue(rv)
+	if !rv.IsValid() {
+		return nil, true
+	}
+	if hasCustomJSONSemantics(rv.Type()) {
+		return nil, false
+	}
+
+	switch rv.Kind() { //nolint:exhaustive
+	case reflect.Bool:
+		return rv.Bool(), true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return rv.Interface(), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return rv.Interface(), true
+	case reflect.Float32, reflect.Float64:
+		return rv.Interface(), true
+	case reflect.String:
+		return rv.String(), true
+	case reflect.Slice, reflect.Array:
+		out := make([]any, rv.Len())
+		for i := range rv.Len() {
+			value, ok := valueToContextValue(rv.Index(i))
+			if !ok {
+				return nil, false
+			}
+			out[i] = value
+		}
+		return out, true
+	case reflect.Map:
+		if rv.Type().Key().Kind() != reflect.String {
+			return nil, false
+		}
+		out := make(map[string]any, rv.Len())
+		iter := rv.MapRange()
+		for iter.Next() {
+			value, ok := valueToContextValue(iter.Value())
+			if !ok {
+				return nil, false
+			}
+			out[iter.Key().String()] = value
+		}
+		return out, true
+	case reflect.Struct:
+		return structToMapValue(rv)
+	case reflect.Interface, reflect.Pointer:
+		return valueToContextValue(rv)
+	default:
+		return nil, false
+	}
+}
+
+func indirectValue(rv reflect.Value) reflect.Value {
+	for rv.IsValid() && (rv.Kind() == reflect.Interface || rv.Kind() == reflect.Pointer) {
+		if rv.IsNil() {
+			return reflect.Value{}
+		}
+		rv = rv.Elem()
+	}
+	return rv
+}
+
+func hasCustomJSONSemantics(rt reflect.Type) bool {
+	if rt == nil {
+		return false
+	}
+	if rt.Implements(jsonMarshalerType) || rt.Implements(textMarshalerType) {
+		return true
+	}
+	if rt.Kind() != reflect.Pointer {
+		ptr := reflect.PointerTo(rt)
+		return ptr.Implements(jsonMarshalerType) || ptr.Implements(textMarshalerType)
+	}
+	return false
+}
+
+type jsonTagOptions struct {
+	omitEmpty bool
+}
+
+func parseJSONTag(tag string) (string, jsonTagOptions) {
+	if tag == "" {
+		return "", jsonTagOptions{}
+	}
+	parts := strings.Split(tag, ",")
+	opts := jsonTagOptions{}
+	for _, opt := range parts[1:] {
+		if opt == "omitempty" {
+			opts.omitEmpty = true
+		}
+	}
+	return parts[0], opts
+}
+
+func isEmptyJSONValue(rv reflect.Value) bool {
+	rv = indirectValue(rv)
+	if !rv.IsValid() {
+		return true
+	}
+
+	switch rv.Kind() { //nolint:exhaustive
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return rv.Len() == 0
+	case reflect.Bool:
+		return !rv.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return rv.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return rv.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return rv.Float() == 0
+	case reflect.Interface, reflect.Pointer:
+		return rv.IsNil()
+	default:
+		return false
+	}
 }
 
 // Build returns the constructed Context and any collected errors.
@@ -211,11 +398,28 @@ func (ec *ExecutionContext) Set(name string, value any) {
 }
 
 // NewChildContext creates a child [ExecutionContext] that shares the
-// parent's Public context but copies the Private context for isolated
-// scope.
+// parent's Public context, copies the Private context for isolated
+// scope, and preserves runtime rendering state.
 func NewChildContext(parent *ExecutionContext) *ExecutionContext {
 	return &ExecutionContext{
-		Public:  parent.Public,
-		Private: maps.Clone(parent.Private),
+		Public:       parent.Public,
+		Private:      maps.Clone(parent.Private),
+		engine:       parent.engine,
+		autoescape:   parent.autoescape,
+		includeDepth: parent.includeDepth,
+		currentLeaf:  parent.currentLeaf,
+	}
+}
+
+// NewIsolatedChildContext creates a child [ExecutionContext] with a fresh
+// public/private scope while preserving runtime rendering state.
+func NewIsolatedChildContext(parent *ExecutionContext) *ExecutionContext {
+	return &ExecutionContext{
+		Public:       nil,
+		Private:      NewContext(),
+		engine:       parent.engine,
+		autoescape:   parent.autoescape,
+		includeDepth: parent.includeDepth,
+		currentLeaf:  parent.currentLeaf,
 	}
 }

@@ -3,17 +3,19 @@
 This page covers the multi-file layout features: `{% include %}`,
 `{% extends %}`, `{% block %}`, `{{ block.super }}`, and `{% raw %}`.
 
-> **Scope note**: these are **Set-scoped** features. They are only
-> available when a template is loaded via `NewHTMLSet` or `NewTextSet`.
-> From `template.Compile(src)` they remain unknown tags. See
-> [docs/loaders.md](loaders.md) for how to build a Set.
+> **Scope note**: these are `FeatureLayout` features. They are available
+> only when an engine enables `template.WithFeatures(template.FeatureLayout)`.
 
 ## Quick example
 
 ```go
 loader, _ := template.NewDirLoader("./templates")
-set := template.NewHTMLSet(loader)
-_ = set.Render("layouts/blog.html", template.Context{
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFormat(template.FormatHTML),
+    template.WithFeatures(template.FeatureLayout),
+)
+_ = engine.Render("layouts/blog.html", template.Context{
     "page": pageData,
 }, os.Stdout)
 ```
@@ -78,6 +80,9 @@ render, so they're slightly slower but enable data-driven composition.
   means the outer template's `page`, not the included template's).
 - Bindings land in the included template's `Private` scope — they do
   not mutate the parent.
+- Child execution preserves runtime state from the parent render:
+  engine-local filters/tags, auto-escape mode, include depth, and the
+  current extends leaf all stay intact.
 
 ### Isolating context with `only`
 
@@ -89,6 +94,10 @@ render, so they're slightly slower but enable data-driven composition.
 `only` fully isolates the included template. It does not inherit the
 parent's context **and** it does not see `WithGlobals`-set values. The
 only variables available to the child are those passed via `with`.
+
+This isolation affects data visibility only. Rendering semantics still
+come from the parent engine, so HTML mode stays HTML mode and include
+depth still advances.
 
 This matches Django DTL and Pongo2 semantics. If you need the child to
 see `site.*` from globals while still hiding the page-level state, pass
@@ -203,7 +212,7 @@ block's content. It works through any number of layers:
 
 Rendering `leaf.txt` → `L[M(A)]`.
 
-**Safety**: in `NewHTMLSet`, the super output is already rendered HTML
+**Safety**: in an engine using `FormatHTML`, the super output is already rendered HTML
 and wrapped in `SafeString`, so it is **not** re-escaped when
 interpolated.
 
@@ -266,15 +275,14 @@ Renders literally (including the braces and percent signs). Useful for:
 
 **Errors**: missing `{% endraw %}` returns `ErrUnclosedRaw`.
 
-**Compile-path note**: `{% raw %}` is lexer-level, so it requires the
-Set path (`NewHTMLSet` / `NewTextSet`). `template.Compile(src)` will
-report `unknown tag: raw`.
+**Engine note**: `{% raw %}` is lexer-level, so it requires
+`FeatureLayout` to be enabled on the owning engine.
 
 ---
 
 ## Writing HTML: `safe` and auto-escape
 
-`NewHTMLSet` auto-escapes every `{{ expr }}` output:
+An engine using `FormatHTML` auto-escapes every `{{ expr }}` output:
 
 ```django
 {{ page.title }}
@@ -294,7 +302,7 @@ To output pre-rendered HTML without escaping, either:
 **2. Wrap the value in `SafeString`** in Go code:
 
 ```go
-set.Render("page.html", template.Context{
+engine.Render("page.html", template.Context{
     "title":   "Hello <world>",                         // escaped
     "content": template.SafeString("<p>trusted</p>"),   // raw
 }, w)
@@ -303,7 +311,7 @@ set.Render("page.html", template.Context{
 ### Filter chain safety
 
 `safe` status survives only as long as every filter in the chain is
-safe-aware. `safe` and the HTMLSet override of `escape` are the only
+safe-aware. `safe` and the `FormatHTML` override of `escape` are the only
 safe-aware filters shipped. Any other filter downgrades the value:
 
 ```django
@@ -317,7 +325,7 @@ prevents "I thought I was safe" XSS bugs.
 
 ### Text mode
 
-`NewTextSet` does **not** auto-escape. `SafeString` and the `safe`
+An engine using `FormatText` does **not** auto-escape. `SafeString` and the `safe`
 filter still exist but are no-ops: they just produce the underlying
 string. The `escape` filter in text mode falls through to the global
 version and still returns plain `string`.

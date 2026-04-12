@@ -5,11 +5,33 @@ import (
 	"testing"
 )
 
-// BenchmarkCompile benchmarks template compilation.
-func BenchmarkCompile(b *testing.B) {
+type benchmarkFlatUser struct {
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Age    int    `json:"age"`
+	Active bool   `json:"active"`
+	Role   string `json:"role"`
+}
+
+type benchmarkProfile struct {
+	Bio     string `json:"bio"`
+	Website string `json:"website"`
+	City    string `json:"city"`
+}
+
+type benchmarkNestedUser struct {
+	Name    string           `json:"name"`
+	Email   string           `json:"email"`
+	Profile benchmarkProfile `json:"profile"`
+	Tags    []string         `json:"tags"`
+}
+
+// BenchmarkParseString benchmarks source-string parsing.
+func BenchmarkParseString(b *testing.B) {
 	source := `Hello {{ name }}! {% if age > 18 %}You are an adult.{% endif %}`
+	engine := New()
 	for b.Loop() {
-		_, err := Compile(source)
+		_, err := engine.ParseString(source)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -18,7 +40,8 @@ func BenchmarkCompile(b *testing.B) {
 
 // BenchmarkExecuteSimple benchmarks simple template execution.
 func BenchmarkExecuteSimple(b *testing.B) {
-	tmpl, err := Compile(`Hello {{ name }}!`)
+	engine := New()
+	tmpl, err := engine.ParseString(`Hello {{ name }}!`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -38,7 +61,8 @@ func BenchmarkExecuteSimple(b *testing.B) {
 
 // BenchmarkExecuteWithFilters benchmarks template execution with filters.
 func BenchmarkExecuteWithFilters(b *testing.B) {
-	tmpl, err := Compile(`{{ name | upper | append: "!" }}`)
+	engine := New()
+	tmpl, err := engine.ParseString(`{{ name | upper | append: "!" }}`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -58,7 +82,8 @@ func BenchmarkExecuteWithFilters(b *testing.B) {
 
 // BenchmarkExecuteWithLoop benchmarks template execution with loops.
 func BenchmarkExecuteWithLoop(b *testing.B) {
-	tmpl, err := Compile(`{% for item in items %}{{ item }}{% endfor %}`)
+	engine := New()
+	tmpl, err := engine.ParseString(`{% for item in items %}{{ item }}{% endfor %}`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -78,7 +103,8 @@ func BenchmarkExecuteWithLoop(b *testing.B) {
 
 // BenchmarkExecuteWithConditional benchmarks template execution with conditionals.
 func BenchmarkExecuteWithConditional(b *testing.B) {
-	tmpl, err := Compile(`{% if age > 18 %}Adult{% else %}Minor{% endif %}`)
+	engine := New()
+	tmpl, err := engine.ParseString(`{% if age > 18 %}Adult{% else %}Minor{% endif %}`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -96,17 +122,100 @@ func BenchmarkExecuteWithConditional(b *testing.B) {
 	}
 }
 
-// BenchmarkRender benchmarks one-shot rendering.
-func BenchmarkRender(b *testing.B) {
+// BenchmarkParseAndRender benchmarks one-shot parse+render.
+func BenchmarkParseAndRender(b *testing.B) {
 	source := `Hello {{ name }}!`
 	data := map[string]any{"name": "World"}
+	engine := New()
 
 	for b.Loop() {
-		_, err := Render(source, data)
+		tpl, err := engine.ParseString(source)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = tpl.Render(data)
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
+}
+
+func BenchmarkEngineLoadCacheHit(b *testing.B) {
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.txt": `Hello {{ name }}`,
+		})),
+		WithFormat(FormatText),
+	)
+
+	if _, err := engine.Load("a.txt"); err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := engine.Load("a.txt"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkEngineLoadCacheMissAfterReset(b *testing.B) {
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.txt": `Hello {{ name }}`,
+		})),
+		WithFormat(FormatText),
+	)
+
+	b.ResetTimer()
+	for b.Loop() {
+		engine.Reset()
+		if _, err := engine.Load("a.txt"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkEngineRenderLayout(b *testing.B) {
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"page.html": `{% extends "base.html" %}{% block content %}{% include "card.html" with title=title %}{% endblock %}`,
+			"base.html": `<html><body>{% block content %}{% endblock %}</body></html>`,
+			"card.html": `<section>{{ title }}</section>`,
+		})),
+		WithFormat(FormatHTML),
+		WithFeatures(FeatureLayout),
+	)
+
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := engine.RenderString("page.html", Context{"title": "<b>hello</b>"}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkEngineRenderCachedParallel(b *testing.B) {
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{{ x }}-{{ y }}`,
+		})),
+		WithFormat(FormatHTML),
+	)
+
+	if _, err := engine.Load("a.html"); err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if _, err := engine.RenderString("a.html", Context{"x": "left", "y": "<right>"}); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }
 
 // BenchmarkValueConversion benchmarks Value type conversions.
@@ -151,9 +260,61 @@ func BenchmarkContextSet(b *testing.B) {
 	}
 }
 
+func BenchmarkContextBuilderKeyValue(b *testing.B) {
+	b.ResetTimer()
+	for b.Loop() {
+		builder := NewContextBuilder().
+			KeyValue("name", "Alice").
+			KeyValue("email", "alice@example.com").
+			KeyValue("age", 30).
+			KeyValue("active", true).
+			KeyValue("role", "admin")
+		if _, err := builder.Build(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkContextBuilderStructFlat(b *testing.B) {
+	user := benchmarkFlatUser{
+		Name:   "Alice",
+		Email:  "alice@example.com",
+		Age:    30,
+		Active: true,
+		Role:   "admin",
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := NewContextBuilder().Struct(user).Build(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkContextBuilderStructNested(b *testing.B) {
+	user := benchmarkNestedUser{
+		Name:  "Alice",
+		Email: "alice@example.com",
+		Profile: benchmarkProfile{
+			Bio:     "Engineer",
+			Website: "https://example.com",
+			City:    "Hong Kong",
+		},
+		Tags: []string{"go", "template", "bench"},
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := NewContextBuilder().Struct(user).Build(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 // BenchmarkFilterApplication benchmarks filter application.
 func BenchmarkFilterApplication(b *testing.B) {
-	filter, _ := Filter("upper")
+	filter, _ := defaultRegistry.Filter("upper")
 
 	for b.Loop() {
 		_, err := filter("hello world", nil...)
@@ -187,7 +348,8 @@ func BenchmarkComplexTemplate(b *testing.B) {
 </body>
 </html>
 `
-	tmpl, err := Compile(source)
+	engine := New()
+	tmpl, err := engine.ParseString(source)
 	if err != nil {
 		b.Fatal(err)
 	}

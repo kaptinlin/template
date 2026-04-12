@@ -8,7 +8,7 @@ import (
 
 // registerFormatFilters registers all format-related filters.
 func registerFormatFilters() {
-	RegisterFilter("json", jsonFilter)
+	defaultRegistry.MustRegister("json", jsonFilter)
 }
 
 // jsonFilter serializes an input object into its JSON representation.

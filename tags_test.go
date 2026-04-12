@@ -28,7 +28,7 @@ func restoreTagRegistry(saved map[string]TagParser) {
 	defaultTagRegistry.tags = saved
 }
 
-func TestRegisterTag(t *testing.T) {
+func TestBuiltinRegistryRegisterTag(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
@@ -70,24 +70,24 @@ func TestRegisterTag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
-			err := RegisterTag(tt.tagName, tt.parser)
+			err := defaultTagRegistry.Register(tt.tagName, tt.parser)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("RegisterTag(%q) err = %v, want %v", tt.tagName, err, tt.wantErr)
+					t.Errorf("Register(%q) err = %v, want %v", tt.tagName, err, tt.wantErr)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("RegisterTag(%q) = %v, want nil", tt.tagName, err)
+				t.Fatalf("Register(%q) = %v, want nil", tt.tagName, err)
 			}
 			if _, ok := defaultTagRegistry.tags[tt.tagName]; !ok {
-				t.Errorf("RegisterTag(%q) did not register tag", tt.tagName)
+				t.Errorf("Register(%q) did not register tag", tt.tagName)
 			}
 		})
 	}
 }
 
-func TestTag(t *testing.T) {
+func TestBuiltinRegistryTagLookup(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
@@ -127,15 +127,15 @@ func TestTag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
-			p, ok := Tag(tt.tagName)
+			p, ok := defaultTagRegistry.Get(tt.tagName)
 			if ok != tt.want {
-				t.Errorf("Tag(%q) ok = %v, want %v", tt.tagName, ok, tt.want)
+				t.Errorf("Get(%q) ok = %v, want %v", tt.tagName, ok, tt.want)
 			}
 			if tt.want && p == nil {
-				t.Errorf("Tag(%q) parser = nil, want non-nil", tt.tagName)
+				t.Errorf("Get(%q) parser = nil, want non-nil", tt.tagName)
 			}
 			if !tt.want && p != nil {
-				t.Errorf("Tag(%q) parser = non-nil, want nil", tt.tagName)
+				t.Errorf("Get(%q) parser = non-nil, want nil", tt.tagName)
 			}
 		})
 	}
@@ -300,18 +300,18 @@ func TestParseIfTag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.tmpl)
+			tmpl, err := parseSourceTemplate(tt.tmpl)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
+					t.Fatalf("parseSourceTemplate(%q) err = nil, want error", tt.tmpl)
 				}
 				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
+					t.Errorf("parseSourceTemplate(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("parseSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if tt.validate != nil {
 				if len(tmpl.root) != 1 {
@@ -444,18 +444,18 @@ func TestParseForTag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.tmpl)
+			tmpl, err := parseSourceTemplate(tt.tmpl)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
+					t.Fatalf("parseSourceTemplate(%q) err = nil, want error", tt.tmpl)
 				}
 				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
+					t.Errorf("parseSourceTemplate(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("parseSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if tt.validate != nil {
 				if len(tmpl.root) != 1 {
@@ -508,18 +508,18 @@ func TestParseBreakTag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.tmpl)
+			tmpl, err := parseSourceTemplate(tt.tmpl)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
+					t.Fatalf("parseSourceTemplate(%q) err = nil, want error", tt.tmpl)
 				}
 				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
+					t.Errorf("parseSourceTemplate(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("parseSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if tt.validate != nil {
 				if len(tmpl.root) != 1 {
@@ -572,18 +572,18 @@ func TestParseContinueTag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.tmpl)
+			tmpl, err := parseSourceTemplate(tt.tmpl)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("Compile(%q) err = nil, want error", tt.tmpl)
+					t.Fatalf("parseSourceTemplate(%q) err = nil, want error", tt.tmpl)
 				}
 				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("Compile(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
+					t.Errorf("parseSourceTemplate(%q) err = %q, want containing %q", tt.tmpl, err, tt.errContains)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("parseSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if tt.validate != nil {
 				if len(tmpl.root) != 1 {
@@ -660,12 +660,12 @@ func TestIfTagExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -725,16 +725,16 @@ func TestForTagExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if tt.want != "" && got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 			for _, c := range tt.contains {
 				if !strings.Contains(got, c) {
-					t.Errorf("Render(%q) = %q, want containing %q", tt.tmpl, got, c)
+					t.Errorf("renderSourceTemplate(%q) = %q, want containing %q", tt.tmpl, got, c)
 				}
 			}
 		})
@@ -776,12 +776,12 @@ func TestBreakTagExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -822,14 +822,86 @@ func TestContinueTagExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestForLoopRestoresVariableScope(t *testing.T) {
+	tests := []struct {
+		name     string
+		tmpl     string
+		data     map[string]any
+		want     string
+		contains []string
+	}{
+		{
+			name: "single variable binding does not leak after loop",
+			tmpl: `before={{ item }}|{% for item in items %}{{ item }}{% endfor %}|after={{ item }}`,
+			data: map[string]any{
+				"item":  "outer",
+				"items": []string{"a", "b"},
+			},
+			want: "before=outer|ab|after=outer",
+		},
+		{
+			name: "key value bindings do not leak after loop",
+			tmpl: `before={{ k }}-{{ v }}|{% for k, v in dict %}{{ k }}={{ v }};{% endfor %}|after={{ k }}-{{ v }}`,
+			data: map[string]any{
+				"k":    "outer-k",
+				"v":    "outer-v",
+				"dict": map[string]string{"a": "1", "b": "2"},
+			},
+			contains: []string{"before=outer-k-outer-v|", "|after=outer-k-outer-v", "a=1", "b=2"},
+		},
+		{
+			name: "loop variable becomes empty when no prior binding exists",
+			tmpl: `{% for item in items %}{{ item }}{% endfor %}|{{ item }}`,
+			data: map[string]any{
+				"items": []string{"x", "y"},
+			},
+			want: "xy|",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
+			if err != nil {
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
+			}
+			if tt.want != "" && got != tt.want {
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
+			}
+			for _, c := range tt.contains {
+				if !strings.Contains(got, c) {
+					t.Errorf("renderSourceTemplate(%q) = %q, want containing %q", tt.tmpl, got, c)
+				}
+			}
+		})
+	}
+}
+
+func TestNestedForLoopRestoresParentLoopContext(t *testing.T) {
+	tmpl := `{% for outer in outers %}[outer={{ loop.Counter }}]{% for inner in inners %}{{ loop.Parent.Counter }}-{{ loop.Counter }}{% endfor %}[after-inner={{ loop.Counter }}]{% endfor %}`
+
+	got, err := renderSourceTemplate(tmpl, map[string]any{
+		"outers": []string{"A", "B"},
+		"inners": []string{"x", "y"},
+	})
+	if err != nil {
+		t.Fatalf("renderSourceTemplate() = %v, want nil", err)
+	}
+
+	want := "[outer=1]1-11-2[after-inner=1][outer=2]2-12-2[after-inner=2]"
+	if got != want {
+		t.Errorf("renderSourceTemplate() = %q, want %q", got, want)
 	}
 }
 
@@ -874,12 +946,12 @@ func TestComplexTagCombinations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -996,9 +1068,9 @@ func TestTagNodeStructure(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.tmpl)
+			tmpl, err := parseSourceTemplate(tt.tmpl)
 			if err != nil {
-				t.Fatalf("Compile(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("parseSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if len(tmpl.root) != 1 {
 				t.Fatalf("len(root) = %d, want 1", len(tmpl.root))
@@ -1049,12 +1121,12 @@ func TestIntegration_BasicTemplateRendering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -1113,12 +1185,12 @@ func TestIntegration_Filters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -1188,12 +1260,12 @@ func TestIntegration_ComplexStructures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -1247,18 +1319,18 @@ func TestIntegration_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("Render(%q) err = nil, want error", tt.tmpl)
+					t.Fatalf("renderSourceTemplate(%q) err = nil, want error", tt.tmpl)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -1304,12 +1376,12 @@ func TestIntegration_ComplexTemplates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -1380,12 +1452,12 @@ func TestIntegration_ArithmeticAndComparison(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := renderSourceTemplate(tt.tmpl, tt.data)
 			if err != nil {
-				t.Fatalf("Render(%q) = %v, want nil", tt.tmpl, err)
+				t.Fatalf("renderSourceTemplate(%q) = %v, want nil", tt.tmpl, err)
 			}
 			if got != tt.want {
-				t.Errorf("Render(%q) = %q, want %q", tt.tmpl, got, tt.want)
+				t.Errorf("renderSourceTemplate(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
 		})
 	}
@@ -1412,11 +1484,8 @@ func (n *testSetNode) Execute(ctx *ExecutionContext, _ io.Writer) error {
 }
 
 func TestRegisterTagExternalStatement(t *testing.T) {
-	saved := saveTagRegistry()
-	defer restoreTagRegistry(saved)
-
-	UnregisterTag("set")
-	err := RegisterTag("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+	engine := New()
+	err := engine.Tags().Register("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
 		v, err := args.ExpectIdentifier()
 		if err != nil {
 			return nil, args.Error("expected variable name after 'set'")
@@ -1439,34 +1508,35 @@ func TestRegisterTagExternalStatement(t *testing.T) {
 		}, nil
 	})
 	if err != nil {
-		t.Fatalf("RegisterTag(\"set\") = %v, want nil", err)
+		t.Fatalf("engine.Tags().Register(\"set\") = %v, want nil", err)
 	}
 
-	got, err := Render(`{% set greeting = "Hello" %}{{ greeting }}, World!`, nil)
+	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}, World!`)
 	if err != nil {
-		t.Fatalf("Render() = %v, want nil", err)
+		t.Fatalf("ParseString() = %v, want nil", err)
+	}
+	got, err := tpl.Render(nil)
+	if err != nil {
+		t.Fatalf("renderSourceTemplate() = %v, want nil", err)
 	}
 	if want := "Hello, World!"; got != want {
-		t.Errorf("Render() = %q, want %q", got, want)
+		t.Errorf("renderSourceTemplate() = %q, want %q", got, want)
 	}
 }
 
 func TestListTags(t *testing.T) {
-	saved := saveTagRegistry()
-	defer restoreTagRegistry(saved)
-
-	tags := ListTags()
+	tags := defaultTagRegistry.List()
 	for _, want := range []string{"if", "for", "break", "continue"} {
 		if !slices.Contains(tags, want) {
-			t.Errorf("ListTags() missing %q", want)
+			t.Errorf("List() missing %q", want)
 		}
 	}
 	if !slices.IsSorted(tags) {
-		t.Errorf("ListTags() = %v, want sorted", tags)
+		t.Errorf("List() = %v, want sorted", tags)
 	}
 }
 
-func TestHasTag(t *testing.T) {
+func TestBuiltinRegistryHasTag(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
@@ -1484,26 +1554,80 @@ func TestHasTag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := HasTag(tt.tag); got != tt.want {
-				t.Errorf("HasTag(%q) = %v, want %v", tt.tag, got, tt.want)
+			if got := defaultTagRegistry.Has(tt.tag); got != tt.want {
+				t.Errorf("Has(%q) = %v, want %v", tt.tag, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestUnregisterTag(t *testing.T) {
+func TestBuiltinRegistryUnregisterTag(t *testing.T) {
 	saved := saveTagRegistry()
 	defer restoreTagRegistry(saved)
 
-	if !HasTag("if") {
-		t.Fatal("HasTag(\"if\") = false, want true (before unregister)")
+	if !defaultTagRegistry.Has("if") {
+		t.Fatal("Has(\"if\") = false, want true (before unregister)")
 	}
-	UnregisterTag("if")
-	if HasTag("if") {
-		t.Error("HasTag(\"if\") = true, want false (after unregister)")
+	defaultTagRegistry.Unregister("if")
+	if defaultTagRegistry.Has("if") {
+		t.Error("Has(\"if\") = true, want false (after unregister)")
 	}
 	// Unregistering a non-existent tag is a no-op.
-	UnregisterTag("nonexistent")
+	defaultTagRegistry.Unregister("nonexistent")
+}
+
+func TestTagRegistryReplaceOverwrites(t *testing.T) {
+	r := NewTagRegistry()
+
+	first := func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
+		return NewTextNode("first", start.Line, start.Col), nil
+	}
+	second := func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
+		return NewTextNode("second", start.Line, start.Col), nil
+	}
+
+	if err := r.Register("demo", first); err != nil {
+		t.Fatalf("Register(\"demo\") = %v, want nil", err)
+	}
+	r.Replace("demo", second)
+
+	got, ok := r.Get("demo")
+	if !ok {
+		t.Fatal("Get(\"demo\") = _, false, want true")
+	}
+	if fmt.Sprintf("%p", got) != fmt.Sprintf("%p", second) {
+		t.Fatal("Get(\"demo\") did not return replaced parser")
+	}
+}
+
+func TestTagRegistryRegisterNilPanics(t *testing.T) {
+	r := NewTagRegistry()
+
+	defer func() {
+		if recover() == nil {
+			t.Error("Register(nil) did not panic, want panic")
+		}
+	}()
+
+	_ = r.Register("niltag", nil)
+}
+
+func TestTagRegistryMustRegisterDuplicatePanics(t *testing.T) {
+	r := NewTagRegistry()
+
+	parser := func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
+		return NewTextNode("ok", start.Line, start.Col), nil
+	}
+
+	r.MustRegister("dup", parser)
+
+	defer func() {
+		if recover() == nil {
+			t.Error("MustRegister(duplicate) did not panic, want panic")
+		}
+	}()
+
+	r.MustRegister("dup", parser)
 }
 
 func TestDuplicateRegistration(t *testing.T) {
@@ -1521,8 +1645,8 @@ func TestDuplicateRegistration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := RegisterTag(tt.tag, tt.fn); !errors.Is(err, ErrTagAlreadyRegistered) {
-				t.Errorf("RegisterTag(%q) err = %v, want %v", tt.tag, err, ErrTagAlreadyRegistered)
+			if err := defaultTagRegistry.Register(tt.tag, tt.fn); !errors.Is(err, ErrTagAlreadyRegistered) {
+				t.Errorf("Register(%q) err = %v, want %v", tt.tag, err, ErrTagAlreadyRegistered)
 			}
 		})
 	}
@@ -1531,29 +1655,29 @@ func TestDuplicateRegistration(t *testing.T) {
 func TestTagRegistrySaveRestore(t *testing.T) {
 	saved := saveTagRegistry()
 
-	err := RegisterTag("mytesttag", func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
+	err := defaultTagRegistry.Register("mytesttag", func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
 		return NewTextNode("", start.Line, start.Col), nil
 	})
 	if err != nil {
-		t.Fatalf("RegisterTag(\"mytesttag\") = %v, want nil", err)
+		t.Fatalf("Register(\"mytesttag\") = %v, want nil", err)
 	}
-	if !HasTag("mytesttag") {
-		t.Error("HasTag(\"mytesttag\") = false, want true (before restore)")
+	if !defaultTagRegistry.Has("mytesttag") {
+		t.Error("Has(\"mytesttag\") = false, want true (before restore)")
 	}
 
 	restoreTagRegistry(saved)
 
-	if HasTag("mytesttag") {
-		t.Error("HasTag(\"mytesttag\") = true, want false (after restore)")
+	if defaultTagRegistry.Has("mytesttag") {
+		t.Error("Has(\"mytesttag\") = true, want false (after restore)")
 	}
-	if !HasTag("if") {
-		t.Error("HasTag(\"if\") = false, want true (after restore)")
+	if !defaultTagRegistry.Has("if") {
+		t.Error("Has(\"if\") = false, want true (after restore)")
 	}
 }
 
 func TestTagIfElseAfterElse(t *testing.T) {
 	// {% if x %}...{% else %}...{% else %}...{% endif %}
-	_, err := Compile("{% if x %}a{% else %}b{% else %}c{% endif %}")
+	_, err := parseSourceTemplate("{% if x %}a{% else %}b{% else %}c{% endif %}")
 	if err == nil {
 		t.Fatal("expected error for else after else")
 	}
@@ -1561,7 +1685,7 @@ func TestTagIfElseAfterElse(t *testing.T) {
 
 func TestTagIfElifAfterElse(t *testing.T) {
 	// {% if x %}...{% else %}...{% elif y %}...{% endif %}
-	_, err := Compile("{% if x %}a{% else %}b{% elif y %}c{% endif %}")
+	_, err := parseSourceTemplate("{% if x %}a{% else %}b{% elif y %}c{% endif %}")
 	if err == nil {
 		t.Fatal("expected error for elif after else")
 	}
@@ -1569,7 +1693,7 @@ func TestTagIfElifAfterElse(t *testing.T) {
 
 func TestTagForMissingIn(t *testing.T) {
 	// {% for x items %}...{% endfor %} — missing "in"
-	_, err := Compile("{% for x items %}a{% endfor %}")
+	_, err := parseSourceTemplate("{% for x items %}a{% endfor %}")
 	if err == nil {
 		t.Fatal("expected error for missing 'in' keyword")
 	}
@@ -1577,7 +1701,7 @@ func TestTagForMissingIn(t *testing.T) {
 
 func TestTagForMissingVariable(t *testing.T) {
 	// {% for in items %}...{% endfor %} — variable missing/ambiguous
-	_, err := Compile("{% for in items %}a{% endfor %}")
+	_, err := parseSourceTemplate("{% for in items %}a{% endfor %}")
 	if err == nil {
 		t.Fatal("expected error for missing variable")
 	}
@@ -1585,7 +1709,7 @@ func TestTagForMissingVariable(t *testing.T) {
 
 func TestTagForSecondVariableMissing(t *testing.T) {
 	// {% for k, in items %}...{% endfor %} — second variable missing
-	_, err := Compile("{% for k, in items %}a{% endfor %}")
+	_, err := parseSourceTemplate("{% for k, in items %}a{% endfor %}")
 	if err == nil {
 		t.Fatal("expected error for missing second variable")
 	}

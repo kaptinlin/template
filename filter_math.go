@@ -9,20 +9,20 @@ import (
 // registerMathFilters registers all math-related filters.
 func registerMathFilters() {
 	// Liquid-standard primary names
-	RegisterFilter("abs", absFilter)
-	RegisterFilter("at_least", atLeastFilter)
-	RegisterFilter("at_most", atMostFilter)
-	RegisterFilter("round", roundFilter)
-	RegisterFilter("floor", floorFilter)
-	RegisterFilter("ceil", ceilFilter)
-	RegisterFilter("plus", plusFilter)
-	RegisterFilter("minus", minusFilter)
-	RegisterFilter("times", timesFilter)
-	RegisterFilter("divided_by", divideFilter)
-	RegisterFilter("modulo", moduloFilter)
+	defaultRegistry.MustRegister("abs", absFilter)
+	defaultRegistry.MustRegister("at_least", atLeastFilter)
+	defaultRegistry.MustRegister("at_most", atMostFilter)
+	defaultRegistry.MustRegister("round", roundFilter)
+	defaultRegistry.MustRegister("floor", floorFilter)
+	defaultRegistry.MustRegister("ceil", ceilFilter)
+	defaultRegistry.MustRegister("plus", plusFilter)
+	defaultRegistry.MustRegister("minus", minusFilter)
+	defaultRegistry.MustRegister("times", timesFilter)
+	defaultRegistry.MustRegister("divided_by", divideFilter)
+	defaultRegistry.MustRegister("modulo", moduloFilter)
 
 	// Aliases
-	RegisterFilter("divide", divideFilter)
+	defaultRegistry.MustRegister("divide", divideFilter)
 }
 
 // absFilter calculates the absolute value of a number.
