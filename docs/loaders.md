@@ -80,9 +80,9 @@ loader := template.NewMemoryLoader(map[string]string{
 engine := template.New(
     template.WithLoader(loader),
     template.WithFormat(template.FormatHTML),
-    template.WithFeatures(template.FeatureLayout),
+    template.WithLayout(),
 )
-out, _ := engine.RenderString("child.html", nil)
+out, _ := engine.Render("child.html", nil)
 // <html>hi</html>
 ```
 

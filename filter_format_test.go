@@ -45,10 +45,10 @@ func TestJsonFilter(t *testing.T) {
 }
 
 func TestJsonFilterViaTemplate(t *testing.T) {
-	tpl, err := Compile("{{ data | json }}")
+	tpl, err := parseSourceTemplate("{{ data | json }}")
 	require.NoError(t, err)
 
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("data", map[string]any{"key": "value"})
 
 	got, err := tpl.Render(map[string]any(ctx))

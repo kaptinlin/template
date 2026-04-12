@@ -35,9 +35,13 @@ func main() {
 	// Here we just use the embedded FS for simplicity.
 	loader := template.NewFSLoader(rooted)
 
-	// HTMLSet enables auto-escape for every {{ expr }} output.
-	set := template.NewHTMLSet(loader,
-		template.WithGlobals(template.Context{
+	// Engine + FormatHTML enables auto-escape for every {{ expr }}
+	// output. FeatureLayout turns on include/extends/block/raw.
+	engine := template.New(
+		template.WithLoader(loader),
+		template.WithFormat(template.FormatHTML),
+		template.WithLayout(),
+		template.WithDefaults(template.Data{
 			"site": map[string]any{
 				"title": "Example Blog",
 				"url":   "https://example.com",
@@ -47,7 +51,7 @@ func main() {
 
 	// Render a blog post. Values flow through auto-escape except where
 	// explicitly marked with SafeString or the | safe filter.
-	err = set.Render("layouts/blog.html", template.Context{
+	err = engine.RenderTo("layouts/blog.html", os.Stdout, template.Data{
 		"page": map[string]any{
 			"title":  "Hello <world> & friends",
 			"author": "Alice",
@@ -60,7 +64,7 @@ func main() {
     already rendered to HTML by an upstream Markdown pipeline.</p>`),
 			"tags": []string{"golang", "templates", "<example>"},
 		},
-	}, os.Stdout)
+	})
 
 	if err != nil {
 		log.Fatal(err)

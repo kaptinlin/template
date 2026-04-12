@@ -17,7 +17,7 @@ import (
 // Options:
 //   - withPairs: {% include "x" with k1=expr1 k2=expr2 %}
 //   - only: {% include "x" only %} — fully isolates the child context,
-//     excluding parent variables AND globals.
+//     excluding parent variables AND defaults.
 //   - ifExists: {% include "x" if_exists %} — missing template is a no-op
 //     instead of an error.
 type IncludeNode struct {
@@ -72,7 +72,7 @@ const maxIncludeDepth = 32
 // Execute renders the included template. The parser only produces
 // IncludeNode inside an Engine with layout enabled, so ctx.engine is guaranteed non-nil by the
 // time we reach here.
-func (n *IncludeNode) Execute(ctx *ExecutionContext, w io.Writer) error {
+func (n *IncludeNode) Execute(ctx *RenderContext, w io.Writer) error {
 	if ctx.includeDepth >= maxIncludeDepth {
 		return fmt.Errorf("%w at line %d (max %d)",
 			ErrIncludeDepthExceeded, n.Line, maxIncludeDepth)
@@ -96,7 +96,7 @@ func (n *IncludeNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 // returns (nil, nil) when the target is missing and if_exists is set,
 // signalling "silently render nothing". Any other failure is returned
 // as an error.
-func (n *IncludeNode) resolveChild(ctx *ExecutionContext) (*Template, error) {
+func (n *IncludeNode) resolveChild(ctx *RenderContext) (*Template, error) {
 	if n.prepared != nil {
 		return n.prepared, nil
 	}
@@ -117,23 +117,23 @@ func (n *IncludeNode) resolveChild(ctx *ExecutionContext) (*Template, error) {
 	return tpl, nil
 }
 
-// buildChildContext constructs the execution context the sub-template
+// buildChildContext constructs the render context the sub-template
 // will run in. It honors the "only" keyword (full isolation) and
 // evaluates "with" bindings in the PARENT context.
-func (n *IncludeNode) buildChildContext(ctx *ExecutionContext) (*ExecutionContext, error) {
-	var childCtx *ExecutionContext
+func (n *IncludeNode) buildChildContext(ctx *RenderContext) (*RenderContext, error) {
+	var childCtx *RenderContext
 	if n.only {
 		// Fully isolated: only the with-pairs are visible.
 		childCtx = NewIsolatedChildContext(ctx)
 	} else {
-		// Inherit parent's public variables and runtime state with isolated
-		// private scope for the child render.
+		// Inherit parent's render data and runtime state with isolated
+		// locals for the child render.
 		childCtx = NewChildContext(ctx)
 	}
 	childCtx.includeDepth = ctx.includeDepth + 1
 
 	// Evaluate "with" bindings in the PARENT context, then insert them
-	// into the CHILD context's Private (which is always a fresh per-
+	// into the CHILD context's Locals (which is always a fresh per-
 	// child map, so this does not leak into the parent).
 	for _, wp := range n.withPairs {
 		val, err := wp.expr.Evaluate(ctx)
@@ -147,7 +147,7 @@ func (n *IncludeNode) buildChildContext(ctx *ExecutionContext) (*ExecutionContex
 
 // resolveName returns the target template name for a lazy include,
 // re-validating dynamic names against fs.ValidPath (defense in depth).
-func (n *IncludeNode) resolveName(ctx *ExecutionContext) (string, error) {
+func (n *IncludeNode) resolveName(ctx *RenderContext) (string, error) {
 	if n.pathExpr == nil {
 		return n.staticName, nil
 	}

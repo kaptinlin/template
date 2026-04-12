@@ -27,7 +27,7 @@ Consider a scenario where you want to personalize a greeting in an email templat
 Hello, {{ name }}!
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
   "name": "Alice"
@@ -51,7 +51,7 @@ Title: {{ post.title }}
 Author: {{ post.author }}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
   "post": {
@@ -78,7 +78,7 @@ For a user profile page, consider displaying a user's address. The address is ne
 Address: {{ user.address.street }}, {{ user.address.city }}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
   "user": {
@@ -106,7 +106,7 @@ Templates gracefully handle missing data by rendering an empty string when a var
 Welcome, {{ name }}!
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {}
 ```
@@ -129,7 +129,7 @@ Products:
 - {{ products.1 }}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
   "products": ["Coffee Maker", "Toaster"]

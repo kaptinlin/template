@@ -1,8 +1,8 @@
-// Package main demonstrates multi-file text generation with NewTextSet.
+// Package main demonstrates multi-file text generation with Engine.
 //
 // This is the "code / config generator" use case: the output is YAML
 // meant for another template engine (Task runner), so HTML-escape would
-// corrupt it ({{ becomes &#123;&#123;). NewTextSet never escapes.
+// corrupt it ({{ becomes &#123;&#123;). FormatText never escapes.
 //
 // The scaffold directory contains a Taskfile.yml.tmpl that uses
 // {% include %} to pull in header.tmpl and footer.tmpl, and emits
@@ -34,11 +34,14 @@ func main() {
 	}
 	loader := template.NewFSLoader(rooted)
 
-	// NewTextSet — no HTML auto-escape. The generated Taskfile.yml
+	// Engine + FormatText — no HTML auto-escape. The generated Taskfile.yml
 	// contains literal '{{.GOBIN}}' sequences meant for Task runner,
 	// and must be emitted byte-for-byte.
-	set := template.NewTextSet(loader,
-		template.WithGlobals(template.Context{
+	engine := template.New(
+		template.WithLoader(loader),
+		template.WithFormat(template.FormatText),
+		template.WithLayout(),
+		template.WithDefaults(template.Data{
 			"project": map[string]any{
 				"name":   "awesome-service",
 				"binary": "awesomectl",
@@ -47,7 +50,7 @@ func main() {
 		}),
 	)
 
-	if err := set.Render("Taskfile.yml.tmpl", nil, os.Stdout); err != nil {
+	if err := engine.RenderTo("Taskfile.yml.tmpl", os.Stdout, nil); err != nil {
 		log.Fatal(err)
 	}
 }

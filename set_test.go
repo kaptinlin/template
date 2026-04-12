@@ -19,7 +19,7 @@ func TestEngine_RenderBasicInterpolation(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := engine.Render("hello.txt", Context{"name": "world"}, &buf); err != nil {
+	if err := engine.RenderTo("hello.txt", &buf, Data{"name": "world"}); err != nil {
 		t.Fatalf("renderSourceTemplate() err = %v", err)
 	}
 	if got := buf.String(); got != "Hello world" {
@@ -65,7 +65,7 @@ func TestEngine_Load_PropagatesParseError(t *testing.T) {
 }
 
 // Phase B cycle 4: RenderString convenience.
-func TestEngine_RenderString(t *testing.T) {
+func TestEngine_Render(t *testing.T) {
 	t.Parallel()
 
 	engine := New(
@@ -74,7 +74,7 @@ func TestEngine_RenderString(t *testing.T) {
 		})),
 		WithFormat(FormatText),
 	)
-	got, err := engine.RenderString("t.txt", Context{"a": 1, "b": 2})
+	got, err := engine.Render("t.txt", Data{"a": 1, "b": 2})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}

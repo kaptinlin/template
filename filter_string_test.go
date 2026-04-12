@@ -267,10 +267,10 @@ func TestStringFilters(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tpl, err := Compile(tc.template)
+			tpl, err := parseSourceTemplate(tc.template)
 			require.NoError(t, err)
 
-			ctx := NewContext()
+			ctx := NewData()
 			for k, v := range tc.context {
 				ctx.Set(k, v)
 			}

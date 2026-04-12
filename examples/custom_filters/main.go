@@ -11,8 +11,10 @@ import (
 )
 
 func main() {
+	engine := template.New()
+
 	// Register a "repeat" filter: {{ text|repeat:3 }} → "texttexttext"
-	template.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
+	engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
 		s := fmt.Sprintf("%v", value)
 		n := 2
 		if len(args) > 0 {
@@ -23,11 +25,14 @@ func main() {
 		return strings.Repeat(s, n), nil
 	})
 
-	output, err := template.Render(`{{ word|repeat:3 }}`, map[string]any{
-		"word": "ha",
-	})
+	tpl, err := engine.ParseString(`{{ word|repeat:3 }}`)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(output) // hahaha
+
+	rendered, err := tpl.Render(template.Data{"word": "ha"})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(rendered) // hahaha
 }

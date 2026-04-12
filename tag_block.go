@@ -19,10 +19,10 @@ func (n *BlockNode) String() string { return fmt.Sprintf("Block(%s)", n.Name) }
 // body inline.
 //
 // The {{ block.super }} expression is supported by injecting a "block"
-// variable into the execution context whose "super" field is the
+// variable into the render context whose "super" field is the
 // pre-rendered parent block body (already a SafeString so it survives
 // HTML auto-escape untouched).
-func (n *BlockNode) Execute(ctx *ExecutionContext, w io.Writer) error {
+func (n *BlockNode) Execute(ctx *RenderContext, w io.Writer) error {
 	if ctx.currentLeaf == nil {
 		return renderBlockWithSuper(n, nil, ctx, w)
 	}
@@ -55,7 +55,7 @@ func collectBlockChain(leaf *Template, name string) []*BlockNode {
 
 // renderBlockWithSuper executes block's body, pre-rendering the parent
 // chain's output and exposing it as {{ block.super }}.
-func renderBlockWithSuper(block *BlockNode, parents []*BlockNode, ctx *ExecutionContext, w io.Writer) error {
+func renderBlockWithSuper(block *BlockNode, parents []*BlockNode, ctx *RenderContext, w io.Writer) error {
 	var superVal SafeString
 	if len(parents) > 0 {
 		var buf bytes.Buffer
@@ -67,16 +67,16 @@ func renderBlockWithSuper(block *BlockNode, parents []*BlockNode, ctx *Execution
 		superVal = SafeString(buf.String())
 	}
 
-	if ctx.Private == nil {
-		ctx.Private = NewContext()
+	if ctx.Locals == nil {
+		ctx.Locals = NewData()
 	}
-	prev, had := ctx.Private["block"]
-	ctx.Private["block"] = map[string]any{"super": superVal}
+	prev, had := ctx.Locals["block"]
+	ctx.Locals["block"] = map[string]any{"super": superVal}
 	defer func() {
 		if had {
-			ctx.Private["block"] = prev
+			ctx.Locals["block"] = prev
 		} else {
-			delete(ctx.Private, "block")
+			delete(ctx.Locals, "block")
 		}
 	}()
 

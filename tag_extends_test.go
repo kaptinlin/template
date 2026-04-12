@@ -6,15 +6,24 @@ import (
 	"testing"
 )
 
+func newLayoutTextExtendsEngine(loader Loader, opts ...EngineOption) *Engine {
+	opts = append([]EngineOption{
+		WithLoader(loader),
+		WithFormat(FormatText),
+		WithLayout(),
+	}, opts...)
+	return New(opts...)
+}
+
 // Phase I cycle 1: basic extends with single block override.
 func TestExtends_BasicChild_OverridesBlock(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"base.txt":  `[{% block content %}default{% endblock %}]`,
 		"child.txt": `{% extends "base.txt" %}{% block content %}custom{% endblock %}`,
 	}))
-	got, err := set.RenderString("child.txt", nil)
+	got, err := engine.Render("child.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -27,11 +36,11 @@ func TestExtends_BasicChild_OverridesBlock(t *testing.T) {
 func TestExtends_UnoverriddenBlock_UsesParentDefault(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"base.txt":  `[{% block a %}A{% endblock %}][{% block b %}B{% endblock %}]`,
 		"child.txt": `{% extends "base.txt" %}{% block a %}aa{% endblock %}`,
 	}))
-	got, err := set.RenderString("child.txt", nil)
+	got, err := engine.Render("child.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -44,11 +53,11 @@ func TestExtends_UnoverriddenBlock_UsesParentDefault(t *testing.T) {
 func TestExtends_MustBeFirstTag(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"base.txt":  `{% block x %}{% endblock %}`,
 		"child.txt": `junk {% extends "base.txt" %}`,
 	}))
-	_, err := set.Get("child.txt")
+	_, err := engine.Load("child.txt")
 	if !errors.Is(err, ErrExtendsNotFirst) && !strings.Contains(errString(err), "first tag") {
 		t.Errorf("err = %v, want ErrExtendsNotFirst", err)
 	}
@@ -58,10 +67,10 @@ func TestExtends_MustBeFirstTag(t *testing.T) {
 func TestExtends_PathMustBeStringLiteral(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"child.txt": `{% extends parent_var %}`,
 	}))
-	_, err := set.Get("child.txt")
+	_, err := engine.Load("child.txt")
 	if !errors.Is(err, ErrExtendsPathNotLiteral) {
 		t.Errorf("err = %v, want ErrExtendsPathNotLiteral", err)
 	}
@@ -71,11 +80,11 @@ func TestExtends_PathMustBeStringLiteral(t *testing.T) {
 func TestExtends_NonBlockContentIgnored(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"base.txt":  `[{% block x %}A{% endblock %}]`,
 		"child.txt": `{% extends "base.txt" %}This text is ignored.{% block x %}B{% endblock %}More ignored.`,
 	}))
-	got, err := set.RenderString("child.txt", nil)
+	got, err := engine.Render("child.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -88,10 +97,10 @@ func TestExtends_NonBlockContentIgnored(t *testing.T) {
 func TestBlock_EndblockNameMatches(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"a.txt": `[{% block x %}hi{% endblock x %}]`,
 	}))
-	got, err := set.RenderString("a.txt", nil)
+	got, err := engine.Render("a.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -104,10 +113,10 @@ func TestBlock_EndblockNameMatches(t *testing.T) {
 func TestBlock_EndblockNameMismatch_Errors(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"a.txt": `{% block x %}hi{% endblock y %}`,
 	}))
-	_, err := set.Get("a.txt")
+	_, err := engine.Load("a.txt")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -120,10 +129,10 @@ func TestBlock_EndblockNameMismatch_Errors(t *testing.T) {
 func TestBlock_DuplicateNameErrors(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"a.txt": `{% block x %}1{% endblock %}{% block x %}2{% endblock %}`,
 	}))
-	_, err := set.Get("a.txt")
+	_, err := engine.Load("a.txt")
 	if !errors.Is(err, ErrBlockRedefined) {
 		t.Errorf("err = %v, want ErrBlockRedefined", err)
 	}
@@ -133,11 +142,11 @@ func TestBlock_DuplicateNameErrors(t *testing.T) {
 func TestExtends_CircularChain_Errors(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"a.txt": `{% extends "b.txt" %}`,
 		"b.txt": `{% extends "a.txt" %}`,
 	}))
-	_, err := set.Get("a.txt")
+	_, err := engine.Load("a.txt")
 	if !errors.Is(err, ErrCircularExtends) {
 		t.Errorf("err = %v, want ErrCircularExtends", err)
 	}
@@ -147,10 +156,10 @@ func TestExtends_CircularChain_Errors(t *testing.T) {
 func TestExtends_ParentMissing_Errors(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"child.txt": `{% extends "nope.txt" %}`,
 	}))
-	_, err := set.Get("child.txt")
+	_, err := engine.Load("child.txt")
 	if !errors.Is(err, ErrTemplateNotFound) {
 		t.Errorf("err = %v, want ErrTemplateNotFound", err)
 	}
@@ -167,11 +176,11 @@ func errString(err error) string {
 func TestExtends_RenderUsesRootBody(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"base.txt":  `start-{% block x %}default{% endblock %}-end`,
 		"child.txt": `{% extends "base.txt" %}{% block x %}hi{% endblock %}`,
 	}))
-	got, err := set.RenderString("child.txt", nil)
+	got, err := engine.Render("child.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -184,12 +193,12 @@ func TestExtends_RenderUsesRootBody(t *testing.T) {
 func TestExtends_ThreeLevelChain(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"a.txt":      `{% block x %}A{% endblock %}`,
 		"middle.txt": `{% extends "a.txt" %}{% block x %}M{% endblock %}`,
 		"leaf.txt":   `{% extends "middle.txt" %}{% block x %}L{% endblock %}`,
 	}))
-	got, err := set.RenderString("leaf.txt", nil)
+	got, err := engine.Render("leaf.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -202,12 +211,12 @@ func TestExtends_ThreeLevelChain(t *testing.T) {
 func TestExtends_ThreeLevel_LeafFallsThroughToMiddle(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"a.txt":      `{% block x %}A{% endblock %}`,
 		"middle.txt": `{% extends "a.txt" %}{% block x %}M{% endblock %}`,
 		"leaf.txt":   `{% extends "middle.txt" %}`,
 	}))
-	got, err := set.RenderString("leaf.txt", nil)
+	got, err := engine.Render("leaf.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -220,11 +229,11 @@ func TestExtends_ThreeLevel_LeafFallsThroughToMiddle(t *testing.T) {
 func TestExtends_MultipleBlocksOverriddenIndependently(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"base.txt": `[{% block a %}1{% endblock %}|{% block b %}2{% endblock %}]`,
 		"c.txt":    `{% extends "base.txt" %}{% block a %}X{% endblock %}{% block b %}Y{% endblock %}`,
 	}))
-	got, err := set.RenderString("c.txt", nil)
+	got, err := engine.Render("c.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -238,12 +247,12 @@ func TestExtends_MultipleBlocksOverriddenIndependently(t *testing.T) {
 func TestInclude_BlockInsideIncluded_RendersInline(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
 		"base.txt":    `[{% block content %}BASE{% endblock %}]`,
 		"partial.txt": `{% block content %}PARTIAL{% endblock %}`,
 		"page.txt":    `{% extends "base.txt" %}{% block content %}before-{% include "partial.txt" %}-after{% endblock %}`,
 	}))
-	got, err := set.RenderString("page.txt", nil)
+	got, err := engine.Render("page.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}

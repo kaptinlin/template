@@ -1567,7 +1567,7 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 			}
 
 			// Evaluate the expression
-			ctx := NewExecutionContext(tt.context)
+			ctx := NewRenderContext(tt.context)
 			result, err := expr.Evaluate(ctx)
 			if err != nil {
 				t.Errorf("Evaluate(%q) error = %v, want nil", tt.expr, err)
@@ -1912,7 +1912,7 @@ func TestKeywordAndSymbolEquivalence(t *testing.T) {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.exprKeyword, err)
 			}
 
-			ctx := NewExecutionContext(tt.context)
+			ctx := NewRenderContext(tt.context)
 			resultKeyword, err := exprKeyword.Evaluate(ctx)
 			if err != nil {
 				t.Fatalf("Evaluate(%q) error = %v, want nil", tt.exprKeyword, err)

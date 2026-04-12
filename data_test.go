@@ -9,15 +9,25 @@ import (
 	"time"
 )
 
+func parseContextTestTemplate(t *testing.T, source string) *Template {
+	t.Helper()
+
+	tpl, err := New().ParseString(source)
+	if err != nil {
+		t.Fatalf("parsing template %q: %v", source, err)
+	}
+	return tpl
+}
+
 // lastYear returns the same date one year earlier.
 func lastYear(t time.Time) time.Time {
 	return t.AddDate(-1, 0, 0)
 }
 
 func TestEmptyContextInitialization(t *testing.T) {
-	ctx := NewContext()
+	ctx := NewData()
 	if len(ctx) != 0 {
-		t.Errorf("NewContext() = %v, want empty context", ctx)
+		t.Errorf("NewData() = %v, want empty data", ctx)
 	}
 }
 
@@ -57,7 +67,7 @@ func TestContextSetAndGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			ctx.Set(tt.key, tt.val)
 			got, err := ctx.Get(tt.key)
 			if err != nil {
@@ -114,7 +124,7 @@ func TestContextNestedKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			ctx.Set(tt.setKey, tt.val)
 			got, err := ctx.Get(tt.getKey)
 			if err != nil {
@@ -163,7 +173,7 @@ func TestContextDeepNestedKeys(t *testing.T) {
 		},
 	}
 
-	ctx := NewContext()
+	ctx := NewData()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx.Set(tt.setKey, tt.val)
@@ -215,7 +225,7 @@ func TestContextSliceIndexAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			ctx.Set(tt.setKey, tt.val)
 			got, err := ctx.Get(tt.getKey)
 			if tt.wantError {
@@ -264,7 +274,7 @@ func TestContextKeyNotFound(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			for k, v := range tt.setup {
 				ctx.Set(k, v)
 			}
@@ -302,7 +312,7 @@ func TestContextIndexOutOfRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			for k, v := range tt.setup {
 				ctx.Set(k, v)
 			}
@@ -330,7 +340,7 @@ func TestContextOverwrite(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			ctx.Set(tt.key, tt.initial)
 			ctx.Set(tt.key, tt.override)
 			got, err := ctx.Get(tt.key)
@@ -412,7 +422,7 @@ func TestContextStructConversion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			ctx.Set(tt.key, tt.val)
 			got, err := ctx.Get(tt.getKey)
 			if tt.wantError != nil {
@@ -466,7 +476,7 @@ func TestContextComplexStruct(t *testing.T) {
 		{"embedded priority", "project.metadata.priority", 1},
 	}
 
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("project", project)
 
 	for _, tt := range tests {
@@ -516,7 +526,7 @@ func TestContextSliceOfStructs(t *testing.T) {
 		{"last item ID", "items.2.id", 3},
 	}
 
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("items", items)
 
 	for _, tt := range tests {
@@ -556,7 +566,7 @@ func TestContextMapWithStructValues(t *testing.T) {
 		{"non-existent user", "users.user3.username", nil, ErrContextKeyNotFound},
 	}
 
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("users", users)
 
 	for _, tt := range tests {
@@ -929,7 +939,7 @@ func TestContextComplexNestedStructures(t *testing.T) {
 		{"email notification setting", "company.settings.notifications.email", true},
 	}
 
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("company", company)
 
 	for _, tt := range tests {
@@ -1002,7 +1012,7 @@ func TestContextPreservesOriginalTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
+			ctx := NewData()
 			ctx.Set(tt.key, tt.val)
 			got, err := ctx.Get(tt.getKey)
 			if err != nil {
@@ -1042,13 +1052,13 @@ func TestRenderingStability(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		setup    func() Context
+		setup    func() Data
 	}{
 		{
 			name:     "map string iteration",
 			template: `{% for key, value in data %}{{ key }}:{{ value }},{% endfor %}`,
-			setup: func() Context {
-				ctx := NewContext()
+			setup: func() Data {
+				ctx := NewData()
 				ctx.Set("data", map[string]string{
 					"zebra": "last", "alpha": "first", "beta": "second",
 					"gamma": "third", "delta": "fourth", "echo": "fifth",
@@ -1060,8 +1070,8 @@ func TestRenderingStability(t *testing.T) {
 		{
 			name:     "map interface iteration",
 			template: `{% for key, user in users %}{{ key }}:{{ user.name }},{% endfor %}`,
-			setup: func() Context {
-				ctx := NewContext()
+			setup: func() Data {
+				ctx := NewData()
 				ctx.Set("users", map[string]any{
 					"user3": map[string]any{"name": "Charlie", "age": 35},
 					"user1": map[string]any{"name": "Alice", "age": 25},
@@ -1074,8 +1084,8 @@ func TestRenderingStability(t *testing.T) {
 		{
 			name:     "nested map iteration",
 			template: `{% for deptKey, dept in company %}{{ deptKey }}:{% for empKey, emp in dept %}{{ empKey }}-{{ emp }},{% endfor %};{% endfor %}`,
-			setup: func() Context {
-				ctx := NewContext()
+			setup: func() Data {
+				ctx := NewData()
 				ctx.Set("company", map[string]map[string]string{
 					"engineering": {"john": "senior", "alice": "junior", "bob": "lead"},
 					"sales":       {"mary": "manager", "tom": "rep"},
@@ -1087,8 +1097,8 @@ func TestRenderingStability(t *testing.T) {
 		{
 			name:     "slice rendering",
 			template: `{% for item in items %}{{ item }},{% endfor %}`,
-			setup: func() Context {
-				ctx := NewContext()
+			setup: func() Data {
+				ctx := NewData()
 				ctx.Set("items", []string{"first", "second", "third", "fourth", "fifth"})
 				return ctx
 			},
@@ -1096,12 +1106,12 @@ func TestRenderingStability(t *testing.T) {
 		{
 			name:     "struct slice rendering",
 			template: `{% for person in people %}{{ person.name }}-{{ person.age }},{% endfor %}`,
-			setup: func() Context {
+			setup: func() Data {
 				type Person struct {
 					Name string `json:"name"`
 					Age  int    `json:"age"`
 				}
-				ctx := NewContext()
+				ctx := NewData()
 				ctx.Set("people", []Person{
 					{Name: "Alice", Age: 25},
 					{Name: "Bob", Age: 30},
@@ -1113,8 +1123,8 @@ func TestRenderingStability(t *testing.T) {
 		{
 			name:     "map variable rendering",
 			template: `{{ data }}`,
-			setup: func() Context {
-				ctx := NewContext()
+			setup: func() Data {
+				ctx := NewData()
 				ctx.Set("data", map[string]any{
 					"zebra": "value1", "alpha": "value2",
 					"beta": "value3", "gamma": "value4",
@@ -1125,8 +1135,8 @@ func TestRenderingStability(t *testing.T) {
 		{
 			name:     "complex nested structure rendering",
 			template: `{{ complex }}`,
-			setup: func() Context {
-				ctx := NewContext()
+			setup: func() Data {
+				ctx := NewData()
 				ctx.Set("complex", map[string]any{
 					"users": map[string]any{
 						"user2": []string{"read", "write"},
@@ -1145,17 +1155,14 @@ func TestRenderingStability(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.template)
-			if err != nil {
-				t.Fatalf("Compile(%q) = _, %v", tt.template, err)
-			}
+			tmpl := parseContextTestTemplate(t, tt.template)
 
 			results := make([]string, 0, iterations)
 			for i := range iterations {
 				ctx := tt.setup()
 				result, err := tmpl.Render(map[string]any(ctx))
 				if err != nil {
-					t.Fatalf("Render() iteration %d = _, %v", i, err)
+					t.Fatalf("renderSourceTemplate() iteration %d = _, %v", i, err)
 				}
 				results = append(results, result)
 			}
@@ -1177,7 +1184,7 @@ func TestRenderingStability(t *testing.T) {
 // =============================================================================
 
 func TestContextGetEmptyPathComponent(t *testing.T) {
-	c := NewContext()
+	c := NewData()
 	c.Set("a", 1)
 	_, err := c.Get("a..b")
 	if err == nil {
@@ -1186,7 +1193,7 @@ func TestContextGetEmptyPathComponent(t *testing.T) {
 }
 
 func TestContextGetEmptyKey(t *testing.T) {
-	c := NewContext()
+	c := NewData()
 	c.Set("x", 1)
 	val, err := c.Get("")
 	if err != nil {
@@ -1209,7 +1216,7 @@ func TestSplitDotPathEmpty(t *testing.T) {
 }
 
 func TestContextSetNestedEmpty(t *testing.T) {
-	c := NewContext()
+	c := NewData()
 	c.Set("", "ignored")
 	if len(c) != 0 {
 		t.Errorf("Set('', ...) should be ignored, got len = %d", len(c))
@@ -1217,7 +1224,7 @@ func TestContextSetNestedEmpty(t *testing.T) {
 }
 
 func TestContextGetIndexOutOfRange(t *testing.T) {
-	c := NewContext()
+	c := NewData()
 	c.Set("items", []int{1, 2, 3})
 	_, err := c.Get("items.99")
 	if err == nil {
@@ -1225,9 +1232,9 @@ func TestContextGetIndexOutOfRange(t *testing.T) {
 	}
 }
 
-func TestContextBuilderStructMarshalError(t *testing.T) {
+func TestDataBuilderStructMarshalError(t *testing.T) {
 	// A channel cannot be marshaled to JSON.
-	cb := NewContextBuilder()
+	cb := NewDataBuilder()
 	cb.Struct(make(chan int))
 	_, err := cb.Build()
 	if err == nil {

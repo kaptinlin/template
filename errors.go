@@ -26,7 +26,7 @@ var (
 	ErrIncludePathNotString  = errors.New("include path did not evaluate to string")
 )
 
-// ErrContextKeyNotFound indicates a key was not found in the execution context.
+// ErrContextKeyNotFound indicates a key was not found in the render data.
 // ErrContextInvalidKeyType indicates an invalid key type during context navigation.
 // ErrContextIndexOutOfRange indicates an index out of range during context navigation.
 var (

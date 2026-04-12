@@ -1,9 +1,28 @@
 # Security Model
 
-This page documents the threat model and defenses for the multi-file
-template system. Single-string `template.Compile(src)` has **no loader
-and no input other than the source string**, so this page applies only
-to code that uses `NewHTMLSet` or `NewTextSet`.
+This page documents the threat model and defenses for loader-backed
+engine usage.
+
+## Safe defaults
+
+If you want the shortest path to a safe setup, start here:
+
+| Goal | Recommended setup |
+|---|---|
+| Render HTML from files on disk | `New(WithLoader(NewDirLoader(...)), WithFormat(FormatHTML))` |
+| Render text or config files from disk | `New(WithLoader(NewDirLoader(...)), WithFormat(FormatText))` |
+| Render embedded templates | `New(..., WithLoader(NewFSLoader(embed.FS)))` with the appropriate `Format` |
+| Parse and render a single source string | `engine.ParseString(src)` |
+
+Default guidance:
+
+- Prefer `NewDirLoader` for local directories.
+- Prefer `FormatHTML` for HTML output.
+- Treat `NewFSLoader(os.DirFS(...))` as an explicit escape hatch.
+- Treat `SafeString` as trusted output only, never as a convenience cast.
+
+These defaults are intentionally opinionated: the library is designed so
+the most common path is also the safest one.
 
 ## Threat model
 
@@ -20,10 +39,22 @@ or dynamic paths. Specifically:
 |---|---|
 | User-submitted content inside `{{ expr }}` | XSS if rendered as HTML without escape |
 | Dynamic include paths (`{% include page.widget %}`) | Path traversal if the value comes from untrusted input |
-| Template names passed to `Set.Render(name, ...)` | Same — the caller may derive `name` from URL parameters or frontmatter |
+| Template names passed to `Engine.Render(name, ...)` | Same — the caller may derive `name` from URL parameters or frontmatter |
 | Symbolic links in the templates directory | Accidental or malicious escape of the root |
 | File names on case-insensitive filesystems | Cache collisions in multi-layer chains |
 | Pre-rendered HTML from upstream services | Must be explicitly marked `SafeString` — never infer "trusted" |
+
+## Security decisions at a glance
+
+Before going deeper into the threat matrix, these are the key choices
+that determine most real-world safety outcomes:
+
+1. Pick `FormatHTML` whenever the output is HTML.
+2. Pick `NewDirLoader` whenever templates live on local disk.
+3. Use `SafeString` only for content that has already been validated or
+   escaped for the exact output context.
+4. Keep template names and dynamic include paths on the validated
+   loader path; do not bypass `Loader.Open`.
 
 ## Threat matrix
 
@@ -38,7 +69,7 @@ or dynamic paths. Specifically:
 | T7 | TOCTOU | File replaced between check and open | `os.Root` uses `openat2` / `O_NOFOLLOW` — no separate check step |
 | T8 | Mutual include cycle | A → B → A | Parse-time detection downgrades to lazy; runtime hits depth cap |
 | T9 | Self-include / deep chain | A → A or 50-level nesting | Hard-coded `maxIncludeDepth = 32`, `maxExtendsDepth = 10` |
-| T10 | HTML injection (XSS) | `{{ user_title }}` contains `<script>` | `NewHTMLSet` auto-escapes by default |
+| T10 | HTML injection (XSS) | `{{ user_title }}` contains `<script>` | `FormatHTML` auto-escapes by default |
 | T11 | Double-escape bypass | `{{ x \| safe \| some_filter }}` | Non-safe-aware filters downgrade `SafeString` back to plain |
 
 ## Layered defense
@@ -123,7 +154,7 @@ resolved name, so:
 
 Multiple defenses against runaway recursion:
 
-1. **Parse-time circular detection** (`Set.parsing` map). When
+1. **Parse-time circular detection** (`Engine.parsing` map). When
    parsing template A, any static `{% include "B" %}` in A where B is
    already mid-parse is downgraded to lazy (runtime) mode. This
    enables recursive tree-walk patterns while preventing parse-time
@@ -140,9 +171,9 @@ Both caps are hard-coded constants. They are safety nets, not
 performance tunables. If your architecture legitimately needs more,
 something is probably wrong.
 
-### Layer 6 — HTML auto-escape (HTMLSet only)
+### Layer 6 — HTML auto-escape (`FormatHTML`)
 
-`NewHTMLSet` wires `ec.autoescape = true`, which causes
+An engine using `FormatHTML` wires `ec.autoescape = true`, which causes
 `OutputNode.Execute` to pipe every `{{ expr }}` output through
 `filter.Escape` before writing — **unless** the underlying value is a
 `SafeString`.
@@ -152,14 +183,14 @@ something is probably wrong.
 - The `safe` filter wraps a value: `{{ content | safe }}`
 - Go code can construct one directly:
   `template.SafeString("<p>trusted</p>")`
-- The HTMLSet overrides of `escape`, `escape_once`, and `h` return
+- The `FormatHTML` overrides of `escape`, `escape_once`, and `h` return
   `SafeString`, so `{{ x | escape }}` doesn't double-escape.
 
 **Conservative downgrade**: if any non-safe-aware filter runs on a
 `SafeString`, the wrapper is stripped and the value becomes plain
 string again (subject to auto-escape). This prevents "I thought I was
 safe" XSS bugs like `{{ user_input | safe | upper }}`. The only
-safe-aware filters in v1 are `safe` and (in HTMLSet) the `escape`
+safe-aware filters in v1 are `safe` and (in `FormatHTML`) the `escape`
 family.
 
 ## What this library does NOT defend against
@@ -178,7 +209,7 @@ process).
 
 ### Complex JavaScript / CSS escape contexts
 
-`NewHTMLSet` auto-escapes for an HTML text context: `<`, `>`, `&`,
+`FormatHTML` auto-escapes for an HTML text context: `<`, `>`, `&`,
 `'`, `"`. It does **not** do context-aware escaping for:
 
 - JavaScript strings (`<script>var x = "{{ user }}"</script>`)

@@ -45,9 +45,9 @@ func BenchmarkExecuteSimple(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("name", "World")
-	execCtx := NewExecutionContext(ctx)
+	execCtx := NewRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
@@ -66,9 +66,9 @@ func BenchmarkExecuteWithFilters(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("name", "world")
-	execCtx := NewExecutionContext(ctx)
+	execCtx := NewRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
@@ -87,9 +87,9 @@ func BenchmarkExecuteWithLoop(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("items", []string{"a", "b", "c", "d", "e"})
-	execCtx := NewExecutionContext(ctx)
+	execCtx := NewRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
@@ -108,9 +108,9 @@ func BenchmarkExecuteWithConditional(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("age", 25)
-	execCtx := NewExecutionContext(ctx)
+	execCtx := NewRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
@@ -185,12 +185,12 @@ func BenchmarkEngineRenderLayout(b *testing.B) {
 			"card.html": `<section>{{ title }}</section>`,
 		})),
 		WithFormat(FormatHTML),
-		WithFeatures(FeatureLayout),
+		WithLayout(),
 	)
 
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := engine.RenderString("page.html", Context{"title": "<b>hello</b>"}); err != nil {
+		if _, err := engine.Render("page.html", Data{"title": "<b>hello</b>"}); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -211,7 +211,7 @@ func BenchmarkEngineRenderCachedParallel(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			if _, err := engine.RenderString("a.html", Context{"x": "left", "y": "<right>"}); err != nil {
+			if _, err := engine.Render("a.html", Data{"x": "left", "y": "<right>"}); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -241,9 +241,9 @@ func BenchmarkValueIterate(b *testing.B) {
 	}
 }
 
-// BenchmarkContextGet benchmarks Context.Get with dot notation.
-func BenchmarkContextGet(b *testing.B) {
-	ctx := NewContext()
+// BenchmarkDataGet benchmarks Data.Get with dot notation.
+func BenchmarkDataGet(b *testing.B) {
+	ctx := NewData()
 	ctx.Set("user.address.city", "New York")
 
 	for b.Loop() {
@@ -251,19 +251,19 @@ func BenchmarkContextGet(b *testing.B) {
 	}
 }
 
-// BenchmarkContextSet benchmarks Context.Set with dot notation.
-func BenchmarkContextSet(b *testing.B) {
-	ctx := NewContext()
+// BenchmarkDataSet benchmarks Data.Set with dot notation.
+func BenchmarkDataSet(b *testing.B) {
+	ctx := NewData()
 
 	for b.Loop() {
 		ctx.Set("user.address.city", "New York")
 	}
 }
 
-func BenchmarkContextBuilderKeyValue(b *testing.B) {
+func BenchmarkDataBuilderKeyValue(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
-		builder := NewContextBuilder().
+		builder := NewDataBuilder().
 			KeyValue("name", "Alice").
 			KeyValue("email", "alice@example.com").
 			KeyValue("age", 30).
@@ -275,7 +275,7 @@ func BenchmarkContextBuilderKeyValue(b *testing.B) {
 	}
 }
 
-func BenchmarkContextBuilderStructFlat(b *testing.B) {
+func BenchmarkDataBuilderStructFlat(b *testing.B) {
 	user := benchmarkFlatUser{
 		Name:   "Alice",
 		Email:  "alice@example.com",
@@ -286,13 +286,13 @@ func BenchmarkContextBuilderStructFlat(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := NewContextBuilder().Struct(user).Build(); err != nil {
+		if _, err := NewDataBuilder().Struct(user).Build(); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
-func BenchmarkContextBuilderStructNested(b *testing.B) {
+func BenchmarkDataBuilderStructNested(b *testing.B) {
 	user := benchmarkNestedUser{
 		Name:  "Alice",
 		Email: "alice@example.com",
@@ -306,7 +306,7 @@ func BenchmarkContextBuilderStructNested(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := NewContextBuilder().Struct(user).Build(); err != nil {
+		if _, err := NewDataBuilder().Struct(user).Build(); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -354,7 +354,7 @@ func BenchmarkComplexTemplate(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	ctx := NewContext()
+	ctx := NewData()
 	ctx.Set("title", "My Store")
 	ctx.Set("heading", "Welcome to My Store")
 	ctx.Set("user.name", "john doe")
@@ -364,7 +364,7 @@ func BenchmarkComplexTemplate(b *testing.B) {
 		{"name": "Banana", "price": 0.567},
 		{"name": "Orange", "price": 2.345},
 	})
-	execCtx := NewExecutionContext(ctx)
+	execCtx := NewRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()

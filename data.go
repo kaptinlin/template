@@ -14,24 +14,23 @@ import (
 	"github.com/kaptinlin/jsonpointer"
 )
 
-// Context stores template variables as a string-keyed map.
+// Data stores template variables as a string-keyed map.
 // Values can be of any type. Dot-notation (e.g., "user.name") is
 // supported for nested access.
-type Context map[string]any
+type Data map[string]any
 
-// ContextBuilder provides a fluent API for building a [Context] with
+// DataBuilder provides a fluent API for building a [Data] with
 // error collection.
-type ContextBuilder struct {
-	context Context
+type DataBuilder struct {
+	context Data
 	errors  []error
 }
 
-// ExecutionContext holds the execution state for template rendering,
-// separating user-provided variables (Public) from internal variables
-// (Private).
-type ExecutionContext struct {
-	Public  Context // user-provided variables
-	Private Context // internal variables (e.g., loop counters)
+// RenderContext holds the execution state for template rendering,
+// separating render input data (Data) from local bindings (Locals).
+type RenderContext struct {
+	Data   Data // render input data
+	Locals Data // local bindings (e.g., loop counters)
 
 	// engine is the owning Engine when rendering via Engine.Render; nil for
 	// standalone Template.Execute calls.
@@ -50,29 +49,29 @@ type ExecutionContext struct {
 	currentLeaf *Template
 }
 
-// NewContext creates and returns a new empty [Context].
-func NewContext() Context {
-	return make(Context)
+// NewData creates and returns a new empty [Data].
+func NewData() Data {
+	return make(Data)
 }
 
-// NewContextBuilder creates a new [ContextBuilder] for fluent [Context]
+// NewDataBuilder creates a new [DataBuilder] for fluent [Data]
 // construction.
 //
-//	ctx, err := NewContextBuilder().
+//	ctx, err := NewDataBuilder().
 //	    KeyValue("name", "John").
 //	    Struct(user).
 //	    Build()
-func NewContextBuilder() *ContextBuilder {
-	return &ContextBuilder{
-		context: make(Context),
+func NewDataBuilder() *DataBuilder {
+	return &DataBuilder{
+		context: make(Data),
 	}
 }
 
-// Set inserts a value into the Context with the specified key.
+// Set inserts a value into the Data with the specified key.
 // Dot-notation (e.g., "user.address.city") creates nested map
 // structures. Top-level keys preserve original data types; nested keys
 // use map[string]any. Empty keys are silently ignored.
-func (c Context) Set(key string, value any) {
+func (c Data) Set(key string, value any) {
 	if key == "" {
 		return
 	}
@@ -97,13 +96,13 @@ func (c Context) Set(key string, value any) {
 	current[parts[last]] = value
 }
 
-// Get retrieves a value from the Context by key. Dot-separated keys
+// Get retrieves a value from the Data by key. Dot-separated keys
 // (e.g., "user.profile.name") navigate nested structures. Array indices
 // are supported (e.g., "items.0").
 //
 // Get returns [ErrContextKeyNotFound], [ErrContextIndexOutOfRange], or
 // [ErrContextInvalidKeyType] on failure.
-func (c Context) Get(key string) (any, error) {
+func (c Data) Get(key string) (any, error) {
 	if key == "" {
 		return map[string]any(c), nil
 	}
@@ -120,7 +119,7 @@ func (c Context) Get(key string) (any, error) {
 	return value, nil
 }
 
-// classifyGetError maps jsonpointer errors to context-level sentinel
+// classifyGetError maps jsonpointer errors to data-level sentinel
 // errors.
 func classifyGetError(err error, key string) error {
 	switch {
@@ -149,21 +148,21 @@ func splitDotPath(path string) []string {
 
 // KeyValue sets a key-value pair and returns the builder for chaining.
 //
-//	builder := NewContextBuilder().
+//	builder := NewDataBuilder().
 //	    KeyValue("name", "John").
 //	    KeyValue("age", 30)
-func (cb *ContextBuilder) KeyValue(key string, value any) *ContextBuilder {
+func (cb *DataBuilder) KeyValue(key string, value any) *DataBuilder {
 	cb.context.Set(key, value)
 	return cb
 }
 
-// Struct expands struct fields into the Context using JSON
+// Struct expands struct fields into the Data using JSON
 // serialization. Fields are flattened to top-level keys based on their
 // json tags. Nested structs are preserved as nested maps accessible via
 // dot notation. If serialization fails, the error is collected and
-// returned by [ContextBuilder.Build].
-func (cb *ContextBuilder) Struct(v any) *ContextBuilder {
-	if temp, ok := contextFromStructFast(v); ok {
+// returned by [DataBuilder.Build].
+func (cb *DataBuilder) Struct(v any) *DataBuilder {
+	if temp, ok := dataFromStructFast(v); ok {
 		maps.Copy(cb.context, temp)
 		return cb
 	}
@@ -189,7 +188,7 @@ var (
 	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
 
-func contextFromStructFast(v any) (Context, bool) {
+func dataFromStructFast(v any) (Data, bool) {
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
 		return nil, false
@@ -207,7 +206,7 @@ func contextFromStructFast(v any) (Context, bool) {
 	if !ok {
 		return nil, false
 	}
-	return Context(out), true
+	return Data(out), true
 }
 
 func structToMapValue(rv reflect.Value) (map[string]any, bool) {
@@ -231,7 +230,7 @@ func structToMapValue(rv reflect.Value) (map[string]any, bool) {
 			name = field.Name
 		}
 
-		value, ok := valueToContextValue(rv.Field(i))
+		value, ok := valueToDataValue(rv.Field(i))
 		if !ok {
 			return nil, false
 		}
@@ -244,7 +243,7 @@ func structToMapValue(rv reflect.Value) (map[string]any, bool) {
 	return out, true
 }
 
-func valueToContextValue(rv reflect.Value) (any, bool) {
+func valueToDataValue(rv reflect.Value) (any, bool) {
 	rv = indirectValue(rv)
 	if !rv.IsValid() {
 		return nil, true
@@ -267,7 +266,7 @@ func valueToContextValue(rv reflect.Value) (any, bool) {
 	case reflect.Slice, reflect.Array:
 		out := make([]any, rv.Len())
 		for i := range rv.Len() {
-			value, ok := valueToContextValue(rv.Index(i))
+			value, ok := valueToDataValue(rv.Index(i))
 			if !ok {
 				return nil, false
 			}
@@ -281,7 +280,7 @@ func valueToContextValue(rv reflect.Value) (any, bool) {
 		out := make(map[string]any, rv.Len())
 		iter := rv.MapRange()
 		for iter.Next() {
-			value, ok := valueToContextValue(iter.Value())
+			value, ok := valueToDataValue(iter.Value())
 			if !ok {
 				return nil, false
 			}
@@ -291,7 +290,7 @@ func valueToContextValue(rv reflect.Value) (any, bool) {
 	case reflect.Struct:
 		return structToMapValue(rv)
 	case reflect.Interface, reflect.Pointer:
-		return valueToContextValue(rv)
+		return valueToDataValue(rv)
 	default:
 		return nil, false
 	}
@@ -363,47 +362,47 @@ func isEmptyJSONValue(rv reflect.Value) bool {
 	}
 }
 
-// Build returns the constructed Context and any collected errors.
-// Errors from [ContextBuilder.KeyValue] or [ContextBuilder.Struct]
+// Build returns the constructed Data and any collected errors.
+// Errors from [DataBuilder.KeyValue] or [DataBuilder.Struct]
 // operations are joined into a single error.
-func (cb *ContextBuilder) Build() (Context, error) {
+func (cb *DataBuilder) Build() (Data, error) {
 	if len(cb.errors) > 0 {
 		return cb.context, errors.Join(cb.errors...)
 	}
 	return cb.context, nil
 }
 
-// NewExecutionContext creates a new [ExecutionContext] from user data.
-func NewExecutionContext(data Context) *ExecutionContext {
-	return &ExecutionContext{
-		Public:  data,
-		Private: NewContext(),
+// NewRenderContext creates a new [RenderContext] from user data.
+func NewRenderContext(data Data) *RenderContext {
+	return &RenderContext{
+		Data:   data,
+		Locals: NewData(),
 	}
 }
 
-// Get retrieves a variable, checking Private first, then Public.
-func (ec *ExecutionContext) Get(name string) (any, bool) {
-	if val, err := ec.Private.Get(name); err == nil {
+// Get retrieves a variable, checking Locals first, then Data.
+func (ec *RenderContext) Get(name string) (any, bool) {
+	if val, err := ec.Locals.Get(name); err == nil {
 		return val, true
 	}
-	if val, err := ec.Public.Get(name); err == nil {
+	if val, err := ec.Data.Get(name); err == nil {
 		return val, true
 	}
 	return nil, false
 }
 
-// Set stores a variable in the private context.
-func (ec *ExecutionContext) Set(name string, value any) {
-	ec.Private.Set(name, value)
+// Set stores a variable in the local bindings.
+func (ec *RenderContext) Set(name string, value any) {
+	ec.Locals.Set(name, value)
 }
 
-// NewChildContext creates a child [ExecutionContext] that shares the
-// parent's Public context, copies the Private context for isolated
-// scope, and preserves runtime rendering state.
-func NewChildContext(parent *ExecutionContext) *ExecutionContext {
-	return &ExecutionContext{
-		Public:       parent.Public,
-		Private:      maps.Clone(parent.Private),
+// NewChildContext creates a child [RenderContext] that shares the
+// parent's Data, copies the Locals for isolated scope, and preserves
+// runtime rendering state.
+func NewChildContext(parent *RenderContext) *RenderContext {
+	return &RenderContext{
+		Data:         parent.Data,
+		Locals:       maps.Clone(parent.Locals),
 		engine:       parent.engine,
 		autoescape:   parent.autoescape,
 		includeDepth: parent.includeDepth,
@@ -411,12 +410,12 @@ func NewChildContext(parent *ExecutionContext) *ExecutionContext {
 	}
 }
 
-// NewIsolatedChildContext creates a child [ExecutionContext] with a fresh
-// public/private scope while preserving runtime rendering state.
-func NewIsolatedChildContext(parent *ExecutionContext) *ExecutionContext {
-	return &ExecutionContext{
-		Public:       nil,
-		Private:      NewContext(),
+// NewIsolatedChildContext creates a child [RenderContext] with fresh
+// Data/Locals while preserving runtime rendering state.
+func NewIsolatedChildContext(parent *RenderContext) *RenderContext {
+	return &RenderContext{
+		Data:         nil,
+		Locals:       NewData(),
 		engine:       parent.engine,
 		autoescape:   parent.autoescape,
 		includeDepth: parent.includeDepth,

@@ -6,17 +6,22 @@ import (
 	"testing"
 )
 
-// rawSet is a tiny helper: build a TextSet with one template named "a.txt".
-func rawSet(src string) *Set {
-	return NewTextSet(NewMemoryLoader(map[string]string{"a.txt": src}))
+// rawEngine is a tiny helper: build a text engine with layout enabled and
+// one template named "a.txt".
+func rawEngine(src string) *Engine {
+	return New(
+		WithLoader(NewMemoryLoader(map[string]string{"a.txt": src})),
+		WithFormat(FormatText),
+		WithLayout(),
+	)
 }
 
-// Raw block preserves {{ var }} literally (Set-loaded template).
+// Raw block preserves {{ var }} literally in a layout-enabled engine.
 func TestRaw_PreservesVariableSyntax(t *testing.T) {
 	t.Parallel()
 
-	set := rawSet(`{% raw %}{{ foo }}{% endraw %}`)
-	got, err := set.RenderString("a.txt", nil)
+	engine := rawEngine(`{% raw %}{{ foo }}{% endraw %}`)
+	got, err := engine.Render("a.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -29,8 +34,8 @@ func TestRaw_PreservesVariableSyntax(t *testing.T) {
 func TestRaw_PreservesTagSyntax(t *testing.T) {
 	t.Parallel()
 
-	set := rawSet(`{% raw %}{% for x in items %}{% endraw %}`)
-	got, err := set.RenderString("a.txt", nil)
+	engine := rawEngine(`{% raw %}{% for x in items %}{% endraw %}`)
+	got, err := engine.Render("a.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -44,8 +49,8 @@ func TestRaw_Multiline(t *testing.T) {
 	t.Parallel()
 
 	src := "{% raw %}line1\nline2\n{{ x }}\nline3{% endraw %}"
-	set := rawSet(src)
-	got, err := set.RenderString("a.txt", nil)
+	engine := rawEngine(src)
+	got, err := engine.Render("a.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -59,8 +64,8 @@ func TestRaw_Multiline(t *testing.T) {
 func TestRaw_UnclosedErrors(t *testing.T) {
 	t.Parallel()
 
-	set := rawSet(`{% raw %}never closes`)
-	_, err := set.Get("a.txt")
+	engine := rawEngine(`{% raw %}never closes`)
+	_, err := engine.Load("a.txt")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -69,14 +74,18 @@ func TestRaw_UnclosedErrors(t *testing.T) {
 	}
 }
 
-// Raw in HTMLSet: content is emitted as literal text, not HTML-escaped.
-func TestRaw_WorksInHTMLSet_NotEscaped(t *testing.T) {
+// Raw in an HTML engine: content is emitted as literal text, not HTML-escaped.
+func TestRaw_WorksInFormatHTML_NotEscaped(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `{% raw %}<b>{{ x }}</b>{% endraw %}`,
-	}))
-	got, err := set.RenderString("a.html", nil)
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{% raw %}<b>{{ x }}</b>{% endraw %}`,
+		})),
+		WithFormat(FormatHTML),
+		WithLayout(),
+	)
+	got, err := engine.Render("a.html", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -85,11 +94,11 @@ func TestRaw_WorksInHTMLSet_NotEscaped(t *testing.T) {
 	}
 }
 
-// Compile-path templates do NOT know {% raw %} — it's a Set-only feature.
-func TestRaw_CompilePath_UnknownTag(t *testing.T) {
+// Core parsing does NOT know {% raw %} — it's a FeatureLayout-only feature.
+func TestRaw_CoreEngine_UnknownTag(t *testing.T) {
 	t.Parallel()
 
-	_, err := Compile(`{% raw %}{{ x }}{% endraw %}`)
+	_, err := parseSourceTemplate(`{% raw %}{{ x }}{% endraw %}`)
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
 	}

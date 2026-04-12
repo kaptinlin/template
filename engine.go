@@ -34,7 +34,7 @@ type Engine struct {
 	loader   Loader
 	format   Format
 	features Feature
-	globals  Context
+	defaults Data
 
 	// tags is the per-engine tag registry, layered on top of the global
 	// registry. Optional language features register into this private layer.
@@ -103,11 +103,17 @@ func WithFeatures(features ...Feature) EngineOption {
 	}
 }
 
-// WithGlobals injects variables available to every render call. Render-time
-// ctx keys override globals on conflict.
-func WithGlobals(g Context) EngineOption {
+// WithLayout enables layout features such as include, extends, block, raw,
+// and safe-aware engine behavior.
+func WithLayout() EngineOption {
+	return WithFeatures(FeatureLayout)
+}
+
+// WithDefaults injects variables available to every render call. Render-time
+// ctx keys override defaults on conflict.
+func WithDefaults(g Data) EngineOption {
 	return func(e *Engine) {
-		e.globals = g
+		e.defaults = g
 	}
 }
 
@@ -171,6 +177,38 @@ func (e *Engine) Filters() *Registry {
 	return e.filters
 }
 
+// RegisterFilter adds or replaces an engine-local filter.
+func (e *Engine) RegisterFilter(name string, fn FilterFunc) {
+	e.filters.Register(name, fn)
+}
+
+// ReplaceFilter overwrites an engine-local filter.
+func (e *Engine) ReplaceFilter(name string, fn FilterFunc) {
+	e.filters.Replace(name, fn)
+}
+
+// MustRegisterFilter adds or replaces an engine-local filter and panics on nil.
+func (e *Engine) MustRegisterFilter(name string, fn FilterFunc) {
+	e.filters.MustRegister(name, fn)
+}
+
+// RegisterTag adds an engine-local tag parser. Duplicate names return
+// [ErrTagAlreadyRegistered].
+func (e *Engine) RegisterTag(name string, parser TagParser) error {
+	return e.tags.Register(name, parser)
+}
+
+// ReplaceTag overwrites an engine-local tag parser.
+func (e *Engine) ReplaceTag(name string, parser TagParser) {
+	e.tags.Replace(name, parser)
+}
+
+// MustRegisterTag registers an engine-local tag parser and panics on duplicate
+// registration or nil parser.
+func (e *Engine) MustRegisterTag(name string, parser TagParser) {
+	e.tags.MustRegister(name, parser)
+}
+
 // Clone copies engine configuration into a fresh Engine with an empty cache.
 func (e *Engine) Clone(opts ...EngineOption) *Engine {
 	e.mu.RLock()
@@ -180,7 +218,7 @@ func (e *Engine) Clone(opts ...EngineOption) *Engine {
 		loader:   e.loader,
 		format:   e.format,
 		features: e.features,
-		globals:  maps.Clone(e.globals),
+		defaults: maps.Clone(e.defaults),
 		tags:     e.tags.Clone(),
 		filters:  e.filters.Clone(),
 		cache:    make(map[string]*Template),
@@ -311,28 +349,28 @@ func (e *Engine) markParsing(name string, v bool) {
 	}
 }
 
-// Render loads the named template and writes its output to w.
-// ctx is merged with any globals configured via WithGlobals; ctx keys take
-// precedence over globals.
-func (e *Engine) Render(name string, ctx Context, w io.Writer) error {
+// Render loads the named template and returns its output as a string.
+func (e *Engine) Render(name string, data Data) (string, error) {
+	var buf bytes.Buffer
+	if err := e.RenderTo(name, &buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// RenderTo loads the named template and writes its output to w.
+// data is merged with any defaults configured via WithDefaults; data keys take
+// precedence over defaults.
+func (e *Engine) RenderTo(name string, w io.Writer, data Data) error {
 	tpl, err := e.Load(name)
 	if err != nil {
 		return err
 	}
-	merged := e.mergeContext(ctx)
-	ec := NewExecutionContext(merged)
+	merged := e.mergeContext(data)
+	ec := NewRenderContext(merged)
 	ec.engine = e
 	ec.autoescape = e.autoescape()
 	return tpl.Execute(ec, w)
-}
-
-// RenderString is a convenience wrapper around Render returning a string.
-func (e *Engine) RenderString(name string, ctx Context) (string, error) {
-	var buf bytes.Buffer
-	if err := e.Render(name, ctx, &buf); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }
 
 // Reset clears the template cache.
@@ -344,12 +382,12 @@ func (e *Engine) Reset() {
 	e.loading = make(map[string]*loadCall)
 }
 
-func (e *Engine) mergeContext(ctx Context) Context {
-	if e.globals == nil {
+func (e *Engine) mergeContext(ctx Data) Data {
+	if e.defaults == nil {
 		return ctx
 	}
-	merged := make(Context, len(e.globals)+len(ctx))
-	maps.Copy(merged, e.globals)
+	merged := make(Data, len(e.defaults)+len(ctx))
+	maps.Copy(merged, e.defaults)
 	maps.Copy(merged, ctx)
 	return merged
 }

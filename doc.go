@@ -1,40 +1,28 @@
 /*
-Package template provides a simple and efficient template engine for Go.
+Package template provides a Go template engine built around a single
+core concept: [Engine].
 
-Single-string usage (backwards-compatible, minimal feature set):
-
-	tmpl, err := template.Compile("Hello, {{ name|upper }}!")
-	if err != nil {
-		panic(err)
-	}
-
-	output, err := tmpl.Render(template.Context{"name": "world"})
-	// Output: "Hello, WORLD!"
-
-Multi-file usage (layout, inheritance, includes, HTML auto-escape):
+Use [New] with [WithLoader], [WithFormat], [WithLayout], and [WithFeatures] to define
+how templates are loaded, what output semantics they use, and which
+optional language features are enabled.
 
 	loader, _ := template.NewDirLoader("./templates")
-	set := template.NewHTMLSet(loader,
-		template.WithGlobals(template.Context{"site": siteData}),
+	engine := template.New(
+		template.WithLoader(loader),
+		template.WithFormat(template.FormatHTML),
+		template.WithLayout(),
+		template.WithDefaults(template.Data{"site": siteData}),
 	)
-	_ = set.Render("layouts/blog.html", template.Context{"page": pageData}, os.Stdout)
+	_ = engine.RenderTo("layouts/blog.html", os.Stdout, template.Data{"page": pageData})
 
-Two worlds, one package:
+Core design rules:
 
-  - [Compile] / [Render] — simple string templates. Supports {{ var }},
-    filters, {% if %}, {% for %}, {% break %}, {% continue %}, {# ... #}.
-    Does NOT support {% include %}, {% extends %}, {% block %}, {% raw %},
-    or the "safe" filter. Does NOT auto-escape. Suited to log lines,
-    config snippets, plain-text emails, and anything that is "interpolate
-    a few values into a string".
-
-  - [NewTextSet] / [NewHTMLSet] — multi-file template systems with
-    Loader-backed inclusion, inheritance, block.super, raw blocks, and
-    (HTMLSet only) automatic HTML escaping with the [SafeString]
-    mechanism. Layout tags and the safe filter live in a per-Set
-    registry so the Compile(src) path above is unaffected.
-
-This mirrors Go's own text/template vs html/template split.
+  - [Engine] is the only public entry point.
+  - [FormatHTML] and [FormatText] define output semantics.
+  - [WithLayout] is optional and must be enabled explicitly.
+  - HTML auto-escape exists only behind [FormatHTML].
+  - Layout inheritance, include, raw, and safe-aware behavior exist only
+    behind [WithLayout] (internally this maps to [FeatureLayout]).
 
 Supported syntax summary:
 
@@ -42,44 +30,11 @@ Supported syntax summary:
   - Filters: {{ variable | filter:arg }}
   - Control structures: {% if %}, {% for %}
   - Comments: {# ... #}
-  - (Set only) {% include "x" [with k=v] [only] [if_exists] %}
-  - (Set only) {% extends "parent" %} + {% block name %}...{% endblock %}
-  - (Set only) {{ block.super }}
-  - (Set only) {% raw %}...{% endraw %}
-  - (Set only) {{ x | safe }} and (HTMLSet only) auto-escape of {{ x }}
-
-Architecture:
-
-The package is organized into several key components:
-  - Lexer: Tokenizes template source into a token stream
-  - Parser: Converts tokens into an AST (Abstract Syntax Tree)
-  - Expression Parser: Parses expressions with operator precedence
-  - Template: Executes the AST with a given context
-  - Filters: Transforms values during template execution
-  - Context: Stores and retrieves template variables
-
-Control Flow:
-
-The template engine supports break and continue statements within loops:
-
-	{% for item in items %}
-		{% if item == "skip" %}
-			{% continue %}
-		{% endif %}
-		{% if item == "stop" %}
-			{% break %}
-		{% endif %}
-		{{ item }}
-	{% endfor %}
-
-Loop Context:
-
-Within loops, a special "loop" variable is available providing:
-  - loop.Index: Current index (0-based)
-  - loop.Revindex: Reverse index
-  - loop.First: True if first iteration
-  - loop.Last: True if last iteration
-  - loop.Length: Total collection length
+  - (FeatureLayout only) {% include "x" [with k=v] [only] [if_exists] %}
+  - (FeatureLayout only) {% extends "parent" %} + {% block name %}...{% endblock %}
+  - (FeatureLayout only) {{ block.super }}
+  - (FeatureLayout only) {% raw %}...{% endraw %}
+  - (FeatureLayout only) {{ x | safe }} and ([FormatHTML] only) auto-escape of {{ x }}
 
 For detailed examples, see the examples/ directory.
 */

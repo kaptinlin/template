@@ -21,7 +21,7 @@ The `for` loop iterates over arrays, maps, or other iterable objects.
 {% endfor %}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
     "simple": {
@@ -47,7 +47,7 @@ Key: key2
 {% endfor %}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
     "products": ["Coffee Maker", "Toaster"]
@@ -80,7 +80,7 @@ The `if` statement conditionally renders content based on data values.
 {% endif %}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
     "simple": {
@@ -104,7 +104,7 @@ Float value is: 3.14
 {% endif %}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
     "simple": null
@@ -130,7 +130,7 @@ Control structures can be nested for complex logical flows.
 {% endfor %}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
     "simple": {
@@ -159,7 +159,7 @@ key2: 3.14
 {% endif %}
 ```
 
-**Context Data:**
+**Data Data:**
 ```json
 {
     "simple": {
@@ -362,7 +362,7 @@ The template engine follows Django-style truthiness for conditional evaluation:
 
 6. **Operator Compatibility**
    - Both C-style (`&&`, `||`, `!`) and Django-style (`and`, `or`, `not`) operators are supported.
-   - Can be mixed in the same template for backward compatibility.
+   - Can be mixed in the same template for authoring convenience.
 
 7. **Thread Safety**
    - Filter registry is protected by `sync.RWMutex` for concurrent access.
@@ -424,7 +424,7 @@ The template engine follows Django-style truthiness for conditional evaluation:
 
 3. **Operator Style**
    - Prefer Django-style operators (`and`, `or`, `not`) for better readability.
-   - C-style operators (`&&`, `||`, `!`) are supported for backward compatibility.
+   - C-style operators (`&&`, `||`, `!`) are supported as alternate syntax.
    - Be consistent within the same template.
 
 4. **Negation**

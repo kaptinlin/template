@@ -1,10 +1,10 @@
 package template
 
 // SafeString marks a string value as pre-escaped or otherwise trusted
-// HTML content. When a template rendered via [NewHTMLSet] outputs a
-// SafeString, the auto-escaper bypasses escaping. In [NewTextSet] or
-// [Compile]-path templates, SafeString behaves identically to a plain
-// string.
+// HTML content. When a template rendered by an engine with [FormatHTML]
+// outputs a SafeString, the auto-escaper bypasses escaping. In text-format
+// engine renders or [Compile]-path templates, SafeString behaves identically
+// to a plain string.
 //
 // Producing a SafeString from untrusted input is a security bug: the
 // contents are emitted verbatim into HTML.

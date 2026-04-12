@@ -8,7 +8,7 @@ precise error reporting and the plugin-based extensibility design.
 
 This package exposes one architectural model:
 
-- engine-based rendering via `New(...)`, `WithLoader(...)`, `WithFormat(...)`, and optional `WithFeatures(...)`
+- engine-based rendering via `New(...)`, `WithLoader(...)`, `WithFormat(...)`, and optional `WithLayout()` or `WithFeatures(...)`
 
 That design serves two product goals at the same time:
 
@@ -212,13 +212,12 @@ Parsing `{% if score > 80 %}`:
 
 ### Stage 3: Execution
 
-`Template.Execute()` (`template.go`) traverses the AST and produces output:
+`Template.RenderTo()` (`template.go`) traverses the AST and produces output:
 
 ```go
 tmpl := template.NewTemplate(ast)
 var buf bytes.Buffer
-ctx := template.NewExecutionContext(data)
-tmpl.Execute(ctx, &buf)
+tmpl.RenderTo(&buf, data)
 ```
 
 The executor walks the root node list in order:
@@ -488,7 +487,7 @@ func (n *SetNode) Position() (int, int) { return n.Line, n.Col }
 func (n *SetNode) String() string       { return fmt.Sprintf("Set(%s)", n.VarName) }
 
 // Execute evaluates the expression and stores the result in the context.
-func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
+func (n *SetNode) Execute(ctx *template.RenderContext, _ io.Writer) error {
     val, err := n.Expression.Evaluate(ctx)
     if err != nil {
         return err
@@ -500,7 +499,7 @@ func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
 func main() {
     engine := template.New()
 
-    engine.Tags().Register("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
+    engine.RegisterTag("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
         varToken, err := arguments.ExpectIdentifier()
         if err != nil {
             return nil, arguments.Error("expected variable name after 'set'")
@@ -575,7 +574,7 @@ func init() {
     engine := template.New()
 
     // Register a repeat filter: {{ text|repeat:3 }} -> "texttexttext"
-    engine.Filters().Register("repeat", func(value any, args ...any) (any, error) {
+    engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
         s := fmt.Sprintf("%v", value)
         n := 2 // default: repeat 2 times
         if len(args) > 0 {
@@ -647,7 +646,7 @@ engine construction rather than through package-global side effects.
 ### 3.6 Core Design Principles
 
 1. **Open/Closed Principle** — Open for extension, closed for modification. Add new tags and filters through engine-local registries.
-2. **Unified Interface** — Custom tags use the exact same `Parser` and `ExecutionContext` API as built-in tags, with full access to expression parsing, nested body parsing, and error reporting.
+2. **Unified Interface** — Custom tags use the exact same `Parser` and `RenderContext` API as built-in tags, with full access to expression parsing, nested body parsing, and error reporting.
 3. **One Tag Per File** — The engine itself follows this convention. New tags simply follow the same pattern.
 4. **Fully Open Extension Points**:
    - **Tags**: The `Statement` and `Expression` interfaces are open to external packages. External packages can implement `Statement` directly and register it on an engine.
@@ -677,7 +676,7 @@ engine model.
 |  Filters:  Engine.filters (private) → global       |
 |  Escape:   FormatHTML only                         |
 |                                                    |
-|  → Adds named-template loading, cache, globals     |
+|  → Adds named-template loading, cache, defaults     |
 |    FeatureLayout adds include/extends/block/raw    |
 |    FormatHTML overrides escape/escape_once/h       |
 |    to return SafeString.                           |
@@ -695,7 +694,7 @@ type Engine struct {
     loader   Loader
     format   Format
     features Feature
-    globals  Context
+    defaults Data
 
     tags    *TagRegistry  // private, parent = defaultTagRegistry
     filters *Registry     // private, parent = defaultRegistry
@@ -781,8 +780,8 @@ engines without `FeatureLayout` they remain unknown tags.
 - Expression paths are evaluated at runtime and re-validated against
   `fs.ValidPath`.
 - `with k=v` keyword arguments are evaluated in the **parent**
-  context, then injected into the child's Private scope.
-- `only` isolates the child from the parent and from `WithGlobals`.
+  context, then injected into the child's Locals scope.
+- `only` isolates the child from the parent and from `WithDefaults`.
 - `if_exists` turns a missing template into a silent no-op.
 - Parse-time circular references (A → B → A) automatically downgrade
   to lazy mode so recursive tree-walk templates work.
@@ -879,7 +878,7 @@ format. `FormatHTML` sets it to `true`, `FormatText` to `false`.
 ### 4.6 Engine options
 
 ```go
-func WithGlobals(g Context) EngineOption
+func WithDefaults(g Data) EngineOption
 func WithFilters(r *Registry) EngineOption
 func WithTags(r *TagRegistry) EngineOption
 func WithLoader(loader Loader) EngineOption
@@ -887,15 +886,15 @@ func WithFormat(format Format) EngineOption
 func WithFeatures(features ...Feature) EngineOption
 ```
 
-`WithGlobals` merges into every render's context. Render-time ctx keys
-take precedence over globals.
+`WithDefaults` merges into every render's context. Render-time ctx keys
+take precedence over defaults.
 
-When an engine spawns child execution contexts for includes, runtime
+When an engine spawns child render contexts for includes, runtime
 state such as `engine`, `autoescape`, `includeDepth`, and `currentLeaf`
 is preserved automatically. The child gets either:
 
-- shared `Public` + cloned `Private` (`NewChildContext`)
-- isolated `Public`/`Private` with the same runtime state (`NewIsolatedChildContext`)
+- shared `Data` + cloned `Locals` (`NewChildContext`)
+- isolated `Data`/`Locals` with the same runtime state (`NewIsolatedChildContext`)
 
 ### 4.7 Concurrency and hot reload
 
@@ -918,11 +917,11 @@ in-flight bookkeeping tied to the cache.
 |  engine := New(                                              |
 |      WithLoader(loader),                                     |
 |      WithFormat(FormatHTML),                                 |
-|      WithFeatures(FeatureLayout),                            |
-|      WithGlobals(...),                                       |
+|      WithLayout(),                                           |
+|      WithDefaults(...),                                       |
 |  )                                                           |
 |                                                              |
-|  engine.Render("layouts/blog.html", ctx, w)                  |
+|  engine.RenderTo("layouts/blog.html", w, data)               |
 |        │                                                     |
 |        ▼                                                     |
 |  Engine.Load("layouts/blog.html")                            |

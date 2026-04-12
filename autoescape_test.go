@@ -4,14 +4,17 @@ import (
 	"testing"
 )
 
-// Phase G cycle 1: HTMLSet auto-escapes {{ expr }} output.
-func TestHTMLSet_VariableOutputIsEscaped(t *testing.T) {
+// Phase G cycle 1: FormatHTML auto-escapes {{ expr }} output.
+func TestFormatHTML_VariableOutputIsEscaped(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `<p>{{ title }}</p>`,
-	}))
-	got, err := set.RenderString("a.html", Context{"title": "<script>alert(1)</script>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `<p>{{ title }}</p>`,
+		})),
+		WithFormat(FormatHTML),
+	)
+	got, err := engine.Render("a.html", Data{"title": "<script>alert(1)</script>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -21,14 +24,17 @@ func TestHTMLSet_VariableOutputIsEscaped(t *testing.T) {
 	}
 }
 
-// Phase G cycle 2: TextSet does NOT escape output.
-func TestTextSet_VariableOutputIsNotEscaped(t *testing.T) {
+// Phase G cycle 2: FormatText does NOT escape output.
+func TestFormatText_VariableOutputIsNotEscaped(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
-		"a.txt": `{{ title }}`,
-	}))
-	got, err := set.RenderString("a.txt", Context{"title": "<script>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.txt": `{{ title }}`,
+		})),
+		WithFormat(FormatText),
+	)
+	got, err := engine.Render("a.txt", Data{"title": "<script>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -37,14 +43,18 @@ func TestTextSet_VariableOutputIsNotEscaped(t *testing.T) {
 	}
 }
 
-// Phase G cycle 3: "| safe" skips auto-escape in HTMLSet.
-func TestHTMLSet_SafeFilter_SkipsEscape(t *testing.T) {
+// Phase G cycle 3: "| safe" skips auto-escape in an HTML engine.
+func TestFormatHTML_SafeFilter_SkipsEscape(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `{{ content | safe }}`,
-	}))
-	got, err := set.RenderString("a.html", Context{"content": "<b>bold</b>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{{ content | safe }}`,
+		})),
+		WithFormat(FormatHTML),
+		WithLayout(),
+	)
+	got, err := engine.Render("a.html", Data{"content": "<b>bold</b>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -55,13 +65,17 @@ func TestHTMLSet_SafeFilter_SkipsEscape(t *testing.T) {
 
 // Phase G cycle 4: safe status is downgraded by non-safe-aware filters.
 // {{ x | safe | upper }} should escape because upper is not safe-aware.
-func TestHTMLSet_SafeThenNonSafeFilter_Downgrades(t *testing.T) {
+func TestFormatHTML_SafeThenNonSafeFilter_Downgrades(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `{{ x | safe | upper }}`,
-	}))
-	got, err := set.RenderString("a.html", Context{"x": "<b>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{{ x | safe | upper }}`,
+		})),
+		WithFormat(FormatHTML),
+		WithLayout(),
+	)
+	got, err := engine.Render("a.html", Data{"x": "<b>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -71,13 +85,17 @@ func TestHTMLSet_SafeThenNonSafeFilter_Downgrades(t *testing.T) {
 }
 
 // Phase G cycle 5: safe at the terminal position keeps the value safe.
-func TestHTMLSet_UpperThenSafe_IsSafe(t *testing.T) {
+func TestFormatHTML_UpperThenSafe_IsSafe(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `{{ x | upper | safe }}`,
-	}))
-	got, err := set.RenderString("a.html", Context{"x": "<b>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{{ x | upper | safe }}`,
+		})),
+		WithFormat(FormatHTML),
+		WithLayout(),
+	)
+	got, err := engine.Render("a.html", Data{"x": "<b>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -87,13 +105,16 @@ func TestHTMLSet_UpperThenSafe_IsSafe(t *testing.T) {
 }
 
 // Phase G cycle 6: escape filter output is idempotent in a chain.
-func TestHTMLSet_EscapeIdempotent(t *testing.T) {
+func TestFormatHTML_EscapeIdempotent(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `{{ x | escape }}`,
-	}))
-	got, err := set.RenderString("a.html", Context{"x": "<b>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{{ x | escape }}`,
+		})),
+		WithFormat(FormatHTML),
+	)
+	got, err := engine.Render("a.html", Data{"x": "<b>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -105,13 +126,16 @@ func TestHTMLSet_EscapeIdempotent(t *testing.T) {
 }
 
 // Phase G cycle 7: quotes in attribute context are escaped.
-func TestHTMLSet_AttributeQuoteEscaped(t *testing.T) {
+func TestFormatHTML_AttributeQuoteEscaped(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `<a href="{{ url }}">link</a>`,
-	}))
-	got, err := set.RenderString("a.html", Context{"url": `" onclick="x`})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `<a href="{{ url }}">link</a>`,
+		})),
+		WithFormat(FormatHTML),
+	)
+	got, err := engine.Render("a.html", Data{"url": `" onclick="x`})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}

@@ -150,9 +150,9 @@ func TestChainLoader_EmptyChain_NotFound(t *testing.T) {
 	}
 }
 
-// Phase M cycle 6: Set using ChainLoader caches keyed on resolved name
+// Phase M cycle 6: Engine using ChainLoader caches keyed on resolved name
 // so the same user/theme layers do not clobber each other.
-func TestChainLoader_SetCacheKeyedOnResolvedName(t *testing.T) {
+func TestChainLoader_EngineCacheKeyedOnResolvedName(t *testing.T) {
 	t.Parallel()
 
 	user := NewMemoryLoader(map[string]string{
@@ -161,9 +161,13 @@ func TestChainLoader_SetCacheKeyedOnResolvedName(t *testing.T) {
 	theme := NewMemoryLoader(map[string]string{
 		"a.txt": "THEME",
 	})
-	set := NewTextSet(NewChainLoader(user, theme))
+	engine := New(
+		WithLoader(NewChainLoader(user, theme)),
+		WithFormat(FormatText),
+		WithLayout(),
+	)
 
-	got, err := set.RenderString("a.txt", nil)
+	got, err := engine.Render("a.txt", nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}

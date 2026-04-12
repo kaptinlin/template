@@ -4,7 +4,7 @@ This page covers the multi-file layout features: `{% include %}`,
 `{% extends %}`, `{% block %}`, `{{ block.super }}`, and `{% raw %}`.
 
 > **Scope note**: these are `FeatureLayout` features. They are available
-> only when an engine enables `template.WithFeatures(template.FeatureLayout)`.
+> only when an engine enables `template.WithLayout()`.
 
 ## Quick example
 
@@ -13,9 +13,9 @@ loader, _ := template.NewDirLoader("./templates")
 engine := template.New(
     template.WithLoader(loader),
     template.WithFormat(template.FormatHTML),
-    template.WithFeatures(template.FeatureLayout),
+    template.WithLayout(),
 )
-_ = engine.Render("layouts/blog.html", template.Context{
+_ = engine.Render("layouts/blog.html", template.Data{
     "page": pageData,
 }, os.Stdout)
 ```
@@ -78,7 +78,7 @@ render, so they're slightly slower but enable data-driven composition.
 
 - The values are evaluated in the **parent** context (so `page.hello`
   means the outer template's `page`, not the included template's).
-- Bindings land in the included template's `Private` scope — they do
+- Bindings land in the included template's `Locals` scope — they do
   not mutate the parent.
 - Child execution preserves runtime state from the parent render:
   engine-local filters/tags, auto-escape mode, include depth, and the
@@ -92,7 +92,7 @@ render, so they're slightly slower but enable data-driven composition.
 ```
 
 `only` fully isolates the included template. It does not inherit the
-parent's context **and** it does not see `WithGlobals`-set values. The
+parent's context **and** it does not see `WithDefaults`-set values. The
 only variables available to the child are those passed via `with`.
 
 This isolation affects data visibility only. Rendering semantics still
@@ -100,7 +100,7 @@ come from the parent engine, so HTML mode stays HTML mode and include
 depth still advances.
 
 This matches Django DTL and Pongo2 semantics. If you need the child to
-see `site.*` from globals while still hiding the page-level state, pass
+see `site.*` from defaults while still hiding the page-level state, pass
 it explicitly:
 
 ```django
@@ -302,7 +302,7 @@ To output pre-rendered HTML without escaping, either:
 **2. Wrap the value in `SafeString`** in Go code:
 
 ```go
-engine.Render("page.html", template.Context{
+engine.Render("page.html", template.Data{
     "title":   "Hello <world>",                         // escaped
     "content": template.SafeString("<p>trusted</p>"),   // raw
 }, w)

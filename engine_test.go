@@ -1,6 +1,7 @@
 package template
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"sync"
@@ -46,12 +47,99 @@ func TestEngineParseString_DefaultCoreOnly(t *testing.T) {
 		t.Fatalf("ParseString() err = %v", err)
 	}
 
-	out, err := got.Render(Context{"name": "world"})
+	out, err := got.Render(Data{"name": "world"})
 	if err != nil {
 		t.Fatalf("renderSourceTemplate() err = %v", err)
 	}
 	if out != "Hello, world!" {
 		t.Errorf("renderSourceTemplate() = %q, want %q", out, "Hello, world!")
+	}
+}
+
+func TestWithLayout_EnablesFeatureLayout(t *testing.T) {
+	t.Parallel()
+
+	engine := New(WithLayout())
+	if !engine.HasFeature(FeatureLayout) {
+		t.Fatal("HasFeature(FeatureLayout) = false, want true")
+	}
+}
+
+func TestEngineRegisterTag_AddsEngineLocalTag(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	err := engine.RegisterTag("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+		v, err := args.ExpectIdentifier()
+		if err != nil {
+			return nil, args.Error("expected variable name after 'set'")
+		}
+		if args.Match(TokenSymbol, "=") == nil {
+			return nil, args.Error("expected '=' after variable name")
+		}
+		expr, err := args.ParseExpression()
+		if err != nil {
+			return nil, err
+		}
+		return &testSetNode{
+			varName: v.Value,
+			expr:    expr,
+			line:    start.Line,
+			col:     start.Col,
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("RegisterTag() err = %v", err)
+	}
+
+	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}`)
+	if err != nil {
+		t.Fatalf("ParseString() err = %v", err)
+	}
+	got, err := tpl.Render(nil)
+	if err != nil {
+		t.Fatalf("Render() err = %v", err)
+	}
+	if got != "Hello" {
+		t.Errorf("Render() = %q, want %q", got, "Hello")
+	}
+}
+
+func TestEngineRegisterFilter_AddsEngineLocalFilter(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
+		return toString(value) + toString(value), nil
+	})
+
+	tpl, err := engine.ParseString(`{{ word | repeat }}`)
+	if err != nil {
+		t.Fatalf("ParseString() err = %v", err)
+	}
+	got, err := tpl.Render(Data{"word": "ha"})
+	if err != nil {
+		t.Fatalf("Render() err = %v", err)
+	}
+	if got != "haha" {
+		t.Errorf("Render() = %q, want %q", got, "haha")
+	}
+}
+
+func TestTemplateRenderTo_UsesDataPath(t *testing.T) {
+	t.Parallel()
+
+	tpl, err := New().ParseString(`Hello, {{ name }}!`)
+	if err != nil {
+		t.Fatalf("ParseString() err = %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tpl.RenderTo(&buf, Data{"name": "world"}); err != nil {
+		t.Fatalf("RenderTo() err = %v", err)
+	}
+	if got := buf.String(); got != "Hello, world!" {
+		t.Errorf("RenderTo() = %q, want %q", got, "Hello, world!")
 	}
 }
 
@@ -89,7 +177,7 @@ func TestEngineLoad_LayoutFeatureEnabled(t *testing.T) {
 
 	engine := New(
 		WithLoader(loader),
-		WithFeatures(FeatureLayout),
+		WithLayout(),
 	)
 
 	page, err := engine.Load("page.txt")
@@ -127,12 +215,12 @@ func TestEngineRenderString_HTMLFormatAutoescapes(t *testing.T) {
 		WithFormat(FormatHTML),
 	)
 
-	got, err := engine.RenderString("a.html", Context{"title": "<b>"})
+	got, err := engine.Render("a.html", Data{"title": "<b>"})
 	if err != nil {
-		t.Fatalf("RenderString() err = %v", err)
+		t.Fatalf("Render() err = %v", err)
 	}
 	if got != "&lt;b&gt;" {
-		t.Errorf("RenderString() = %q, want %q", got, "&lt;b&gt;")
+		t.Errorf("Render() = %q, want %q", got, "&lt;b&gt;")
 	}
 }
 
@@ -154,7 +242,7 @@ func TestEngineTemplateRender_InheritsEngineSemantics(t *testing.T) {
 		t.Fatalf("ParseString() err = %v", err)
 	}
 
-	got, err := tpl.Render(Context{"title": "<b>"})
+	got, err := tpl.Render(Data{"title": "<b>"})
 	if err != nil {
 		t.Fatalf("renderSourceTemplate() err = %v", err)
 	}
@@ -167,12 +255,12 @@ func TestEngineClone_IsolatesLocalRegistries(t *testing.T) {
 	t.Parallel()
 
 	engine := New()
-	engine.Filters().Register("alpha", func(value any, _ ...any) (any, error) {
+	engine.RegisterFilter("alpha", func(value any, _ ...any) (any, error) {
 		return "alpha:" + toString(value), nil
 	})
 
 	clone := engine.Clone()
-	clone.Filters().Register("beta", func(value any, _ ...any) (any, error) {
+	clone.RegisterFilter("beta", func(value any, _ ...any) (any, error) {
 		return "beta:" + toString(value), nil
 	})
 
@@ -184,7 +272,7 @@ func TestEngineClone_IsolatesLocalRegistries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseString() err = %v", err)
 	}
-	got, err := tpl.Render(Context{"x": "ok"})
+	got, err := tpl.Render(Data{"x": "ok"})
 	if err != nil {
 		t.Fatalf("renderSourceTemplate() err = %v", err)
 	}
@@ -394,7 +482,7 @@ func TestEngineRenderString_ConcurrentAliasNamesShareResolvedTemplate(t *testing
 				name = "alias.txt"
 			}
 
-			got, err := engine.RenderString(name, nil)
+			got, err := engine.Render(name, nil)
 			if err != nil {
 				errs <- err
 				return
@@ -407,11 +495,11 @@ func TestEngineRenderString_ConcurrentAliasNamesShareResolvedTemplate(t *testing
 	close(results)
 
 	for err := range errs {
-		t.Fatalf("RenderString() err = %v", err)
+		t.Fatalf("Render() err = %v", err)
 	}
 	for got := range results {
 		if got != "ok" {
-			t.Fatalf("RenderString() = %q, want %q", got, "ok")
+			t.Fatalf("Render() = %q, want %q", got, "ok")
 		}
 	}
 	if got := parseCount.Load(); got != 1 {

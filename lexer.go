@@ -34,11 +34,8 @@ type Lexer struct {
 	tokens []*Token
 	len    int // cached len(input)
 
-	// allowRaw enables {% raw %}...{% endraw %} block scanning. It is
-	// false by default so Compile(src) retains its original behavior
-	// (raw is treated as an unknown tag). Set.Get enables it via
-	// compileForSet so templates loaded via NewHTMLSet/NewTextSet get
-	// the raw feature.
+	// allowRaw enables {% raw %}...{% endraw %} block scanning. It stays
+	// off unless FeatureLayout is enabled for the owning engine.
 	allowRaw bool
 }
 
@@ -70,10 +67,8 @@ func (l *Lexer) Tokenize() ([]*Token, error) {
 				}
 				continue
 			case '%':
-				// Intercept {% raw %}...{% endraw %} at the lexer level
-				// — but only when allowRaw is enabled. Compile(src)
-				// leaves it off, so raw is treated as an unknown tag in
-				// that path.
+				// Intercept {% raw %}...{% endraw %} at the lexer level only
+				// when allowRaw is enabled for a layout-capable engine.
 				if l.allowRaw {
 					if n := l.matchRawOpen(); n > 0 {
 						if err := l.scanRawBlock(n); err != nil {

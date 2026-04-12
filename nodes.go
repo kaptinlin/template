@@ -25,14 +25,14 @@ type Node interface {
 // Statements are executed and produce output or side effects.
 type Statement interface {
 	Node
-	Execute(ctx *ExecutionContext, writer io.Writer) error
+	Execute(ctx *RenderContext, writer io.Writer) error
 }
 
 // Expression is the interface for all expression nodes.
 // Expressions are evaluated to produce values.
 type Expression interface {
 	Node
-	Evaluate(ctx *ExecutionContext) (*Value, error)
+	Evaluate(ctx *RenderContext) (*Value, error)
 }
 
 // Statement Node Types
@@ -226,7 +226,7 @@ func (n *TextNode) Position() (int, int) { return n.Line, n.Col }
 func (n *TextNode) String() string { return fmt.Sprintf("Text(%q)", n.Text) }
 
 // Execute writes the raw text to the output.
-func (n *TextNode) Execute(_ *ExecutionContext, w io.Writer) error {
+func (n *TextNode) Execute(_ *RenderContext, w io.Writer) error {
 	_, err := io.WriteString(w, n.Text)
 	return err
 }
@@ -241,11 +241,11 @@ func (n *OutputNode) String() string { return fmt.Sprintf("Output(%s)", n.Expr) 
 
 // Execute evaluates the expression and writes its string value.
 //
-// When the execution context has autoescape enabled (FormatHTML engine rendering),
+// When the render context has autoescape enabled (FormatHTML engine rendering),
 // the output is HTML-escaped UNLESS the underlying Go value is a
 // [SafeString]. In the non-autoescape path (text engine or standalone
 // Compile), SafeString is treated as a plain string.
-func (n *OutputNode) Execute(ctx *ExecutionContext, w io.Writer) error {
+func (n *OutputNode) Execute(ctx *RenderContext, w io.Writer) error {
 	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
 		return err
@@ -274,7 +274,7 @@ func (n *IfNode) Position() (int, int) { return n.Line, n.Col }
 func (n *IfNode) String() string { return fmt.Sprintf("If(%d branches)", len(n.Branches)) }
 
 // Execute runs the first truthy branch, or the else block if no branch matches.
-func (n *IfNode) Execute(ctx *ExecutionContext, w io.Writer) error {
+func (n *IfNode) Execute(ctx *RenderContext, w io.Writer) error {
 	for _, branch := range n.Branches {
 		val, err := branch.Condition.Evaluate(ctx)
 		if err != nil {
@@ -301,7 +301,7 @@ func (n *ForNode) String() string {
 }
 
 // Execute evaluates the iterable and executes the loop body for each element.
-func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
+func (n *ForNode) Execute(ctx *RenderContext, w io.Writer) error {
 	col, err := n.Collection.Evaluate(ctx)
 	if err != nil {
 		return err
@@ -311,7 +311,7 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	rv := col.resolved()
 	bindToKey := rv.IsValid() && rv.Kind() == reflect.Map
 
-	prevLoop, hadLoop := ctx.Private["loop"]
+	prevLoop, hadLoop := ctx.Locals["loop"]
 	var parent *LoopContext
 	if lc, ok := prevLoop.(*LoopContext); ok {
 		parent = lc
@@ -320,20 +320,20 @@ func (n *ForNode) Execute(ctx *ExecutionContext, w io.Writer) error {
 	prevBindings := make(map[string]any, len(n.Vars))
 	hadBindings := make(map[string]bool, len(n.Vars))
 	for _, name := range n.Vars {
-		prevBindings[name], hadBindings[name] = ctx.Private[name]
+		prevBindings[name], hadBindings[name] = ctx.Locals[name]
 	}
 
 	defer func() {
 		if hadLoop {
-			ctx.Private["loop"] = prevLoop
+			ctx.Locals["loop"] = prevLoop
 		} else {
-			delete(ctx.Private, "loop")
+			delete(ctx.Locals, "loop")
 		}
 		for _, name := range n.Vars {
 			if hadBindings[name] {
-				ctx.Private[name] = prevBindings[name]
+				ctx.Locals[name] = prevBindings[name]
 			} else {
-				delete(ctx.Private, name)
+				delete(ctx.Locals, name)
 			}
 		}
 	}()
@@ -398,7 +398,7 @@ func (n *BreakNode) Position() (int, int) { return n.Line, n.Col }
 func (n *BreakNode) String() string { return "Break" }
 
 // Execute signals loop termination via BreakError.
-func (n *BreakNode) Execute(_ *ExecutionContext, _ io.Writer) error {
+func (n *BreakNode) Execute(_ *RenderContext, _ io.Writer) error {
 	return &BreakError{}
 }
 
@@ -411,7 +411,7 @@ func (n *ContinueNode) Position() (int, int) { return n.Line, n.Col }
 func (n *ContinueNode) String() string { return "Continue" }
 
 // Execute signals loop continuation via ContinueError.
-func (n *ContinueNode) Execute(_ *ExecutionContext, _ io.Writer) error {
+func (n *ContinueNode) Execute(_ *RenderContext, _ io.Writer) error {
 	return &ContinueError{}
 }
 
@@ -424,7 +424,7 @@ func (n *LiteralNode) Position() (int, int) { return n.Line, n.Col }
 func (n *LiteralNode) String() string { return fmt.Sprintf("Literal(%v)", n.Value) }
 
 // Evaluate returns the literal value wrapped in a Value.
-func (n *LiteralNode) Evaluate(_ *ExecutionContext) (*Value, error) {
+func (n *LiteralNode) Evaluate(_ *RenderContext) (*Value, error) {
 	return NewValue(n.Value), nil
 }
 
@@ -436,8 +436,8 @@ func (n *VariableNode) Position() (int, int) { return n.Line, n.Col }
 // String returns a debug representation of the VariableNode.
 func (n *VariableNode) String() string { return fmt.Sprintf("Var(%s)", n.Name) }
 
-// Evaluate resolves the variable in the current execution context.
-func (n *VariableNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
+// Evaluate resolves the variable in the current render context.
+func (n *VariableNode) Evaluate(ctx *RenderContext) (*Value, error) {
 	val, ok := ctx.Get(n.Name)
 	if !ok {
 		return NewValue(nil), nil
@@ -456,7 +456,7 @@ func (n *BinaryOpNode) String() string {
 }
 
 // Evaluate computes the binary operation result.
-func (n *BinaryOpNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
+func (n *BinaryOpNode) Evaluate(ctx *RenderContext) (*Value, error) {
 	left, err := n.Left.Evaluate(ctx)
 	if err != nil {
 		return nil, err
@@ -574,7 +574,7 @@ func (n *UnaryOpNode) String() string {
 }
 
 // Evaluate computes the unary operation result.
-func (n *UnaryOpNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
+func (n *UnaryOpNode) Evaluate(ctx *RenderContext) (*Value, error) {
 	operand, err := n.Operand.Evaluate(ctx)
 	if err != nil {
 		return nil, err
@@ -614,7 +614,7 @@ func (n *PropertyAccessNode) String() string {
 }
 
 // Evaluate returns the property value from the evaluated object.
-func (n *PropertyAccessNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
+func (n *PropertyAccessNode) Evaluate(ctx *RenderContext) (*Value, error) {
 	object, err := n.Object.Evaluate(ctx)
 	if err != nil {
 		return nil, err
@@ -633,7 +633,7 @@ func (n *SubscriptNode) String() string {
 }
 
 // Evaluate returns the indexed or keyed value.
-func (n *SubscriptNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
+func (n *SubscriptNode) Evaluate(ctx *RenderContext) (*Value, error) {
 	object, err := n.Object.Evaluate(ctx)
 	if err != nil {
 		return nil, err
@@ -668,7 +668,7 @@ func (n *FilterNode) String() string {
 // Filter lookup consults the per-engine filter registry first, falling
 // back to the built-in registry. This gives each engine access to its own
 // feature-gated filters and format-specific overrides.
-func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
+func (n *FilterNode) Evaluate(ctx *RenderContext) (*Value, error) {
 	val, err := n.Expr.Evaluate(ctx)
 	if err != nil {
 		return nil, err
@@ -704,7 +704,7 @@ func (n *FilterNode) Evaluate(ctx *ExecutionContext) (*Value, error) {
 // Helper Functions
 
 // executeBody executes a list of nodes as statements, returning the first error.
-func executeBody(body []Node, ctx *ExecutionContext, w io.Writer) error {
+func executeBody(body []Node, ctx *RenderContext, w io.Writer) error {
 	for _, node := range body {
 		s, ok := node.(Statement)
 		if !ok {

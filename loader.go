@@ -143,7 +143,7 @@ func (l *fsLoader) Open(name string) (string, string, error) {
 // Chain loaders are typically used to implement override layers like
 // user > theme > builtin. Each hit's resolved name is prefixed with
 // the layer index so the same name in different layers produces
-// distinct cache keys in a [Set].
+// distinct cache keys in an [Engine].
 func NewChainLoader(loaders ...Loader) Loader {
 	return &chainLoader{loaders: loaders}
 }

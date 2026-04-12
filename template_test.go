@@ -7,6 +7,32 @@ import (
 	"time"
 )
 
+func parseCoreTemplate(t *testing.T, source string) *Template {
+	t.Helper()
+
+	tpl, err := New().ParseString(source)
+	if err != nil {
+		t.Fatalf("parsing template: %v", err)
+	}
+	return tpl
+}
+
+func renderCoreTemplate(t *testing.T, source string, data Data) string {
+	t.Helper()
+
+	return renderParsedTemplate(t, parseCoreTemplate(t, source), data)
+}
+
+func renderParsedTemplate(t *testing.T, tpl *Template, data Data) string {
+	t.Helper()
+
+	out, err := tpl.Render(data)
+	if err != nil {
+		t.Fatalf("rendering template: %v", err)
+	}
+	return out
+}
+
 func TestIfConditions(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -372,10 +398,7 @@ func TestIfConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			result := renderCoreTemplate(t, tt.tmpl, tt.context)
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
 			}
@@ -458,10 +481,7 @@ Total Products: 3`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			result := renderCoreTemplate(t, tt.tmpl, tt.context)
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
 			}
@@ -577,10 +597,7 @@ Featured Products:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			result := renderCoreTemplate(t, tt.tmpl, tt.context)
 			if result != tt.expected {
 				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
 					len(tt.expected), len(result), tt.expected, result)
@@ -755,10 +772,7 @@ Special Offers:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			result := renderCoreTemplate(t, tt.tmpl, tt.context)
 			if result != tt.expected {
 				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
 					len(tt.expected), len(result), tt.expected, result)
@@ -998,10 +1012,7 @@ Lower city: shanghai`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			result := renderCoreTemplate(t, tt.tmpl, tt.context)
 			if result != tt.expected {
 				t.Errorf("output mismatch (want len=%d, got len=%d):\nwant: %q\ngot:  %q",
 					len(tt.expected), len(result), tt.expected, result)
@@ -1025,10 +1036,7 @@ func TestComplexNestedVariableAccess(t *testing.T) {
 	{{ deepStructure.0.0.user.path.0.innerPath.0 }} {{ deepStructure.0.1.profile.path.0.innerPath.0 }} 
 	{{ deepStructure.1.0.user.path.0.innerPath.0 }} {{ deepStructure.1.1.profile.path.0.innerPath.0 }}`
 
-	tmpl, err := Compile(sourceTemplate)
-	if err != nil {
-		t.Fatalf("compiling template: %v", err)
-	}
+	tmpl := parseCoreTemplate(t, sourceTemplate)
 
 	// Create context and set complex nested data
 	ctx := make(map[string]any)
@@ -1164,10 +1172,7 @@ func TestComplexNestedConditions(t *testing.T) {
 	{% if appSettings.0.preferences.display.options.flags.0 %}Option1: {{ appSettings.0.preferences.display.options.flags.1 }}!{% endif %}
 	{% if appSettings.1.preferences.display.options.flags.0 %}Option2: {{ appSettings.1.preferences.display.options.flags.1 }}!{% endif %}`
 
-	tmpl, err := Compile(sourceTemplate)
-	if err != nil {
-		t.Fatalf("compiling template: %v", err)
-	}
+	tmpl := parseCoreTemplate(t, sourceTemplate)
 
 	// Create context and set complex nested data
 	ctx := make(map[string]any)
@@ -1337,7 +1342,7 @@ func TestComplexNestedConditions(t *testing.T) {
 // 			{% endfor %}
 // 		{% endfor %}`
 
-// 	tmpl, err := Compile(sourceTemplate)
+// 	tmpl, err := parseSourceTemplate(sourceTemplate)
 // 	if err != nil {
 // 		t.Fatalf("compiling template: %v", err)
 // 	}
@@ -1715,10 +1720,7 @@ Department SliceMap: [[{"key1":"nestedvalue1","key2":"nestedvalue2"},{"key1":"ne
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			result := renderCoreTemplate(t, tt.tmpl, tt.context)
 			// For tests with JSON output, check key content rather than exact string match
 			// due to map key ordering variations in go-json-experiment
 			if tt.name == "Interface_field_access" || tt.name == "SliceMap_access" {
@@ -1868,7 +1870,7 @@ Time exists: ` + now.Format(time.RFC3339),
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -2068,7 +2070,7 @@ key2: value2`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -2215,7 +2217,7 @@ Empty field: Not set`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -2411,7 +2413,7 @@ Sufficient scores: has 2 scores
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -2630,7 +2632,7 @@ Member: Carol Brown
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -3590,7 +3592,7 @@ Team:
 	// Execute tests
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, ctx)
+			result, err := renderSourceTemplate(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4115,7 +4117,7 @@ Carol Pointer:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4130,56 +4132,56 @@ func TestBasicBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		context  Context
+		context  Data
 		expected string
 	}{
 		{
 			name:     "Basic break in for loop",
 			tmpl:     `{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
 			name:     "Basic continue in for loop",
 			tmpl:     `{% for i in nums %}{% if i == 3 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1245",
 		},
 		{
 			name:     "Break at beginning",
 			tmpl:     `{% for i in nums %}{% break %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "",
 		},
 		{
 			name:     "Continue all iterations",
 			tmpl:     `{% for i in nums %}{% continue %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "",
 		},
 		{
 			name:     "Multiple breaks (only first one executes)",
 			tmpl:     `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% if i == 4 %}{% break %}{% endif %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1",
 		},
 		{
 			name:     "Break in string iteration",
 			tmpl:     `{% for char in str %}{% if char == 'c' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
-			context:  Context{"str": "abcdef"},
+			context:  Data{"str": "abcdef"},
 			expected: "ab",
 		},
 		{
 			name:     "Continue in string iteration",
 			tmpl:     `{% for char in str %}{% if char == 'c' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
-			context:  Context{"str": "abcdef"},
+			context:  Data{"str": "abcdef"},
 			expected: "abdef",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4194,38 +4196,38 @@ func TestNestedBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		context  Context
+		context  Data
 		expected string
 	}{
 		{
 			name:     "Break in inner loop only",
 			tmpl:     `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "1-1|2-1|3-1|",
 		},
 		{
 			name:     "Continue in inner loop only",
 			tmpl:     `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "1-1|1-3|2-1|2-3|3-1|3-3|",
 		},
 		{
 			name:     "Break in outer loop",
 			tmpl:     `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "1-1|1-2|1-3|",
 		},
 		{
 			name:     "Continue in outer loop",
 			tmpl:     `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% for j in nums %}{{ i }}-{{ j }}|{% endfor %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "1-1|1-2|1-3|3-1|3-2|3-3|",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4240,35 +4242,35 @@ func TestBreakContinueErrors(t *testing.T) {
 	tests := []struct {
 		name        string
 		tmpl        string
-		context     Context
+		context     Data
 		expectError bool
 		errorMsg    string
 	}{
 		{
 			name:        "Break outside of loop",
 			tmpl:        `Hello {% break %} World`,
-			context:     Context{},
+			context:     Data{},
 			expectError: true,
 			errorMsg:    "break statement outside of loop",
 		},
 		{
 			name:        "Continue outside of loop",
 			tmpl:        `Hello {% continue %} World`,
-			context:     Context{},
+			context:     Data{},
 			expectError: true,
 			errorMsg:    "continue statement outside of loop",
 		},
 		{
 			name:        "Break in if condition outside loop",
 			tmpl:        `{% if true %}{% break %}{% endif %}`,
-			context:     Context{},
+			context:     Data{},
 			expectError: true,
 			errorMsg:    "break statement outside of loop",
 		},
 		{
 			name:        "Continue in if condition outside loop",
 			tmpl:        `{% if true %}{% continue %}{% endif %}`,
-			context:     Context{},
+			context:     Data{},
 			expectError: true,
 			errorMsg:    "continue statement outside of loop",
 		},
@@ -4276,7 +4278,7 @@ func TestBreakContinueErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 
 			if tt.expectError {
 				if err == nil {
@@ -4297,56 +4299,56 @@ func TestAdvancedBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		context  Context
+		context  Data
 		expected string
 	}{
 		{
 			name:     "Break and continue in same loop",
 			tmpl:     `{% for i in nums %}{% if i == 2 %}{% continue %}{% endif %}{% if i == 4 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "13",
 		},
 		{
 			name:     "Break with complex condition",
 			tmpl:     `{% for i in nums %}{% if i > 2 && i < 5 %}{% break %}{% endif %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
 			name:     "Continue with complex condition",
 			tmpl:     `{% for i in nums %}{% if i > 1 && i < 4 %}{% continue %}{% endif %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "145",
 		},
 		{
 			name:     "Break in empty array",
 			tmpl:     `{% for i in empty %}{% break %}{{ i }}{% endfor %}Done`,
-			context:  Context{"empty": []int{}},
+			context:  Data{"empty": []int{}},
 			expected: "Done",
 		},
 		{
 			name:     "Continue in single element",
 			tmpl:     `{% for i in single %}{% continue %}{{ i }}{% endfor %}Done`,
-			context:  Context{"single": []int{1}},
+			context:  Data{"single": []int{1}},
 			expected: "Done",
 		},
 		{
 			name:     "Break with filter",
 			tmpl:     `{% for item in items %}{% if item | length > 3 %}{% break %}{% endif %}{{ item }}|{% endfor %}`,
-			context:  Context{"items": []string{"a", "bb", "ccc", "dddd", "eeeee"}},
+			context:  Data{"items": []string{"a", "bb", "ccc", "dddd", "eeeee"}},
 			expected: "a|bb|ccc|",
 		},
 		{
 			name:     "Continue with filter",
 			tmpl:     `{% for item in items %}{% if item | length == 2 %}{% continue %}{% endif %}{{ item }}|{% endfor %}`,
-			context:  Context{"items": []string{"a", "bb", "ccc", "dd", "e"}},
+			context:  Data{"items": []string{"a", "bb", "ccc", "dd", "e"}},
 			expected: "a|ccc|e|",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4361,32 +4363,32 @@ func TestDeepNestedBreakContinue(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		context  Context
+		context  Data
 		expected string
 	}{
 		{
 			name:     "Three level nested with break",
 			tmpl:     `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% break %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2}},
+			context:  Data{"nums": []int{1, 2}},
 			expected: "1-1-1|1-2-1|2-1-1|2-2-1|",
 		},
 		{
 			name:     "Three level nested with continue",
 			tmpl:     `{% for i in nums %}{% for j in nums %}{% for k in nums %}{% if k == 2 %}{% continue %}{% endif %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "1-1-1|1-1-3|1-2-1|1-2-3|1-3-1|1-3-3|2-1-1|2-1-3|2-2-1|2-2-3|2-3-1|2-3-3|3-1-1|3-1-3|3-2-1|3-2-3|3-3-1|3-3-3|",
 		},
 		{
 			name:     "Middle level break affects only that level",
 			tmpl:     `{% for i in nums %}{% for j in nums %}{% if j == 2 %}{% break %}{% endif %}{% for k in nums %}{{ i }}-{{ j }}-{{ k }}|{% endfor %}{% endfor %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "1-1-1|1-1-2|1-1-3|2-1-1|2-1-2|2-1-3|3-1-1|3-1-2|3-1-3|",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4401,49 +4403,49 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		context  Context
+		context  Data
 		expected string
 	}{
 		{
 			name:     "Break in nested if conditions",
 			tmpl:     `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% break %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1",
 		},
 		{
 			name:     "Continue in nested if conditions",
 			tmpl:     `{% for i in nums %}{% if i > 1 %}{% if i < 4 %}{% continue %}{% endif %}{% endif %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "145",
 		},
 		{
 			name:     "Break in if-else",
 			tmpl:     `{% for i in nums %}{% if i == 3 %}{% break %}{% else %}{{ i }}{% endif %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
 			name:     "Continue in if-else",
 			tmpl:     `{% for i in nums %}{% if i == 3 %}{% continue %}{% else %}{{ i }}{% endif %}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "1245",
 		},
 		{
 			name:     "Multiple loops with different control flow",
 			tmpl:     `{% for i in nums %}{% if i == 2 %}{% break %}{% endif %}{{ i }}{% endfor %}-{% for j in nums %}{% if j == 2 %}{% continue %}{% endif %}{{ j }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "1-13",
 		},
 		{
 			name:     "Break in loop inside if",
 			tmpl:     `{% if true %}{% for i in nums %}{% if i == 3 %}{% break %}{% endif %}{{ i }}{% endfor %}{% endif %}`,
-			context:  Context{"nums": []int{1, 2, 3, 4, 5}},
+			context:  Data{"nums": []int{1, 2, 3, 4, 5}},
 			expected: "12",
 		},
 		{
 			name: "Array of maps with break",
 			tmpl: `{% for item in items %}{% if item.skip %}{% break %}{% endif %}{{ item.name }}|{% endfor %}`,
-			context: Context{
+			context: Data{
 				"items": []map[string]any{
 					{"name": "a", "skip": false},
 					{"name": "b", "skip": false},
@@ -4456,7 +4458,7 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 		{
 			name: "Array of maps with continue",
 			tmpl: `{% for item in items %}{% if item.skip %}{% continue %}{% endif %}{{ item.name }}|{% endfor %}`,
-			context: Context{
+			context: Data{
 				"items": []map[string]any{
 					{"name": "a", "skip": false},
 					{"name": "b", "skip": true},
@@ -4470,7 +4472,7 @@ func TestComplexControlFlowScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4485,50 +4487,50 @@ func TestBreakContinueEdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		context  Context
+		context  Data
 		expected string
 	}{
 		{
 			name:     "Break immediately in nested loop",
 			tmpl:     `{% for i in nums %}{% for j in nums %}{% break %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "123",
 		},
 		{
 			name:     "Continue immediately in nested loop",
 			tmpl:     `{% for i in nums %}{% for j in nums %}{% continue %}{{ j }}{% endfor %}{{ i }}{% endfor %}`,
-			context:  Context{"nums": []int{1, 2, 3}},
+			context:  Data{"nums": []int{1, 2, 3}},
 			expected: "123",
 		},
 		{
 			name:     "Break with boolean array",
 			tmpl:     `{% for flag in flags %}{% if flag %}{% break %}{% endif %}{{ flag }}{% endfor %}`,
-			context:  Context{"flags": []bool{false, false, true, false}},
+			context:  Data{"flags": []bool{false, false, true, false}},
 			expected: "falsefalse",
 		},
 		{
 			name:     "Continue with boolean array",
 			tmpl:     `{% for flag in flags %}{% if flag %}{% continue %}{% endif %}{{ flag }}{% endfor %}`,
-			context:  Context{"flags": []bool{false, true, false, true}},
+			context:  Data{"flags": []bool{false, true, false, true}},
 			expected: "falsefalse",
 		},
 		{
 			name:     "Break in string with unicode",
 			tmpl:     `{% for char in str %}{% if char == '界' %}{% break %}{% endif %}{{ char }}{% endfor %}`,
-			context:  Context{"str": "世界你好"},
+			context:  Data{"str": "世界你好"},
 			expected: "世",
 		},
 		{
 			name:     "Continue in string with unicode",
 			tmpl:     `{% for char in str %}{% if char == '界' %}{% continue %}{% endif %}{{ char }}{% endfor %}`,
-			context:  Context{"str": "世界你好"},
+			context:  Data{"str": "世界你好"},
 			expected: "世你好",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4634,8 +4636,8 @@ func TestElifBasic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := Context(tt.context)
-			result, err := Render(tt.tmpl, ctx)
+			ctx := Data(tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4743,8 +4745,8 @@ func TestElifNested(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := Context(tt.context)
-			result, err := Render(tt.tmpl, ctx)
+			ctx := Data(tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -4869,8 +4871,8 @@ func TestElifComplexExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := Context(tt.context)
-			result, err := Render(tt.tmpl, ctx)
+			ctx := Data(tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, ctx)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}
@@ -5342,8 +5344,8 @@ Category: Electronics
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := Context(tt.context)
-			result, err := Render(tt.tmpl, ctx)
+			ctx := Data(tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, ctx)
 
 			if tt.expectError {
 				if err == nil {
@@ -5377,7 +5379,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		Parameters  map[string]Param `json:"parameters"`
 	}
 
-	type Data struct {
+	type OperationData struct {
 		Operation Operation `json:"operation"`
 	}
 
@@ -5391,7 +5393,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		{
 			name: "String query parameter with request body",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: true,
 						Parameters: map[string]Param{
@@ -5447,7 +5449,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		{
 			name: "Non-string header parameter without request body",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5500,7 +5502,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		{
 			name: "Path parameter",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5553,7 +5555,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		{
 			name: "Cookie parameter",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5606,7 +5608,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		{
 			name: "Default case (unknown parameter type)",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: true,
 						Parameters: map[string]Param{
@@ -5662,7 +5664,7 @@ func TestCompleteParameterGeneration(t *testing.T) {
 		{
 			name: "Simple elif test with single parameter",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: true,
 						Parameters: map[string]Param{
@@ -5692,7 +5694,7 @@ String param: username
 		{
 			name: "Integer parameter test",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5722,7 +5724,7 @@ Integer param: count
 		{
 			name: "Empty parameters map",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters:  map[string]Param{},
@@ -5741,7 +5743,7 @@ Integer param: count
 		{
 			name: "String query parameter with nested if elif",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5793,7 +5795,7 @@ Integer param: count
 		{
 			name: "Unmatched elif in for loop (should error)",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5817,7 +5819,7 @@ Integer param: count
 		{
 			name: "Unmatched else in for loop (should error)",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5841,7 +5843,7 @@ Integer param: count
 		{
 			name: "Error case: multiple else statements in nested structure",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: false,
 						Parameters: map[string]Param{
@@ -5923,7 +5925,7 @@ Integer param: count
 		{
 			name: "Complex validation with nested conditions",
 			context: map[string]any{
-				"data": Data{
+				"data": OperationData{
 					Operation: Operation{
 						RequestBody: true,
 						Parameters: map[string]Param{
@@ -5996,8 +5998,8 @@ req = req.JSONBody(r.Body)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := Context(tt.context)
-			result, err := Render(tt.tmpl, ctx)
+			ctx := Data(tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, ctx)
 
 			if tt.expectError {
 				if err == nil {
@@ -6074,8 +6076,8 @@ Outer[1]:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := Context(tt.context)
-			result, err := Render(tt.tmpl, ctx)
+			ctx := Data(tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, ctx)
 
 			if tt.expectError {
 				if err == nil {
@@ -6098,52 +6100,45 @@ func TestLoopContext(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		ctx      Context
+		ctx      Data
 		expected string
 	}{
 		{
 			name:     "Simple loop with loop.Index",
 			tmpl:     "{% for item in items %}{{ loop.Index }}: {{ item }}\n{% endfor %}",
-			ctx:      Context{"items": []string{"a", "b", "c"}},
+			ctx:      Data{"items": []string{"a", "b", "c"}},
 			expected: "0: a\n1: b\n2: c\n",
 		},
 		{
 			name:     "Loop with all loop properties",
 			tmpl:     "{% for item in items %}{{ loop.Index }}-{{ loop.Revindex }}-{{ loop.First }}-{{ loop.Last }}-{{ loop.Length }}: {{ item }}\n{% endfor %}",
-			ctx:      Context{"items": []string{"x", "y"}},
+			ctx:      Data{"items": []string{"x", "y"}},
 			expected: "0-1-true-false-2: x\n1-0-false-true-2: y\n",
 		},
 		{
 			name:     "Nested loops",
 			tmpl:     "{% for outer in outers %}Outer {{ loop.Index }}:\n{% for inner in inners %}  Inner {{ loop.Index }} (outer was {{ outer }})\n{% endfor %}{% endfor %}",
-			ctx:      Context{"outers": []string{"A", "B"}, "inners": []string{"1", "2"}},
+			ctx:      Data{"outers": []string{"A", "B"}, "inners": []string{"1", "2"}},
 			expected: "Outer 0:\n  Inner 0 (outer was A)\n  Inner 1 (outer was A)\nOuter 1:\n  Inner 0 (outer was B)\n  Inner 1 (outer was B)\n",
 		},
 		{
 			name:     "String iteration with loop",
 			tmpl:     "{% for char in word %}{{ loop.Index }}: {{ char }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
-			ctx:      Context{"word": "hello"},
+			ctx:      Data{"word": "hello"},
 			expected: "0: h, 1: e, 2: l, 3: l, 4: o",
 		},
 		{
 			name:     "Map iteration with loop",
 			tmpl:     "{% for k, v in map %}{{ loop.Index }}: {{ k }}={{ v }}{% if loop.Last == false %}, {% endif %}{% endfor %}",
-			ctx:      Context{"map": map[string]string{"a": "1", "b": "2"}},
+			ctx:      Data{"map": map[string]string{"a": "1", "b": "2"}},
 			expected: "0: a=1, 1: b=2",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.tmpl)
-			if err != nil {
-				t.Fatalf("compiling template: %v", err)
-			}
-
-			result, err := tmpl.Render(tt.ctx)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			tmpl := parseCoreTemplate(t, tt.tmpl)
+			result := renderParsedTemplate(t, tmpl, tt.ctx)
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
 			}
@@ -6159,7 +6154,7 @@ Outer loop {{ loop.Index }} (first: {{ loop.First }}, last: {{ loop.Last }}):
 {% endfor %}
 {% endfor %}`
 
-	ctx := Context{
+	ctx := Data{
 		"outers": []string{"A", "B"},
 		"inners": []string{"1", "2", "3"},
 	}
@@ -6184,15 +6179,8 @@ Outer loop 1 (first: false, last: true):
 
 `
 
-	compiled, err := Compile(tmpl)
-	if err != nil {
-		t.Fatalf("compiling template: %v", err)
-	}
-
-	result, err := compiled.Render(ctx)
-	if err != nil {
-		t.Fatalf("rendering template: %v", err)
-	}
+	compiled := parseCoreTemplate(t, tmpl)
+	result := renderParsedTemplate(t, compiled, ctx)
 
 	if result != expected {
 		t.Errorf("got %q, want %q", result, expected)
@@ -6203,7 +6191,7 @@ func TestHighlyComplexNestedLoops(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		ctx      Context
+		ctx      Data
 		expected string
 	}{
 		{
@@ -6214,7 +6202,7 @@ func TestHighlyComplexNestedLoops(t *testing.T) {
 {% if loop.Revindex > 0 %}{% for level4 in data.level4 %}      L4[{{ loop.Index }}/{{ loop.Length }}]
 {% if loop.Index == 1 %}{% for level5 in data.level5 %}        L5[{{ loop.Index }}/{{ loop.Length }}]{% if loop.Last %}:END{% endif %}
 {% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endfor %}`,
-			ctx: Context{
+			ctx: Data{
 				"data": map[string]any{
 					"level1": []int{10, 20},
 					"level2": []string{"A", "B"},
@@ -6244,7 +6232,7 @@ L1[1/2]
 {% if loop.First %}{% for e in arrays.e %}        E{{ loop.Index }}{% if loop.First %}!{% endif %}
 {% for f in arrays.f %}          F{{ loop.Index }}/{{ loop.Length }}{% if loop.Last %}*{% endif %}
 {% endfor %}{% endfor %}{% endif %}{% endfor %}{% endfor %}{% endfor %}{% endfor %}`,
-			ctx: Context{
+			ctx: Data{
 				"arrays": map[string]any{
 					"a": []int{1, 2},
 					"b": []string{"x", "y"},
@@ -6359,7 +6347,7 @@ A1(end)
 {% if loop.Index == 1 %}{% for sub in subs %}        SUB[{{ loop.Index }}]: {{ sub }}{% if loop.Last %} (FINAL){% endif %}
 {% if loop.First %}{% for meta in metas %}          META[{{ loop.Index }}]: {{ meta }} (pos:{{ loop.Revindex }})
 {% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% endfor %}`,
-			ctx: Context{
+			ctx: Data{
 				"matrix": [][][]string{
 					{{"a1"}, {"b1", "b2"}, {"c1"}},
 					{{"d1"}, {"e1", "e2", "e3"}, {"f1"}},
@@ -6401,15 +6389,8 @@ ROW[1]:FOOTER (rev:0)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := Compile(tt.tmpl)
-			if err != nil {
-				t.Fatalf("compiling template: %v", err)
-			}
-
-			result, err := tmpl.Render(tt.ctx)
-			if err != nil {
-				t.Fatalf("rendering template: %v", err)
-			}
+			tmpl := parseCoreTemplate(t, tt.tmpl)
+			result := renderParsedTemplate(t, tmpl, tt.ctx)
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
 			}
@@ -6486,7 +6467,7 @@ func TestLoopContextFullFeatures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := Render(tt.tmpl, tt.context)
+			result, err := renderSourceTemplate(tt.tmpl, tt.context)
 			if err != nil {
 				t.Fatalf("rendering template: %v", err)
 			}

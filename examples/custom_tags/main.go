@@ -1,4 +1,4 @@
-// Package main demonstrates registering a custom tag via RegisterTag.
+// Package main demonstrates registering a custom tag on an Engine.
 // External packages can implement the Statement interface directly.
 package main
 
@@ -21,18 +21,20 @@ type SetNode struct {
 func (n *SetNode) Position() (int, int) { return n.Line, n.Col }
 func (n *SetNode) String() string       { return fmt.Sprintf("Set(%s)", n.VarName) }
 
-func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
-	val, err := n.Expr.Evaluate(ctx)
+func (n *SetNode) Execute(renderCtx *template.RenderContext, _ io.Writer) error {
+	val, err := n.Expr.Evaluate(renderCtx)
 	if err != nil {
 		return err
 	}
-	ctx.Set(n.VarName, val.Interface())
+	renderCtx.Set(n.VarName, val.Interface())
 	return nil
 }
 
 func main() {
-	// Register a {% set varname = expr %} tag.
-	err := template.RegisterTag("set", func(_ *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
+	engine := template.New()
+
+	// Register a {% set varname = expr %} tag on this engine.
+	err := engine.RegisterTag("set", func(_ *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
 		varToken, err := arguments.ExpectIdentifier()
 		if err != nil {
 			return nil, arguments.Error("expected variable name after 'set'")
@@ -62,9 +64,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	output, err := template.Render(`{% set greeting = "Hello" %}{{ greeting }}, World!`, nil)
+	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}, World!`)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(output) // Hello, World!
+
+	rendered, err := tpl.Render(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(rendered) // Hello, World!
 }

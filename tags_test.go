@@ -1474,7 +1474,7 @@ type testSetNode struct {
 func (n *testSetNode) Position() (int, int) { return n.line, n.col }
 func (n *testSetNode) String() string       { return fmt.Sprintf("Set(%s)", n.varName) }
 
-func (n *testSetNode) Execute(ctx *ExecutionContext, _ io.Writer) error {
+func (n *testSetNode) Execute(ctx *RenderContext, _ io.Writer) error {
 	val, err := n.expr.Evaluate(ctx)
 	if err != nil {
 		return err
@@ -1485,7 +1485,7 @@ func (n *testSetNode) Execute(ctx *ExecutionContext, _ io.Writer) error {
 
 func TestRegisterTagExternalStatement(t *testing.T) {
 	engine := New()
-	err := engine.Tags().Register("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+	err := engine.RegisterTag("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
 		v, err := args.ExpectIdentifier()
 		if err != nil {
 			return nil, args.Error("expected variable name after 'set'")
@@ -1508,7 +1508,7 @@ func TestRegisterTagExternalStatement(t *testing.T) {
 		}, nil
 	})
 	if err != nil {
-		t.Fatalf("engine.Tags().Register(\"set\") = %v, want nil", err)
+		t.Fatalf("engine.RegisterTag(\"set\") = %v, want nil", err)
 	}
 
 	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}, World!`)

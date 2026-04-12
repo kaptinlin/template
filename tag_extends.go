@@ -22,7 +22,7 @@ func (n *ExtendsNode) String() string { return "Extends" }
 
 // Execute is a no-op. The parent relationship is established at parse
 // time and consumed by Template.Execute.
-func (n *ExtendsNode) Execute(_ *ExecutionContext, _ io.Writer) error {
+func (n *ExtendsNode) Execute(_ *RenderContext, _ io.Writer) error {
 	return nil
 }
 
@@ -39,7 +39,7 @@ const maxExtendsDepth = 10
 //   - Parent template is loaded and compiled at parse time.
 //   - Circular chains (A extends B, B extends A) are rejected.
 //
-// Sets doc.parent on the owning parser so compileForSet can transfer
+// Sets doc.parent on the owning parser so compileForEngine can transfer
 // the reference to the final Template.
 func parseExtendsTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 	if doc.hasNonTrivialContent {
@@ -65,16 +65,16 @@ func parseExtendsTag(doc *Parser, start *Token, args *Parser) (Statement, error)
 		return nil, newParseError("extends: unexpected tokens after path", start.Line, start.Col)
 	}
 
-	// parseExtendsTag is only reachable when a Set is present (the tag
-	// is not in the global registry), so doc.Set() is non-nil here.
-	set := doc.Set()
+	// parseExtendsTag is only reachable when a layout-enabled engine is present
+	// (the tag is not in the global registry), so doc.Engine() is non-nil here.
+	engine := doc.Engine()
 
 	// Circular extends: detect if the parent is already mid-compile.
-	if set.isParsing(parentName) {
+	if engine.isParsing(parentName) {
 		return nil, fmt.Errorf("%w: %q", ErrCircularExtends, parentName)
 	}
 
-	parentTpl, err := set.Get(parentName)
+	parentTpl, err := engine.Load(parentName)
 	if err != nil {
 		if errors.Is(err, ErrTemplateNotFound) {
 			return nil, err

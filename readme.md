@@ -12,7 +12,7 @@ This package now exposes one public model: `Engine`.
 |---|---|---|
 | Render plain text, YAML, TOML, code, or Taskfiles from files | `template.New(template.WithLoader(...), template.WithFormat(template.FormatText))` | Unified engine API with text output semantics |
 | Render HTML pages or HTML emails | `template.New(template.WithLoader(...), template.WithFormat(template.FormatHTML))` | Unified engine API with HTML output semantics |
-| Enable layout features | `template.WithFeatures(template.FeatureLayout)` | Explicitly turns on `include` / `extends` / `block` / `raw` |
+| Enable layout features | `template.WithLayout()` | Explicitly turns on `include` / `extends` / `block` / `raw` |
 | Parse a one-off source string | `engine.ParseString(src)` | Same engine model, no second API surface |
 
 Recommended defaults:
@@ -21,7 +21,7 @@ Recommended defaults:
 - Embedded templates: `NewFSLoader(embed.FS)`
 - HTML output: `New(..., WithFormat(FormatHTML))`
 - Non-HTML output: `New(..., WithFormat(FormatText))`
-- Layout features: `WithFeatures(FeatureLayout)` only when needed
+- Layout features: `WithLayout()` only when needed
 
 ## Design Rules
 
@@ -31,13 +31,13 @@ The public design is intentionally narrow:
 engine := template.New(
     template.WithLoader(loader),
     template.WithFormat(template.FormatHTML),
-    template.WithFeatures(template.FeatureLayout),
+    template.WithLayout(),
 )
 ```
 
 1. `Engine` is the only entry point.
 2. `FormatHTML` and `FormatText` define output semantics.
-3. `FeatureLayout` is optional and must be enabled explicitly.
+3. `WithLayout()` is optional and must be enabled explicitly.
 4. Tags and filters belong to an engine instance, not to mutable package-global APIs.
 
 ## Installation
@@ -57,7 +57,7 @@ if err != nil {
     log.Fatal(err)
 }
 
-output, err := tmpl.Render(template.Context{"name": "alice"})
+rendered, err := tmpl.Render(template.Data{"name": "alice"})
 // output: "Hello, ALICE!"
 ```
 
@@ -68,6 +68,7 @@ For web pages with shared layouts, includes, and auto-escape:
 ```go
 import (
     "embed"
+    "log"
     "os"
 
     "github.com/kaptinlin/template"
@@ -77,25 +78,39 @@ import (
 var themeFS embed.FS
 
 func main() {
-    user, _ := template.NewDirLoader("./templates")               // os.Root sandbox
-    theme  := template.NewFSLoader(themeFS)                        // embed.FS
-    loader := template.NewChainLoader(user, theme)                 // user > theme
+    userTemplates, err := template.NewDirLoader("./templates")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    themeTemplates := template.NewFSLoader(themeFS)
+    loader := template.NewChainLoader(
+        userTemplates,  // app overrides
+        themeTemplates, // embedded fallback
+    )
 
     engine := template.New(
         template.WithLoader(loader),
         template.WithFormat(template.FormatHTML),
-        template.WithFeatures(template.FeatureLayout),
-        template.WithGlobals(template.Context{"site": siteData}),
+        template.WithLayout(),
+        template.WithDefaults(template.Data{"site": siteData}),
     )
 
-    _ = engine.Render("layouts/blog.html", template.Context{
+    // Write the rendered page directly to the terminal.
+    err = engine.RenderTo("layouts/blog.html", os.Stdout, template.Data{
         "page": map[string]any{
             "title":   "Hello <world>",                            // auto-escaped
             "content": template.SafeString("<p>trusted HTML</p>"), // rendered as-is
         },
-    }, os.Stdout)
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
 }
 ```
+
+`NewChainLoader(userTemplates, themeTemplates)` means the app's local
+templates win first, and the embedded theme is only used as fallback.
 
 The templates in `./themes/default/`:
 
@@ -135,18 +150,23 @@ See [docs/layout.md](docs/layout.md) for the full layout guide, [docs/loaders.md
 For generating code, config files, or anything that should NOT be HTML-escaped:
 
 ```go
-loader, _ := template.NewDirLoader("./scaffold")
+loader, err := template.NewDirLoader("./scaffold")
+if err != nil {
+    log.Fatal(err)
+}
 
 engine := template.New(
     template.WithLoader(loader),
     template.WithFormat(template.FormatText),
-    template.WithFeatures(template.FeatureLayout),
-    template.WithGlobals(template.Context{"project": projectMeta}),
+    template.WithLayout(),
+    template.WithDefaults(template.Data{"project": projectMeta}),
 )
 
 // Generates Taskfile.yml with {{.GOBIN}}/bin intact — no HTML escape would
 // turn & into &amp; and break the YAML.
-_ = engine.Render("Taskfile.yml.tmpl", nil, &buf)
+if err := engine.RenderTo("Taskfile.yml.tmpl", &buf, nil); err != nil {
+    log.Fatal(err)
+}
 ```
 
 ### Using io.Writer
@@ -154,9 +174,18 @@ _ = engine.Render("Taskfile.yml.tmpl", nil, &buf)
 ```go
 engine := template.New()
 tmpl, _ := engine.ParseString("Hello, {{ name }}!")
-ctx := template.NewExecutionContext(template.Context{"name": "World"})
-_ = tmpl.Execute(ctx, os.Stdout)
+_ = tmpl.RenderTo(os.Stdout, template.Data{"name": "World"})
 ```
+
+The data model is intentionally small:
+
+- `Data` is plain input data.
+- `WithDefaults(...)` provides engine-level default data.
+- `RenderContext` is the runtime container that combines `Data` and `Locals` during execution.
+
+Most callers only need `Data`, `WithDefaults(...)`, `Render(...)`, and
+`RenderTo(...)`. Reach for `RenderContext` when you are writing custom
+tags and nodes or need direct control over runtime state.
 
 ## Template Syntax
 
@@ -233,9 +262,9 @@ See [Control Structure Documentation](docs/control-structure.md) for details.
 {# This content will not appear in the output #}
 ```
 
-### Layout & inheritance (`FeatureLayout`)
+### Layout & inheritance (`WithLayout()`)
 
-Available when the engine enables `template.WithFeatures(template.FeatureLayout)`:
+Available when the engine enables `template.WithLayout()`:
 
 ```django
 {# Include a partial #}
@@ -260,7 +289,7 @@ Available when the engine enables `template.WithFeatures(template.FeatureLayout)
 {% endraw %}
 ```
 
-`{% include %}`, `{% extends %}`, `{% block %}`, and `{% raw %}` exist only when an engine enables `FeatureLayout`. See [docs/layout.md](docs/layout.md).
+`{% include %}`, `{% extends %}`, `{% block %}`, and `{% raw %}` exist only when an engine enables `WithLayout()`. See [docs/layout.md](docs/layout.md).
 
 ### Auto-escape & `safe` (`FormatHTML` only)
 
@@ -275,7 +304,7 @@ An engine using `FormatHTML` auto-escapes every `{{ expr }}` output:
 Go code can mark values as trusted using `template.SafeString`:
 
 ```go
-engine.Render("page.html", template.Context{
+engine.Render("page.html", template.Data{
     "title":   "Hello <world>",                            // escaped
     "content": template.SafeString("<p>pre-rendered</p>"), // NOT escaped
 }, w)
@@ -431,7 +460,7 @@ Literal support: strings (`"text"` / `'text'`), numbers (`42`, `3.14`), booleans
 
 ```go
 engine := template.New()
-engine.Filters().Register("repeat", func(value any, args ...any) (any, error) {
+engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
     s := fmt.Sprintf("%v", value)
     n := 2
     if len(args) > 0 {
@@ -447,9 +476,9 @@ out, _ := tpl.Render(nil)
 // out == "hahaha"
 ```
 
-Use `Register` for new names, `Replace` when you intentionally override
-an existing engine-local filter, and `MustRegister` in bootstrap-style
-code where duplicate registration should panic.
+Use `RegisterFilter` for new names, `ReplaceFilter` when you
+intentionally override an existing engine-local filter, and
+`MustRegisterFilter` in bootstrap-style code where registration should panic.
 
 ### Custom Tags
 
@@ -464,16 +493,16 @@ type SetNode struct {
 
 func (n *SetNode) Position() (int, int) { return n.Line, n.Col }
 func (n *SetNode) String() string       { return fmt.Sprintf("Set(%s)", n.VarName) }
-func (n *SetNode) Execute(ctx *template.ExecutionContext, _ io.Writer) error {
-    val, err := n.Expression.Evaluate(ctx)
+func (n *SetNode) Execute(renderCtx *template.RenderContext, _ io.Writer) error {
+    val, err := n.Expression.Evaluate(renderCtx)
     if err != nil {
         return err
     }
-    ctx.Set(n.VarName, val.Interface())
+    renderCtx.Set(n.VarName, val.Interface())
     return nil
 }
 
-engine.Tags().Register("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
+engine.RegisterTag("set", func(doc *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
     varToken, err := arguments.ExpectIdentifier()
     if err != nil {
         return nil, arguments.Error("expected variable name after 'set'")
@@ -494,8 +523,8 @@ engine.Tags().Register("set", func(doc *template.Parser, start *template.Token, 
 })
 ```
 
-As with filters, prefer `Register` for new names and `Replace` only when
-you intentionally override an existing engine-local parser.
+As with filters, prefer `RegisterTag` for new names and `ReplaceTag`
+only when you intentionally override an existing engine-local parser.
 
 ## Examples
 
@@ -507,28 +536,28 @@ Runnable examples live in the [`examples/`](examples/) directory:
 | [`examples/custom_filters`](examples/custom_filters) | Registering a custom filter on an `Engine` |
 | [`examples/custom_tags`](examples/custom_tags) | Registering a custom tag on an `Engine` |
 | [`examples/layout`](examples/layout) | Engine-based HTML site with `{% extends %}` / `{% block %}` / `{% include %}` / `block.super` / auto-escape |
-| [`examples/multifile_text`](examples/multifile_text) | Engine-based text generation with `FormatText` and `FeatureLayout` |
+| [`examples/multifile_text`](examples/multifile_text) | Engine-based text generation with `FormatText` and `WithLayout()` |
 
 Run any example with `go run ./examples/<name>`.
 
-## Context Building
+## Data Building
 
 ```go
 engine := template.New()
 tmpl, _ := engine.ParseString(source)
 
-// Using map directly
-output, _ := tmpl.Render(map[string]any{
+// Using Data directly
+rendered, _ := tmpl.Render(template.Data{
     "name": "Alice",
     "age":  30,
 })
 
-// Using ContextBuilder (supports struct expansion)
-ctx, err := template.NewContextBuilder().
+// Using DataBuilder (supports struct expansion)
+data, err := template.NewDataBuilder().
     KeyValue("name", "Alice").
     Struct(user).
     Build()
-output, _ := tmpl.Render(ctx)
+rendered, _ = tmpl.Render(data)
 ```
 
 ## Error Reporting

@@ -17,23 +17,27 @@ func TestSafeString_StringCompatible(t *testing.T) {
 }
 
 // The safe filter is NOT registered globally. It only becomes available
-// inside templates loaded via NewHTMLSet or NewTextSet.
+// inside engines with FeatureLayout enabled.
 func TestSafeFilter_NotRegisteredGlobally(t *testing.T) {
 	t.Parallel()
 
-	if _, ok := Filter("safe"); ok {
+	if _, ok := defaultRegistry.Filter("safe"); ok {
 		t.Error("safe filter should not be in the global registry")
 	}
 }
 
-// The safe filter is available in Set-loaded templates.
-func TestSafeFilter_AvailableInSetScope(t *testing.T) {
+// The safe filter is available in engines with FeatureLayout enabled.
+func TestSafeFilter_AvailableInFeatureLayout(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
-		"a.txt": `{{ x | safe }}`,
-	}))
-	got, err := set.RenderString("a.txt", Context{"x": "<b>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.txt": `{{ x | safe }}`,
+		})),
+		WithFormat(FormatText),
+		WithLayout(),
+	)
+	got, err := engine.Render("a.txt", Data{"x": "<b>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -42,13 +46,11 @@ func TestSafeFilter_AvailableInSetScope(t *testing.T) {
 	}
 }
 
-// The global escape filter returns plain string (unchanged from the
-// pre-layout era), so existing callers that type-assert the result as
-// string continue to work.
+// The built-in escape filter returns a plain string.
 func TestEscapeFilter_GlobalReturnsString(t *testing.T) {
 	t.Parallel()
 
-	fn, ok := Filter("escape")
+	fn, ok := defaultRegistry.Filter("escape")
 	if !ok {
 		t.Fatal("escape filter missing from global registry")
 	}
@@ -64,15 +66,18 @@ func TestEscapeFilter_GlobalReturnsString(t *testing.T) {
 	}
 }
 
-// Inside HTMLSet the escape filter is overridden with a SafeString-
+// Inside FormatHTML the escape filter is overridden with a SafeString-
 // returning variant so the auto-escape pipeline does not double-escape.
-func TestEscapeFilter_HTMLSetReturnsSafeString(t *testing.T) {
+func TestEscapeFilter_FormatHTMLReturnsSafeString(t *testing.T) {
 	t.Parallel()
 
-	set := NewHTMLSet(NewMemoryLoader(map[string]string{
-		"a.html": `{{ x | escape }}`,
-	}))
-	got, err := set.RenderString("a.html", Context{"x": "<b>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{{ x | escape }}`,
+		})),
+		WithFormat(FormatHTML),
+	)
+	got, err := engine.Render("a.html", Data{"x": "<b>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -84,32 +89,35 @@ func TestEscapeFilter_HTMLSetReturnsSafeString(t *testing.T) {
 	}
 }
 
-// In TextSet, escape is overridden? No — only HTMLSet needs the safe
-// variant. TextSet's escape uses the global (plain string) filter via
+// In FormatText, escape is overridden? No — only FormatHTML needs the safe
+// variant. FormatText's escape uses the global (plain string) filter via
 // parent fallback.
-func TestEscapeFilter_TextSetUsesGlobal(t *testing.T) {
+func TestEscapeFilter_FormatTextUsesGlobal(t *testing.T) {
 	t.Parallel()
 
-	set := NewTextSet(NewMemoryLoader(map[string]string{
-		"a.txt": `{{ x | escape }}`,
-	}))
-	got, err := set.RenderString("a.txt", Context{"x": "<b>"})
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.txt": `{{ x | escape }}`,
+		})),
+		WithFormat(FormatText),
+	)
+	got, err := engine.Render("a.txt", Data{"x": "<b>"})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	// TextSet does not auto-escape, so escape's string return is
+	// FormatText does not auto-escape, so escape's string return is
 	// written as-is.
 	if got != "&lt;b&gt;" {
 		t.Errorf("got %q", got)
 	}
 }
 
-// Global filter lookup for "safe" returns ErrFilterNotFound via a
+// Built-in filter lookup for "safe" returns ErrFilterNotFound via a
 // render that exercises the FilterNode path.
-func TestCompileCompat_NoSafeFilter(t *testing.T) {
+func TestCoreEngine_NoSafeFilter(t *testing.T) {
 	t.Parallel()
 
-	_, err := Render(`{{ x | safe }}`, Context{"x": "<b>"})
+	_, err := renderSourceTemplate(`{{ x | safe }}`, Data{"x": "<b>"})
 	if !errors.Is(err, ErrFilterNotFound) {
 		t.Errorf("err = %v, want ErrFilterNotFound", err)
 	}
