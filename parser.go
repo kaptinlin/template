@@ -93,22 +93,16 @@ func (p *Parser) parseNext() (Statement, error) {
 func (p *Parser) parseText() Statement {
 	tok := p.Current()
 	p.Advance()
-	if !isAllWhitespace(tok.Value) {
-		p.hasNonTrivialContent = true
-	}
-	return NewTextNode(tok.Value, tok.Line, tok.Col)
-}
-
-func isAllWhitespace(s string) bool {
-	for _, r := range s {
+	for _, r := range tok.Value {
 		switch r {
 		case ' ', '\t', '\r', '\n':
 			continue
 		default:
-			return false
+			p.hasNonTrivialContent = true
+			return NewTextNode(tok.Value, tok.Line, tok.Col)
 		}
 	}
-	return true
+	return NewTextNode(tok.Value, tok.Line, tok.Col)
 }
 
 // parseVariable parses a variable output: {{ expression }}.

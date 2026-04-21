@@ -53,13 +53,31 @@ func TestExtends_UnoverriddenBlock_UsesParentDefault(t *testing.T) {
 func TestExtends_MustBeFirstTag(t *testing.T) {
 	t.Parallel()
 
-	engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
-		"base.txt":  `{% block x %}{% endblock %}`,
-		"child.txt": `junk {% extends "base.txt" %}`,
-	}))
-	_, err := engine.Load("child.txt")
-	if !errors.Is(err, ErrExtendsNotFirst) && !strings.Contains(errString(err), "first tag") {
-		t.Errorf("err = %v, want ErrExtendsNotFirst", err)
+	tests := []struct {
+		name  string
+		child string
+	}{
+		{
+			name:  "text before extends",
+			child: `junk {% extends "base.txt" %}`,
+		},
+		{
+			name:  "whitespace before extends",
+			child: `  \n\t{% extends "base.txt" %}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := newLayoutTextExtendsEngine(NewMemoryLoader(map[string]string{
+				"base.txt":  `{% block x %}{% endblock %}`,
+				"child.txt": tt.child,
+			}))
+			_, err := engine.Load("child.txt")
+			if !errors.Is(err, ErrExtendsNotFirst) && !strings.Contains(errString(err), "first tag") {
+				t.Errorf("err = %v, want ErrExtendsNotFirst", err)
+			}
+		})
 	}
 }
 
