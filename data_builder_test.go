@@ -163,6 +163,15 @@ func TestDataBuilderStruct(t *testing.T) {
 				"name": "Jane",
 			},
 		},
+		{
+			name: "json tag name with additional option",
+			input: struct {
+				Name string `json:"full_name,omitempty,string"`
+			}{Name: "Jane"},
+			want: Data{
+				"full_name": "Jane",
+			},
+		},
 	}
 
 	for _, tt := range tests {

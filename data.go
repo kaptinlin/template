@@ -184,8 +184,8 @@ func (cb *DataBuilder) Struct(v any) *DataBuilder {
 }
 
 var (
-	jsonMarshalerType = reflect.TypeOf((*stdjson.Marshaler)(nil)).Elem()
-	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+	jsonMarshalerType = reflect.TypeFor[stdjson.Marshaler]()
+	textMarshalerType = reflect.TypeFor[encoding.TextMarshaler]()
 )
 
 func dataFromStructFast(v any) (Data, bool) {
@@ -328,14 +328,15 @@ func parseJSONTag(tag string) (string, jsonTagOptions) {
 	if tag == "" {
 		return "", jsonTagOptions{}
 	}
-	parts := strings.Split(tag, ",")
+
+	name, rest, _ := strings.Cut(tag, ",")
 	opts := jsonTagOptions{}
-	for _, opt := range parts[1:] {
+	for _, opt := range strings.Split(rest, ",") {
 		if opt == "omitempty" {
 			opts.omitEmpty = true
 		}
 	}
-	return parts[0], opts
+	return name, opts
 }
 
 func isEmptyJSONValue(rv reflect.Value) bool {

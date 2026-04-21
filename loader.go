@@ -44,9 +44,7 @@ func ValidateName(name string) error {
 // NewMemoryLoader returns a Loader that serves templates from an
 // in-memory map. Intended for tests and small pre-registered sets.
 func NewMemoryLoader(files map[string]string) Loader {
-	copied := make(map[string]string, len(files))
-	maps.Copy(copied, files)
-	return &memoryLoader{files: copied}
+	return &memoryLoader{files: maps.Clone(files)}
 }
 
 type memoryLoader struct {

@@ -65,6 +65,32 @@ func TestMemoryLoader_NotFound(t *testing.T) {
 	}
 }
 
+func TestMemoryLoader_ClonesInputMap(t *testing.T) {
+	t.Parallel()
+
+	files := map[string]string{"a.html": "before"}
+	loader := NewMemoryLoader(files)
+	files["a.html"] = "after"
+
+	src, _, err := loader.Open("a.html")
+	if err != nil {
+		t.Fatalf("Open() err = %v", err)
+	}
+	if src != "before" {
+		t.Errorf("src = %q, want %q", src, "before")
+	}
+}
+
+func TestMemoryLoader_NilInputMapBehavesLikeEmpty(t *testing.T) {
+	t.Parallel()
+
+	loader := NewMemoryLoader(nil)
+	_, _, err := loader.Open("missing.html")
+	if !errors.Is(err, ErrTemplateNotFound) {
+		t.Errorf("err = %v, want ErrTemplateNotFound", err)
+	}
+}
+
 // Phase M cycle 1: ChainLoader returns the first loader that has the file.
 func TestChainLoader_FirstHitWins(t *testing.T) {
 	t.Parallel()
