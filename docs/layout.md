@@ -15,9 +15,9 @@ engine := template.New(
     template.WithFormat(template.FormatHTML),
     template.WithLayout(),
 )
-_ = engine.Render("layouts/blog.html", template.Data{
+_ = engine.RenderTo("layouts/blog.html", os.Stdout, template.Data{
     "page": pageData,
-}, os.Stdout)
+})
 ```
 
 Templates in `./templates/`:
@@ -302,10 +302,10 @@ To output pre-rendered HTML without escaping, either:
 **2. Wrap the value in `SafeString`** in Go code:
 
 ```go
-engine.Render("page.html", template.Data{
-    "title":   "Hello <world>",                         // escaped
-    "content": template.SafeString("<p>trusted</p>"),   // raw
-}, w)
+engine.RenderTo("page.html", w, template.Data{
+    "title":   "Hello <world>",                        // escaped
+    "content": template.SafeString("<p>trusted</p>"), // raw
+})
 ```
 
 ### Filter chain safety
