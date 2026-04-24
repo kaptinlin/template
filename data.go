@@ -331,7 +331,7 @@ func parseJSONTag(tag string) (string, jsonTagOptions) {
 
 	name, rest, _ := strings.Cut(tag, ",")
 	opts := jsonTagOptions{}
-	for _, opt := range strings.Split(rest, ",") {
+	for opt := range strings.SplitSeq(rest, ",") {
 		if opt == "omitempty" {
 			opts.omitEmpty = true
 		}

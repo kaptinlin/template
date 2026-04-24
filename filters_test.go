@@ -184,6 +184,27 @@ func TestRegistryList(t *testing.T) {
 	}
 }
 
+func TestRegistryCloneCopiesDirectFiltersAndParent(t *testing.T) {
+	t.Parallel()
+
+	parent := NewRegistry()
+	parent.Register("parent", noopFilter)
+
+	r := NewRegistry()
+	r.parent = parent
+	r.Register("local", noopFilter)
+
+	clone := r.Clone()
+	r.Unregister("local")
+
+	if _, ok := clone.Filter("local"); !ok {
+		t.Error("clone.Filter(\"local\") = _, false, want true")
+	}
+	if _, ok := clone.Filter("parent"); !ok {
+		t.Error("clone.Filter(\"parent\") = _, false, want true")
+	}
+}
+
 func TestRegistryHas(t *testing.T) {
 	t.Parallel()
 

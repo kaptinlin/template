@@ -373,6 +373,65 @@ func TestEngineLoad_CachesByResolvedName(t *testing.T) {
 	}
 }
 
+func TestEngineLoad_WaitsForInFlightCompile(t *testing.T) {
+	t.Parallel()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var startOnce sync.Once
+
+	registry := NewTagRegistry()
+	if err := registry.Register("gate", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+		if args.Remaining() > 0 {
+			return nil, args.Error("gate does not take arguments")
+		}
+		startOnce.Do(func() { close(started) })
+		<-release
+		return NewTextNode("ok", start.Line, start.Col), nil
+	}); err != nil {
+		t.Fatalf("Register(gate) err = %v", err)
+	}
+
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.txt": `{% gate %}`,
+		})),
+		WithTags(registry),
+	)
+
+	firstDone := make(chan struct{})
+	var first *Template
+	var firstErr error
+	go func() {
+		defer close(firstDone)
+		first, firstErr = engine.Load("a.txt")
+	}()
+
+	<-started
+
+	secondDone := make(chan struct{})
+	var second *Template
+	var secondErr error
+	go func() {
+		defer close(secondDone)
+		second, secondErr = engine.Load("a.txt")
+	}()
+
+	close(release)
+	<-firstDone
+	<-secondDone
+
+	if firstErr != nil {
+		t.Fatalf("first Load(a.txt) err = %v", firstErr)
+	}
+	if secondErr != nil {
+		t.Fatalf("second Load(a.txt) err = %v", secondErr)
+	}
+	if first != second {
+		t.Fatal("Load() returned distinct template pointers for in-flight requests")
+	}
+}
+
 func TestEngineLoad_ConcurrentRequestsCompileOnce(t *testing.T) {
 	t.Parallel()
 

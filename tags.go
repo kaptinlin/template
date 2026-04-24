@@ -116,10 +116,10 @@ func (r *TagRegistry) Clone() *TagRegistry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	cloned := NewTagRegistry()
-	maps.Copy(cloned.tags, r.tags)
-	cloned.parent = r.parent
-	return cloned
+	return &TagRegistry{
+		tags:   maps.Clone(r.tags),
+		parent: r.parent,
+	}
 }
 
 // defaultTagRegistry is the package-wide built-in tag registry used as the

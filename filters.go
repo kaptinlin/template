@@ -110,10 +110,10 @@ func (r *Registry) Clone() *Registry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	cloned := NewRegistry()
-	maps.Copy(cloned.filters, r.filters)
-	cloned.parent = r.parent
-	return cloned
+	return &Registry{
+		filters: maps.Clone(r.filters),
+		parent:  r.parent,
+	}
 }
 
 // defaultRegistry is the package-level built-in filter registry used as the

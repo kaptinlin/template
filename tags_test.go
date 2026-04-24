@@ -1576,6 +1576,27 @@ func TestBuiltinRegistryUnregisterTag(t *testing.T) {
 	defaultTagRegistry.Unregister("nonexistent")
 }
 
+func TestTagRegistryCloneCopiesDirectTagsAndParent(t *testing.T) {
+	t.Parallel()
+
+	parent := NewTagRegistry()
+	parent.Replace("parent", parseIfTag)
+
+	r := NewTagRegistry()
+	r.parent = parent
+	r.Replace("local", parseForTag)
+
+	clone := r.Clone()
+	r.Unregister("local")
+
+	if _, ok := clone.Get("local"); !ok {
+		t.Error("clone.Get(\"local\") = _, false, want true")
+	}
+	if _, ok := clone.Get("parent"); !ok {
+		t.Error("clone.Get(\"parent\") = _, false, want true")
+	}
+}
+
 func TestTagRegistryReplaceOverwrites(t *testing.T) {
 	r := NewTagRegistry()
 
