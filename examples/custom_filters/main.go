@@ -3,7 +3,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 
@@ -11,6 +13,16 @@ import (
 )
 
 func main() {
+	runMain(os.Stdout, log.Fatal)
+}
+
+func runMain(out io.Writer, fatal func(...any)) {
+	if err := run(out); err != nil {
+		fatal(err)
+	}
+}
+
+func run(out io.Writer) error {
 	engine := template.New()
 
 	// Register a "repeat" filter: {{ text|repeat:3 }} → "texttexttext"
@@ -27,12 +39,13 @@ func main() {
 
 	tpl, err := engine.ParseString(`{{ word|repeat:3 }}`)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	rendered, err := tpl.Render(template.Data{"word": "ha"})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	fmt.Println(rendered) // hahaha
+	_, err = fmt.Fprintln(out, rendered) // hahaha
+	return err
 }

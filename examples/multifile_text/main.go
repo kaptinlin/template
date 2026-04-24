@@ -16,6 +16,7 @@ package main
 
 import (
 	"embed"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -27,10 +28,20 @@ import (
 var scaffoldFS embed.FS
 
 func main() {
+	runMain(os.Stdout, log.Fatal)
+}
+
+func runMain(out io.Writer, fatal func(...any)) {
+	if err := run(out); err != nil {
+		fatal(err)
+	}
+}
+
+func run(out io.Writer) error {
 	// Strip the "scaffold/" prefix so includes can use short names.
 	rooted, err := fs.Sub(scaffoldFS, "scaffold")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	loader := template.NewFSLoader(rooted)
 
@@ -50,7 +61,5 @@ func main() {
 		}),
 	)
 
-	if err := engine.RenderTo("Taskfile.yml.tmpl", os.Stdout, nil); err != nil {
-		log.Fatal(err)
-	}
+	return engine.RenderTo("Taskfile.yml.tmpl", out, nil)
 }

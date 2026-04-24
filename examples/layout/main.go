@@ -8,6 +8,7 @@ package main
 
 import (
 	"embed"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -19,11 +20,21 @@ import (
 var templateFS embed.FS
 
 func main() {
+	runMain(os.Stdout, log.Fatal)
+}
+
+func runMain(out io.Writer, fatal func(...any)) {
+	if err := run(out); err != nil {
+		fatal(err)
+	}
+}
+
+func run(out io.Writer) error {
 	// Strip the "templates/" prefix so templates can reference
 	// "layouts/base.html" instead of "templates/layouts/base.html".
 	rooted, err := fs.Sub(templateFS, "templates")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	// Build a loader chain. In a real project you would also include a
@@ -51,7 +62,7 @@ func main() {
 
 	// Render a blog post. Values flow through auto-escape except where
 	// explicitly marked with SafeString or the | safe filter.
-	err = engine.RenderTo("layouts/blog.html", os.Stdout, template.Data{
+	return engine.RenderTo("layouts/blog.html", out, template.Data{
 		"page": map[string]any{
 			"title":  "Hello <world> & friends",
 			"author": "Alice",
@@ -65,8 +76,4 @@ func main() {
 			"tags": []string{"golang", "templates", "<example>"},
 		},
 	})
-
-	if err != nil {
-		log.Fatal(err)
-	}
 }

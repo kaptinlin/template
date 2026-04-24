@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/kaptinlin/template"
 )
@@ -31,10 +32,38 @@ func (n *SetNode) Execute(renderCtx *template.RenderContext, _ io.Writer) error 
 }
 
 func main() {
+	runMain(os.Stdout, log.Fatal)
+}
+
+func runMain(out io.Writer, fatal func(...any)) {
+	if err := run(out); err != nil {
+		fatal(err)
+	}
+}
+
+func run(out io.Writer) error {
 	engine := template.New()
 
+	if err := registerSetTag(engine); err != nil {
+		return err
+	}
+
+	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}, World!`)
+	if err != nil {
+		return err
+	}
+
+	rendered, err := tpl.Render(nil)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, rendered) // Hello, World!
+	return err
+}
+
+func registerSetTag(engine *template.Engine) error {
 	// Register a {% set varname = expr %} tag on this engine.
-	err := engine.RegisterTag("set", func(_ *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
+	return engine.RegisterTag("set", func(_ *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
 		varToken, err := arguments.ExpectIdentifier()
 		if err != nil {
 			return nil, arguments.Error("expected variable name after 'set'")
@@ -60,18 +89,4 @@ func main() {
 			Col:     start.Col,
 		}, nil
 	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}, World!`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	rendered, err := tpl.Render(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(rendered) // Hello, World!
 }
