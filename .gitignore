@@ -50,5 +50,5 @@ TODO.md
 
 design/
 
-# Claude settings (contains API tokens)
-.claude/settings.json
+# Claude local state
+.claude/
