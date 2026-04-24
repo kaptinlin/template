@@ -31,11 +31,6 @@ func run(out io.Writer) error {
 		"name":  "alice",
 		"items": []string{"foo", "bar", "baz"},
 	})
-	// Hello, ALICE!
-	// Items:
-	//   0: foo
-	//   1: bar
-	//   2: baz
 }
 
 func render(out io.Writer, source string, data template.Data) error {

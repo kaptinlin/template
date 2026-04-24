@@ -25,12 +25,11 @@ func runMain(out io.Writer, fatal func(...any)) {
 func run(out io.Writer) error {
 	engine := template.New()
 
-	// Register a "repeat" filter: {{ text|repeat:3 }} → "texttexttext"
 	engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
-		s := fmt.Sprintf("%v", value)
+		s := fmt.Sprint(value)
 		n := 2
 		if len(args) > 0 {
-			if parsed, err := strconv.Atoi(fmt.Sprintf("%v", args[0])); err == nil {
+			if parsed, err := strconv.Atoi(fmt.Sprint(args[0])); err == nil {
 				n = parsed
 			}
 		}
@@ -46,6 +45,6 @@ func run(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(out, rendered) // hahaha
+	_, err = fmt.Fprintln(out, rendered)
 	return err
 }

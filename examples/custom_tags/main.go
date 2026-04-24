@@ -57,12 +57,11 @@ func run(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(out, rendered) // Hello, World!
+	_, err = fmt.Fprintln(out, rendered)
 	return err
 }
 
 func registerSetTag(engine *template.Engine) error {
-	// Register a {% set varname = expr %} tag on this engine.
 	return engine.RegisterTag("set", func(_ *template.Parser, start *template.Token, arguments *template.Parser) (template.Statement, error) {
 		varToken, err := arguments.ExpectIdentifier()
 		if err != nil {
