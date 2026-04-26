@@ -20,6 +20,15 @@ type aliasLoader struct {
 	opens map[string]int
 }
 
+func literalTag(text string) TagParser {
+	return func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+		if args.Remaining() > 0 {
+			return nil, args.Error("literal tag does not take arguments")
+		}
+		return NewTextNode(text, start.Line, start.Col), nil
+	}
+}
+
 func (l *aliasLoader) Open(name string) (string, string, error) {
 	if err := ValidateName(name); err != nil {
 		return "", "", err
@@ -126,6 +135,87 @@ func TestEngineRegisterFilter_AddsEngineLocalFilter(t *testing.T) {
 	}
 }
 
+func TestEngineReplaceFilter_OverridesEngineLocalFilter(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	engine.RegisterFilter("mark", func(value any, _ ...any) (any, error) {
+		return "old:" + toString(value), nil
+	})
+	engine.ReplaceFilter("mark", func(value any, _ ...any) (any, error) {
+		return "new:" + toString(value), nil
+	})
+
+	tpl, err := engine.ParseString(`{{ word | mark }}`)
+	if err != nil {
+		t.Fatalf("ParseString() err = %v", err)
+	}
+	got, err := tpl.Render(Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("Render() err = %v", err)
+	}
+	if got != "new:ok" {
+		t.Errorf("Render() = %q, want %q", got, "new:ok")
+	}
+}
+
+func TestEngineMustRegisterFilter_PanicsOnNilFilter(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustRegisterFilter(nil) did not panic, want panic")
+		}
+	}()
+
+	engine.MustRegisterFilter("bad", nil)
+}
+
+func TestEngineReplaceTag_OverridesEngineLocalTag(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	if err := engine.RegisterTag("marker", literalTag("old")); err != nil {
+		t.Fatalf("RegisterTag(marker) err = %v", err)
+	}
+	engine.ReplaceTag("marker", literalTag("new"))
+
+	tpl, err := engine.ParseString(`{% marker %}`)
+	if err != nil {
+		t.Fatalf("ParseString() err = %v", err)
+	}
+	got, err := tpl.Render(nil)
+	if err != nil {
+		t.Fatalf("Render() err = %v", err)
+	}
+	if got != "new" {
+		t.Errorf("Render() = %q, want %q", got, "new")
+	}
+}
+
+func TestEngineMustRegisterTag_PanicsOnDuplicateTag(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	engine.MustRegisterTag("marker", literalTag("ok"))
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("MustRegisterTag(duplicate) did not panic, want panic")
+		}
+		err, ok := r.(error)
+		if !ok {
+			t.Fatalf("panic value = %T, want error", r)
+		}
+		if !errors.Is(err, ErrTagAlreadyRegistered) {
+			t.Fatalf("panic error = %v, want ErrTagAlreadyRegistered", err)
+		}
+	}()
+
+	engine.MustRegisterTag("marker", literalTag("duplicate"))
+}
+
 func TestTemplateRenderTo_UsesDataPath(t *testing.T) {
 	t.Parallel()
 
@@ -140,6 +230,19 @@ func TestTemplateRenderTo_UsesDataPath(t *testing.T) {
 	}
 	if got := buf.String(); got != "Hello, world!" {
 		t.Errorf("RenderTo() = %q, want %q", got, "Hello, world!")
+	}
+}
+
+func TestEngineRenderTo_ReturnsWriterError(t *testing.T) {
+	t.Parallel()
+
+	engine := New(WithLoader(NewMemoryLoader(map[string]string{
+		"a.txt": "hello",
+	})))
+
+	err := engine.RenderTo("a.txt", &errWriter{err: errMockWrite}, nil)
+	if !errors.Is(err, errMockWrite) {
+		t.Errorf("RenderTo() err = %v, want %v", err, errMockWrite)
 	}
 }
 

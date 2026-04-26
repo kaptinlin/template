@@ -2,6 +2,7 @@ package template
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -167,6 +168,22 @@ func TestExtends_CircularChain_Errors(t *testing.T) {
 	_, err := engine.Load("a.txt")
 	if !errors.Is(err, ErrCircularExtends) {
 		t.Errorf("err = %v, want ErrCircularExtends", err)
+	}
+}
+
+func TestExtends_ChainPastDepthLimitErrors(t *testing.T) {
+	t.Parallel()
+
+	files := make(map[string]string)
+	for i := range maxExtendsDepth + 1 {
+		files[fmt.Sprintf("page%d.txt", i)] = fmt.Sprintf(`{%% extends "page%d.txt" %%}`, i+1)
+	}
+	files[fmt.Sprintf("page%d.txt", maxExtendsDepth+1)] = `{% block content %}root{% endblock %}`
+
+	engine := newLayoutTextExtendsEngine(NewMemoryLoader(files))
+	_, err := engine.Load("page0.txt")
+	if !errors.Is(err, ErrExtendsDepthExceeded) {
+		t.Errorf("Load() err = %v, want ErrExtendsDepthExceeded", err)
 	}
 }
 

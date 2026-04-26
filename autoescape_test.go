@@ -125,6 +125,25 @@ func TestFormatHTML_EscapeIdempotent(t *testing.T) {
 	}
 }
 
+func TestFormatHTML_EscapeOnceIsSafe(t *testing.T) {
+	t.Parallel()
+
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"a.html": `{{ x | escape_once }}`,
+		})),
+		WithFormat(FormatHTML),
+	)
+	got, err := engine.Render("a.html", Data{"x": "&lt;b&gt; & <i>"})
+	if err != nil {
+		t.Fatalf("Render() err = %v", err)
+	}
+	want := "&lt;b&gt; &amp; &lt;i&gt;"
+	if got != want {
+		t.Errorf("Render() = %q, want %q", got, want)
+	}
+}
+
 // Phase G cycle 7: quotes in attribute context are escaped.
 func TestFormatHTML_AttributeQuoteEscaped(t *testing.T) {
 	t.Parallel()

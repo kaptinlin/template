@@ -3,6 +3,7 @@ package template
 import (
 	"errors"
 	"testing"
+	"testing/fstest"
 )
 
 // Phase A: Loader contract — name validation + happy path
@@ -88,6 +89,50 @@ func TestMemoryLoader_NilInputMapBehavesLikeEmpty(t *testing.T) {
 	_, _, err := loader.Open("missing.html")
 	if !errors.Is(err, ErrTemplateNotFound) {
 		t.Errorf("err = %v, want ErrTemplateNotFound", err)
+	}
+}
+
+func TestFSLoader_OpenReadsTemplate(t *testing.T) {
+	t.Parallel()
+
+	loader := NewFSLoader(fstest.MapFS{
+		"pages/home.txt": {Data: []byte("hello {{ name }}")},
+	})
+
+	src, resolved, err := loader.Open("pages/home.txt")
+	if err != nil {
+		t.Fatalf("Open() err = %v", err)
+	}
+	if src != "hello {{ name }}" {
+		t.Errorf("Open() source = %q, want %q", src, "hello {{ name }}")
+	}
+	if resolved != "pages/home.txt" {
+		t.Errorf("Open() resolved = %q, want %q", resolved, "pages/home.txt")
+	}
+}
+
+func TestFSLoader_MissingTemplateErrors(t *testing.T) {
+	t.Parallel()
+
+	loader := NewFSLoader(fstest.MapFS{})
+	_, _, err := loader.Open("missing.txt")
+	if !errors.Is(err, ErrTemplateNotFound) {
+		t.Errorf("Open() err = %v, want ErrTemplateNotFound", err)
+	}
+}
+
+func TestFSLoader_RenderUsesWrappedFS(t *testing.T) {
+	t.Parallel()
+
+	engine := New(WithLoader(NewFSLoader(fstest.MapFS{
+		"pages/home.txt": {Data: []byte("hello {{ name }}")},
+	})))
+	got, err := engine.Render("pages/home.txt", Data{"name": "Ada"})
+	if err != nil {
+		t.Fatalf("Render() err = %v", err)
+	}
+	if got != "hello Ada" {
+		t.Errorf("Render() = %q, want %q", got, "hello Ada")
 	}
 }
 

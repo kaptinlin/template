@@ -270,6 +270,18 @@ func TestInclude_DynamicPath_InvalidName_Rejected(t *testing.T) {
 	}
 }
 
+func TestInclude_DynamicPath_NonStringErrors(t *testing.T) {
+	t.Parallel()
+
+	engine := newLayoutTextEngine(NewMemoryLoader(map[string]string{
+		"a.txt": `{% include target %}`,
+	}))
+	_, err := engine.Render("a.txt", Data{"target": 123})
+	if !errors.Is(err, ErrIncludePathNotString) {
+		t.Errorf("Render() err = %v, want ErrIncludePathNotString", err)
+	}
+}
+
 // Phase E cycle 3: dynamic missing template returns ErrTemplateNotFound.
 func TestInclude_DynamicPath_Missing_Errors(t *testing.T) {
 	t.Parallel()
