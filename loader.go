@@ -78,12 +78,11 @@ func NewDirLoader(dir string) (Loader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dir loader: %w", err)
 	}
-	return &dirLoader{root: root, dir: dir}, nil
+	return &dirLoader{root: root}, nil
 }
 
 type dirLoader struct {
 	root *os.Root
-	dir  string
 }
 
 func (l *dirLoader) Open(name string) (string, string, error) {

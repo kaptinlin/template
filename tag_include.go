@@ -10,9 +10,9 @@ import (
 //
 // Shapes:
 //   - Static path (string literal), resolved at parse time: prepared != nil.
-//   - Parse-time circular static path: lazy = true, staticName holds the
+//   - Parse-time circular static path: prepared == nil, staticName holds the
 //     literal for runtime lookup.
-//   - Dynamic path (expression): lazy = true, pathExpr != nil.
+//   - Dynamic path (expression): pathExpr != nil.
 //
 // Options:
 //   - withPairs: {% include "x" with k1=expr1 k2=expr2 %}
@@ -33,9 +33,6 @@ type IncludeNode struct {
 
 	// pathExpr is set for dynamic includes (non-string-literal path).
 	pathExpr Expression
-
-	// lazy indicates runtime template resolution.
-	lazy bool
 
 	// withPairs holds "with k=expr" bindings; may be nil.
 	withPairs []withPair
@@ -193,13 +190,12 @@ func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
 		node.staticName = tok.Value
 		args.Advance()
 	} else {
-		// Dynamic path: parse as expression and mark lazy.
+		// Dynamic path: parse as expression for runtime resolution.
 		expr, err := args.ParseExpression()
 		if err != nil {
 			return nil, err
 		}
 		node.pathExpr = expr
-		node.lazy = true
 	}
 
 	if err := parseIncludeOptions(node, args); err != nil {
@@ -212,14 +208,12 @@ func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
 
 	// Dynamic paths always resolve at runtime.
 	if node.pathExpr != nil {
-		node.lazy = true
 		return node, nil
 	}
 
 	// Detect parse-time circular reference and downgrade to lazy.
 	// Without this, mutual includes (A→B→A) cause infinite parse recursion.
 	if engine.isParsing(node.staticName) {
-		node.lazy = true
 		return node, nil
 	}
 
@@ -228,7 +222,6 @@ func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
 		if errors.Is(err, ErrTemplateNotFound) {
 			if node.ifExists {
 				// Silently accept missing template — execute is a no-op.
-				node.lazy = true
 				return node, nil
 			}
 			return nil, fmt.Errorf("include: %w", err)
