@@ -259,8 +259,7 @@ func TestEngineLoad_LayoutRequiresFeature(t *testing.T) {
 	if err == nil {
 		t.Fatal("Load() err = nil, want error")
 	}
-	var parseErr *ParseError
-	if !errors.As(err, &parseErr) {
+	if _, ok := errors.AsType[*ParseError](err); !ok {
 		t.Fatalf("Load() err = %T, want *ParseError", err)
 	}
 	if !strings.Contains(err.Error(), "page.txt:") {
@@ -412,8 +411,8 @@ func TestEngineLoad_EmptyTagExpressionIncludesPosition(t *testing.T) {
 		t.Fatal("Load(bad.txt) err = nil, want error")
 	}
 
-	var parseErr *ParseError
-	if !errors.As(err, &parseErr) {
+	parseErr, ok := errors.AsType[*ParseError](err)
+	if !ok {
 		t.Fatalf("Load(bad.txt) err = %T, want *ParseError", err)
 	}
 	if parseErr.Line == 0 || parseErr.Col == 0 {

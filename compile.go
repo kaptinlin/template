@@ -12,8 +12,7 @@ type templateSourceError struct {
 }
 
 func (e *templateSourceError) Error() string {
-	var parseErr *ParseError
-	if errors.As(e.err, &parseErr) {
+	if parseErr, ok := errors.AsType[*ParseError](e.err); ok {
 		return fmt.Sprintf("%s:%d:%d: %s", e.name, parseErr.Line, parseErr.Col, parseErr.Message)
 	}
 	return fmt.Sprintf("%s: %v", e.name, e.err)
@@ -27,8 +26,7 @@ func wrapTemplateSourceError(name string, err error) error {
 	if err == nil || name == "" {
 		return err
 	}
-	var sourceErr *templateSourceError
-	if errors.As(err, &sourceErr) {
+	if _, ok := errors.AsType[*templateSourceError](err); ok {
 		return err
 	}
 	return &templateSourceError{name: name, err: err}

@@ -42,6 +42,12 @@ build/
 .ralphy/*.txt
 
 # todo files
+.workspace
+task.md
+.cov.before
+.cov.after
+.fix.before*
+.fix.after*
 .todo
 TODO.md
 
