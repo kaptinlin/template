@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"testing"
@@ -694,6 +695,138 @@ func TestValue_Equals(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := NewValue(tt.a).Equals(NewValue(tt.b)); got != tt.want {
 				t.Errorf("Equals(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValue_ErrorSentinels(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		run     func() error
+		wantErr error
+	}{
+		{
+			name: "int nil",
+			run: func() error {
+				_, err := NewValue(nil).Int()
+				return err
+			},
+			wantErr: ErrCannotConvertNilToInt,
+		},
+		{
+			name: "int unsupported",
+			run: func() error {
+				_, err := NewValue("hello").Int()
+				return err
+			},
+			wantErr: ErrCannotConvertToInt,
+		},
+		{
+			name: "float nil",
+			run: func() error {
+				_, err := NewValue(nil).Float()
+				return err
+			},
+			wantErr: ErrCannotConvertNilToFloat,
+		},
+		{
+			name: "float unsupported",
+			run: func() error {
+				_, err := NewValue("hello").Float()
+				return err
+			},
+			wantErr: ErrCannotConvertToFloat,
+		},
+		{
+			name: "len unsupported",
+			run: func() error {
+				_, err := NewValue(42).Len()
+				return err
+			},
+			wantErr: ErrTypeHasNoLength,
+		},
+		{
+			name: "index nil",
+			run: func() error {
+				_, err := NewValue(nil).Index(0)
+				return err
+			},
+			wantErr: ErrCannotIndexNil,
+		},
+		{
+			name: "index out of range",
+			run: func() error {
+				_, err := NewValue([]int{1}).Index(1)
+				return err
+			},
+			wantErr: ErrIndexOutOfRange,
+		},
+		{
+			name: "index unsupported",
+			run: func() error {
+				_, err := NewValue(42).Index(0)
+				return err
+			},
+			wantErr: ErrTypeNotIndexable,
+		},
+		{
+			name: "key nil",
+			run: func() error {
+				_, err := NewValue(nil).Key("name")
+				return err
+			},
+			wantErr: ErrCannotGetKeyFromNil,
+		},
+		{
+			name: "key unsupported",
+			run: func() error {
+				_, err := NewValue([]int{1}).Key("name")
+				return err
+			},
+			wantErr: ErrTypeNotMap,
+		},
+		{
+			name: "field nil",
+			run: func() error {
+				_, err := NewValue(nil).Field("Name")
+				return err
+			},
+			wantErr: ErrCannotGetFieldFromNil,
+		},
+		{
+			name: "field missing",
+			run: func() error {
+				_, err := NewValue(struct{ Name string }{}).Field("Missing")
+				return err
+			},
+			wantErr: ErrStructHasNoField,
+		},
+		{
+			name: "field unsupported",
+			run: func() error {
+				_, err := NewValue(42).Field("Name")
+				return err
+			},
+			wantErr: ErrTypeHasNoField,
+		},
+		{
+			name: "iterate unsupported",
+			run: func() error {
+				return NewValue(42).Iterate(func(_, _ int, _, _ *Value) bool { return true })
+			},
+			wantErr: ErrTypeNotIterable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := tt.run(); !errors.Is(err, tt.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}

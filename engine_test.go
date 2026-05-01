@@ -74,6 +74,62 @@ func TestWithLayout_EnablesFeatureLayout(t *testing.T) {
 	}
 }
 
+func TestWithFeatures_EnablesLayoutRegistryLayer(t *testing.T) {
+	t.Parallel()
+
+	engine := New(WithFeatures(FeatureLayout))
+	if !engine.HasFeature(FeatureLayout) {
+		t.Fatal("HasFeature(FeatureLayout) = false, want true")
+	}
+	if !engine.Tags().Has("include") {
+		t.Fatal("Tags().Has(include) = false, want true")
+	}
+	if !engine.Filters().Has("safe") {
+		t.Fatal("Filters().Has(safe) = false, want true")
+	}
+
+	core := New()
+	if core.Tags().Has("include") {
+		t.Fatal("core Tags().Has(include) = true, want false")
+	}
+	if core.Filters().Has("safe") {
+		t.Fatal("core Filters().Has(safe) = true, want false")
+	}
+}
+
+func TestEngineRegistryAccessors_ReturnLocalLayersWithParents(t *testing.T) {
+	t.Parallel()
+
+	filters := NewRegistry()
+	filters.Register("bang", func(value any, _ ...any) (any, error) {
+		return toString(value) + "!", nil
+	})
+	tags := NewTagRegistry()
+	if err := tags.Register("marker", literalTag("ok")); err != nil {
+		t.Fatalf("Register(marker) err = %v", err)
+	}
+
+	engine := New(WithFilters(filters), WithTags(tags))
+	if engine.Filters() != filters {
+		t.Fatal("Filters() returned a different registry, want configured registry")
+	}
+	if engine.Tags() != tags {
+		t.Fatal("Tags() returned a different registry, want configured registry")
+	}
+	if !engine.Filters().Has("bang") {
+		t.Fatal("Filters().Has(bang) = false, want true")
+	}
+	if !engine.Filters().Has("escape") {
+		t.Fatal("Filters().Has(escape) = false, want built-in parent filter")
+	}
+	if !engine.Tags().Has("marker") {
+		t.Fatal("Tags().Has(marker) = false, want true")
+	}
+	if !engine.Tags().Has("if") {
+		t.Fatal("Tags().Has(if) = false, want built-in parent tag")
+	}
+}
+
 func TestEngineRegisterTag_AddsEngineLocalTag(t *testing.T) {
 	t.Parallel()
 
