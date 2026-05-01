@@ -29,12 +29,6 @@ func NewRegistry() *Registry {
 	return &Registry{filters: make(map[string]FilterFunc)}
 }
 
-func (r *Registry) validate(name string, fn FilterFunc) {
-	if fn == nil {
-		panic(fmt.Sprintf("template: nil filter function for %q", name))
-	}
-}
-
 // Register adds or replaces a filter function under the given name.
 //
 // Register preserves the original Registry behavior for compatibility.
@@ -48,7 +42,9 @@ func (r *Registry) Register(name string, fn FilterFunc) {
 //
 // Replace panics if fn is nil.
 func (r *Registry) Replace(name string, fn FilterFunc) {
-	r.validate(name, fn)
+	if fn == nil {
+		panic(fmt.Sprintf("template: nil filter function for %q", name))
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.filters[name] = fn

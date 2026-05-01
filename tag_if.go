@@ -29,13 +29,9 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 	})
 
 	// Process elif and else branches.
-	hasElse := false
 	for tag == "elif" || tag == "else" {
 		switch tag {
 		case "elif":
-			if hasElse {
-				return nil, doc.Error(ErrElifAfterElse.Error())
-			}
 			cond, err = ap.ParseExpression()
 			if err != nil {
 				return nil, err
@@ -55,10 +51,6 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 			ap = nextAP
 
 		case "else":
-			if hasElse {
-				return nil, doc.Error(ErrMultipleElseStatements.Error())
-			}
-			hasElse = true
 			if ap.Remaining() > 0 {
 				return nil, ap.Error(ErrElseNoArgs.Error())
 			}

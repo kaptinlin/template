@@ -2,7 +2,6 @@ package template
 
 import "github.com/kaptinlin/filter"
 
-// registerDateFilters registers all date-related filters.
 func registerDateFilters() {
 	defaultRegistry.MustRegister("date", dateFilter)
 	defaultRegistry.MustRegister("month", monthFilter)
@@ -27,37 +26,30 @@ func dateFilter(value any, args ...any) (any, error) {
 	return filter.Date(value, format)
 }
 
-// dayFilter extracts and returns the day of the month.
 func dayFilter(value any, _ ...any) (any, error) {
 	return filter.Day(value)
 }
 
-// monthFilter extracts and returns the month number.
 func monthFilter(value any, _ ...any) (any, error) {
 	return filter.Month(value)
 }
 
-// monthFullFilter returns the full month name.
 func monthFullFilter(value any, _ ...any) (any, error) {
 	return filter.MonthFull(value)
 }
 
-// yearFilter extracts and returns the year.
 func yearFilter(value any, _ ...any) (any, error) {
 	return filter.Year(value)
 }
 
-// weekFilter returns the ISO week number.
 func weekFilter(value any, _ ...any) (any, error) {
 	return filter.Week(value)
 }
 
-// weekdayFilter returns the day of the week.
 func weekdayFilter(value any, _ ...any) (any, error) {
 	return filter.Weekday(value)
 }
 
-// timeAgoFilter returns a human-readable string representing the time difference.
 func timeAgoFilter(value any, _ ...any) (any, error) {
 	return filter.TimeAgo(value)
 }

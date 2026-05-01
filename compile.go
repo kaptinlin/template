@@ -32,15 +32,6 @@ func wrapTemplateSourceError(name string, err error) error {
 	return &templateSourceError{name: name, err: err}
 }
 
-// compileForEngine compiles a template source, wiring the parser to the given
-// Engine so tag parsers can resolve referenced templates at parse time.
-//
-// When FeatureLayout is enabled, the lexer also accepts {% raw %}...{% endraw %}
-// blocks and the parser can resolve layout tags against the engine loader.
-func compileForEngine(source string, engine *Engine) (*Template, error) {
-	return compileNamedForEngine("", source, engine)
-}
-
 func compileNamedForEngine(name, source string, engine *Engine) (*Template, error) {
 	l := NewLexer(source)
 	// Only enable raw-block lexer mode when layout is enabled.

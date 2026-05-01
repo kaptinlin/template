@@ -67,7 +67,7 @@ func (t *Template) Execute(ctx *RenderContext, w io.Writer) error {
 	prevAutoescape := ctx.autoescape
 	if ctx.engine == nil && t.engine != nil {
 		ctx.engine = t.engine
-		ctx.autoescape = t.engine.autoescape()
+		ctx.autoescape = t.engine.format == FormatHTML
 		defer func() {
 			ctx.engine = prevEngine
 			ctx.autoescape = prevAutoescape

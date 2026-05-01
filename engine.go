@@ -163,10 +163,6 @@ func (e *Engine) rebuildRegistries() {
 	}
 }
 
-func (e *Engine) autoescape() bool {
-	return e.format == FormatHTML
-}
-
 // Tags returns the engine-local tag registry layer.
 func (e *Engine) Tags() *TagRegistry {
 	return e.tags
@@ -240,7 +236,7 @@ func (e *Engine) HasFeature(feature Feature) bool {
 
 // ParseString compiles a template source string in the context of this engine.
 func (e *Engine) ParseString(source string) (*Template, error) {
-	tpl, err := compileForEngine(source, e)
+	tpl, err := compileNamedForEngine("", source, e)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +365,7 @@ func (e *Engine) RenderTo(name string, w io.Writer, data Data) error {
 	merged := e.mergeContext(data)
 	ec := NewRenderContext(merged)
 	ec.engine = e
-	ec.autoescape = e.autoescape()
+	ec.autoescape = e.format == FormatHTML
 	return tpl.Execute(ec, w)
 }
 

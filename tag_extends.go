@@ -39,8 +39,8 @@ const maxExtendsDepth = 10
 //   - Parent template is loaded and compiled at parse time.
 //   - Circular chains (A extends B, B extends A) are rejected.
 //
-// Sets doc.parent on the owning parser so compileForEngine can transfer
-// the reference to the final Template.
+// Sets doc.parent on the owning parser so compilation can transfer the
+// reference to the final Template.
 func parseExtendsTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 	if doc.hasNonTrivialContent {
 		return nil, fmt.Errorf("%w at line %d", ErrExtendsNotFirst, start.Line)
