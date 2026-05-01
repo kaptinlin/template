@@ -19,3 +19,7 @@
 
 ## Exported-symbol exclusions
 - None.
+
+## Drift items appended 2026-05-02
+- Baseline update: `go test ./...`, `task lint`, and `go test -coverprofile=.cov.before ./...` passed; total statements 92.3%.
+- Dead unexported branch: `value.go:69` | `(*Value).IsTrue` | remove unreachable `reflect.Invalid` switch case because invalid reflected values return before the switch.

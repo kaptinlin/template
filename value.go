@@ -66,8 +66,6 @@ func (v *Value) IsTrue() bool {
 		return rv.String() != ""
 	case reflect.Slice, reflect.Map, reflect.Array:
 		return rv.Len() > 0
-	case reflect.Invalid:
-		return false
 	default:
 		return true
 	}
