@@ -118,14 +118,9 @@ func (n *IncludeNode) resolveChild(ctx *RenderContext) (*Template, error) {
 // will run in. It honors the "only" keyword (full isolation) and
 // evaluates "with" bindings in the PARENT context.
 func (n *IncludeNode) buildChildContext(ctx *RenderContext) (*RenderContext, error) {
-	var childCtx *RenderContext
+	childCtx := NewChildContext(ctx)
 	if n.only {
-		// Fully isolated: only the with-pairs are visible.
 		childCtx = NewIsolatedChildContext(ctx)
-	} else {
-		// Inherit parent's render data and runtime state with isolated
-		// locals for the child render.
-		childCtx = NewChildContext(ctx)
 	}
 	childCtx.includeDepth = ctx.includeDepth + 1
 

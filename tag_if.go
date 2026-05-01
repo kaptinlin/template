@@ -9,7 +9,6 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 	var branches []IfBranch
 	var elseBody []Node
 
-	// Parse the first condition.
 	cond, err := args.ParseExpression()
 	if err != nil {
 		return nil, err
@@ -18,7 +17,6 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 		return nil, args.Error(ErrUnexpectedTokensAfterCondition.Error())
 	}
 
-	// Parse the if body until elif/else/endif.
 	body, tag, ap, err := doc.ParseUntilWithArgs("elif", "else", "endif")
 	if err != nil {
 		return nil, err
@@ -28,7 +26,6 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 		Body:      convertStatementsToNodes(body),
 	})
 
-	// Process elif and else branches.
 	for tag == "elif" || tag == "else" {
 		switch tag {
 		case "elif":

@@ -150,14 +150,14 @@ func (p *Parser) parseTag() (Statement, error) {
 
 	// Look up the tag parser. Templates compiled through an Engine consult
 	// the engine-local registry first, layered over the built-in registry.
-	var fn TagParser
-	var ok bool
+	var tagParser TagParser
+	var found bool
 	if p.engine != nil && p.engine.tags != nil {
-		fn, ok = p.engine.tags.Get(name.Value)
+		tagParser, found = p.engine.tags.Get(name.Value)
 	} else {
-		fn, ok = defaultTagRegistry.Get(name.Value)
+		tagParser, found = defaultTagRegistry.Get(name.Value)
 	}
-	if !ok {
+	if !found {
 		msg := "unknown tag: " + name.Value
 		if hint, found := misusedTagHints[name.Value]; found {
 			msg += " (" + hint + ")"
@@ -177,7 +177,7 @@ func (p *Parser) parseTag() (Statement, error) {
 	argParser.engine = p.engine
 	argParser.anchorLine = name.Line
 	argParser.anchorCol = name.Col
-	return fn(p, name, argParser)
+	return tagParser(p, name, argParser)
 }
 
 // ParseUntil parses nodes until one of the given end tags is encountered.

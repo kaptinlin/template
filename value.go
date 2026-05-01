@@ -88,7 +88,6 @@ func (v *Value) String() string {
 		return ""
 	}
 
-	// Handle special types before kind-based switch.
 	if t, ok := rv.Interface().(time.Time); ok {
 		return t.Format("2006-01-02 15:04:05")
 	}

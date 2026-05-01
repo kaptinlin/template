@@ -674,14 +674,14 @@ func (n *FilterNode) Evaluate(ctx *RenderContext) (*Value, error) {
 		return nil, err
 	}
 
-	var fn FilterFunc
-	var ok bool
+	var filterFn FilterFunc
+	var found bool
 	if ctx.engine != nil && ctx.engine.filters != nil {
-		fn, ok = ctx.engine.filters.Filter(n.Name)
+		filterFn, found = ctx.engine.filters.Filter(n.Name)
 	} else {
-		fn, ok = defaultRegistry.Filter(n.Name)
+		filterFn, found = defaultRegistry.Filter(n.Name)
 	}
-	if !ok {
+	if !found {
 		return nil, fmt.Errorf("%w: %s", ErrFilterNotFound, n.Name)
 	}
 
@@ -694,7 +694,7 @@ func (n *FilterNode) Evaluate(ctx *RenderContext) (*Value, error) {
 		args[i] = v.Interface()
 	}
 
-	result, err := fn(val.Interface(), args...)
+	result, err := filterFn(val.Interface(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("filter %s: %w", n.Name, err)
 	}
