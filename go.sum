@@ -14,10 +14,10 @@ github.com/gosimple/unidecode v1.0.1 h1:hZzFTMMqSswvf0LBJZCZgThIZrpDHFXux9KeGmn6
 github.com/gosimple/unidecode v1.0.1/go.mod h1:CP0Cr1Y1kogOtx0bJblKzsVWrqYaqfNOnHzpgWw4Awc=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
-github.com/kaptinlin/filter v0.4.20 h1:riZm9vqGMpX9t/6CXz4ogx9VqfY2kUFmd152srDalA0=
-github.com/kaptinlin/filter v0.4.20/go.mod h1:3We3NEs4BPahC++Hw10uo1BEzrV0irD+dxvQy/W6suQ=
-github.com/kaptinlin/jsonpointer v0.4.21 h1:WVkwQbeerbHFcoXG7Yo/mlQhhZjWiTnagECEfwDXXa0=
-github.com/kaptinlin/jsonpointer v0.4.21/go.mod h1:Mo7+DX8RlQTFqS4dnYJl0izSP4ob+Rl5xO/mGDETgaU=
+github.com/kaptinlin/filter v0.4.22 h1:0Co1P4EcBwg3iDnnczEeDD50rH82MCuBC7unvGGUTu0=
+github.com/kaptinlin/filter v0.4.22/go.mod h1:gJq9/LC6kPV331t/8vqqw8/f8rt2ICrvAUFKqI3FMak=
+github.com/kaptinlin/jsonpointer v0.4.22 h1:XVROu0kco0USeI3c5IxYRcaBMkgX5vQKiC5KPJ5F2uI=
+github.com/kaptinlin/jsonpointer v0.4.22/go.mod h1:Mo7+DX8RlQTFqS4dnYJl0izSP4ob+Rl5xO/mGDETgaU=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
