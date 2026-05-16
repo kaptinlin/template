@@ -86,7 +86,7 @@ Reference directories in [`.references/`](.references/):
 
 ### Must Follow
 
-- Go 1.26.2 — use modern stdlib features already present here when they simplify code.
+- Go 1.26+ — use modern stdlib features already present here when they simplify code.
 - Follow Google Go Best Practices: https://google.github.io/go-style/best-practices
 - Follow Google Go Style Decisions: https://google.github.io/go-style/decisions
 - Keep the public model engine-first — prefer `Engine`, `Format`, and `FeatureLayout` over adding parallel entry points for the same use case.

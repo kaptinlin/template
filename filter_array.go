@@ -42,26 +42,7 @@ func registerArrayFilters() {
 // An optional property argument deduplicates objects by a specific key.
 func uniqueFilter(value any, args ...any) (any, error) {
 	if len(args) >= 1 {
-		// Deduplicate by property: extract key values and keep first occurrence.
-		key := toString(args[0])
-		values, err := filter.Map(value, key)
-		if err != nil {
-			return filter.Unique(value)
-		}
-		slice, err := toSlice(value)
-		if err != nil {
-			return nil, err
-		}
-		seen := make(map[any]bool, len(slice))
-		result := make([]any, 0, len(slice))
-		for i, item := range slice {
-			k := values[i]
-			if !seen[k] {
-				seen[k] = true
-				result = append(result, item)
-			}
-		}
-		return result, nil
+		return filter.UniqueBy(value, toString(args[0]))
 	}
 	return filter.Unique(value)
 }
@@ -120,20 +101,7 @@ func minFilter(value any, _ ...any) (any, error) {
 // An optional property argument sums a specific field from objects.
 func sumFilter(value any, args ...any) (any, error) {
 	if len(args) >= 1 {
-		key := toString(args[0])
-		values, err := filter.Map(value, key)
-		if err != nil {
-			return float64(0), err
-		}
-		var sum float64
-		for _, v := range values {
-			f, err := toFloat64(v)
-			if err != nil {
-				continue
-			}
-			sum += f
-		}
-		return sum, nil
+		return filter.SumBy(value, toString(args[0]))
 	}
 	return filter.Sum(value)
 }

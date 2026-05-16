@@ -3,18 +3,19 @@
 [![Go Version](https://img.shields.io/badge/go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A Go template engine with engine-first configuration, Liquid-style filters, and optional layout-aware HTML rendering
+A Go template engine with Django-style control flow, Liquid-style filters, and optional layout-aware HTML rendering.
 
 For development guidelines and project conventions, see [AGENTS.md](AGENTS.md).
 
 ## Features
 
-- **Engine-first API**: Configure one `Engine` for source-string rendering or loader-backed template rendering.
-- **Two output modes**: Use `FormatText` for raw text generation and `FormatHTML` for automatic HTML escaping.
-- **Layout features on demand**: `WithLayout()` enables `include`, `extends`, `block`, `raw`, and `safe`.
-- **Composable loaders**: Use memory, directory, `fs.FS`, and chained loaders for tests, embedded assets, and override layers.
-- **Extension points**: Register engine-local filters and tags or implement custom `Loader`, `Statement`, and `Expression` types.
-- **Sandboxed local loading**: `NewDirLoader` uses `os.Root` to keep local template reads inside the configured root.
+- **One entry point**: Configure a single `Engine` for source-string parsing or loader-backed rendering.
+- **Two output modes**: `FormatText` for raw text, `FormatHTML` for automatic escaping of `{{ expr }}` output.
+- **Layout on demand**: `WithLayout()` enables `include`, `extends`, `block`, `raw`, and `safe`.
+- **Composable loaders**: `NewMemoryLoader`, `NewDirLoader`, `NewFSLoader`, and `NewChainLoader` for tests, embedded assets, and override layers.
+- **Sandboxed disk reads**: `NewDirLoader` uses `os.Root` so template lookups cannot escape the configured directory.
+- **Typed diagnostics**: `*RenderError` carries the failing template name, line, column, and a sentinel cause for `errors.Is` / `errors.As`.
+- **Engine-local extensions**: Register filters and tags on a single engine without touching global state.
 
 ## Installation
 
@@ -38,7 +39,7 @@ import (
 
 func main() {
 	engine := template.New()
-	tmpl, err := engine.ParseString("Hello, {{ name|upcase }}!")
+	tmpl, err := engine.ParseString("Hello, {{ name | upcase }}!")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(out)
+	fmt.Println(out) // Hello, ALICE!
 }
 ```
 
@@ -61,7 +62,7 @@ func main() {
 | Choose output semantics | `WithFormat(FormatText)` / `WithFormat(FormatHTML)` | `FormatHTML` auto-escapes `{{ expr }}` output |
 | Enable layout syntax | `WithLayout()` | Turns on `include`, `extends`, `block`, `raw`, and `safe` |
 | Provide shared defaults | `WithDefaults(Data)` | Render-time keys override engine defaults |
-| Extend behavior | `RegisterFilter`, `ReplaceFilter`, `RegisterTag`, `ReplaceTag` | Extensions stay local to the engine instance |
+| Extend behavior | `RegisterFilter`, `ReplaceFilter`, `RegisterTag`, `ReplaceTag` | Scoped to the engine instance |
 
 ## Loader-Backed Rendering
 
@@ -93,7 +94,31 @@ fmt.Println(out)
 // <h1>Hello &lt;world&gt;</h1>&lt;p&gt;escaped&lt;/p&gt;
 ```
 
-For full runnable programs, see the example directories below.
+For runnable programs, see the [examples](#examples) below.
+
+## Errors and Diagnostics
+
+Parse-time failures return `*ParseError`. Render-time failures return
+`*RenderError`, which carries the failing template name, 1-based line and
+column, and the underlying sentinel.
+
+```go
+out, err := engine.Render("page.html", data)
+if err != nil {
+	var re *template.RenderError
+	if errors.As(err, &re) {
+		log.Printf("%s:%d:%d: %v", re.Template, re.Line, re.Col, re.Cause)
+	}
+	if errors.Is(err, template.ErrFilterNotFound) {
+		// branch on the sentinel category
+	}
+	return err
+}
+```
+
+Sentinels live in [`errors.go`](errors.go) and are matched with `errors.Is`.
+The human-readable `RenderError.Error()` format is not part of the contract;
+read the fields for stable output.
 
 ## Extension Points
 
@@ -103,7 +128,7 @@ For full runnable programs, see the example directories below.
 | Custom tag | `Engine.RegisterTag`, `Engine.ReplaceTag`, `Engine.MustRegisterTag` |
 | Custom loader | Implement `Loader` and pass it through `WithLoader(...)` |
 | Direct runtime control | `Template.Execute` with `RenderContext` |
-| Trusted HTML | `SafeString` or `| safe` with `FormatHTML` |
+| Trusted HTML | `SafeString` or `| safe` under `FormatHTML` |
 
 ## Examples
 
@@ -116,6 +141,7 @@ Runnable examples live in [`examples/`](examples/):
 | Custom tags | [`examples/custom_tags`](examples/custom_tags) | Register an engine-local tag parser |
 | HTML layouts | [`examples/layout`](examples/layout) | `WithLayout()`, `FormatHTML`, includes, extends, and `block.super` |
 | Text generation | [`examples/multifile_text`](examples/multifile_text) | `FormatText` with loader-backed multi-file output |
+| Secret redaction | [`examples/secret_redaction`](examples/secret_redaction) | Redact rendered output at the writer or filter boundary |
 
 Run any example with:
 
@@ -123,21 +149,14 @@ Run any example with:
 go run ./examples/<name>
 ```
 
-## Security Model
-
-- Use `NewDirLoader` for local directories when you want path validation and symlink-escape protection.
-- Use `NewFSLoader` for already-sandboxed filesystems such as `embed.FS` or `testing/fstest.MapFS`.
-- Use `FormatHTML` when rendering HTML; every `{{ expr }}` output is escaped unless the value is trusted.
-- Use `SafeString` or the `safe` filter only for content you already trust.
-
 ## Documentation
 
 - [docs/layout.md](docs/layout.md) — Includes, extends, blocks, raw blocks, and `block.super`
 - [docs/loaders.md](docs/loaders.md) — Loader types and cache behavior
 - [docs/filters.md](docs/filters.md) — Built-in filter reference
-- [docs/variables.md](docs/variables.md) — Variable access and dot-path lookup
+- [docs/variables.md](docs/variables.md) — Variable access, dot paths, and strict mode
 - [docs/control-structure.md](docs/control-structure.md) — `if`, `for`, `break`, and `continue`
-- [docs/security.md](docs/security.md) — Loader boundaries and escaping rules
+- [docs/security.md](docs/security.md) — Loader sandbox, escaping rules, and redaction
 - [docs/liquid-compatibility.md](docs/liquid-compatibility.md) — Compatibility notes and differences
 
 ## Development

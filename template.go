@@ -78,7 +78,7 @@ func (t *Template) Execute(ctx *RenderContext, w io.Writer) error {
 	prevLeaf := ctx.currentLeaf
 	ctx.currentLeaf = t
 	defer func() { ctx.currentLeaf = prevLeaf }()
-	return root.executeRoot(ctx, w)
+	return attachTemplate(t.name, root.executeRoot(ctx, w))
 }
 
 // executeRoot runs this template's own top-level statements without
@@ -86,7 +86,7 @@ func (t *Template) Execute(ctx *RenderContext, w io.Writer) error {
 func (t *Template) executeRoot(ctx *RenderContext, w io.Writer) error {
 	for _, stmt := range t.root {
 		if err := stmt.Execute(ctx, w); err != nil {
-			return err
+			return wrapRender(stmt, err)
 		}
 	}
 	return nil

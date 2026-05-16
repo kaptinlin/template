@@ -144,3 +144,79 @@ Products:
 ```
 
 This shows how to access elements in a list by their index.
+
+### Strict mode (turning missing values into errors)
+
+The default render behavior is forgiving: an undefined variable evaluates
+to nil and produces an empty string in the output. This matches Liquid /
+Pongo2 / Django and keeps templates resilient to optional fields.
+
+When the calling system needs a missing-key failure to be loud (CI, cron
+job, contract enforcement), the library does **not** add a global
+`WithStrictMissing()` switch. Instead, lift the policy into your data
+layer and into a custom filter, where the failure carries useful
+context.
+
+**Pattern 1 — pre-validate the data**
+
+Refuse to render until the data shape is what the template expects.
+Validation errors get reported through your existing input-validation
+path, not through render-time diagnostics.
+
+```go
+type pageData struct {
+    Title string `validate:"required"`
+    Body  string `validate:"required"`
+}
+
+func render(engine *template.Engine, name string, p pageData) (string, error) {
+    if err := validate.Struct(p); err != nil {
+        return "", fmt.Errorf("invalid page data: %w", err)
+    }
+    data, err := template.NewDataBuilder().Struct(p).Build()
+    if err != nil {
+        return "", err
+    }
+    return engine.Render(name, data)
+}
+```
+
+**Pattern 2 — use `WithDefaults` plus a `required` filter**
+
+Register an engine-local filter that returns
+[`ErrUndefinedVariable`](../errors.go) when the input is empty. Errors
+returned by filters are wrapped into a `*RenderError` carrying template
+name, line, and column:
+
+```go
+engine := template.New(template.WithLoader(loader))
+engine.RegisterFilter("required", func(in any, _ ...any) (any, error) {
+    if in == nil || in == "" {
+        return nil, fmt.Errorf("%w: value is required", template.ErrUndefinedVariable)
+    }
+    return in, nil
+})
+```
+
+Template:
+
+```
+Hello, {{ name | required }}!
+```
+
+When `name` is missing, render returns a `*RenderError`:
+
+```go
+var re *template.RenderError
+if errors.As(err, &re) {
+    log.Printf("%s:%d:%d: %v", re.Template, re.Line, re.Col, re.Cause)
+}
+if errors.Is(err, template.ErrUndefinedVariable) {
+    // strict miss
+}
+```
+
+This keeps the strict-mode policy *visible in the template* (the field
+is annotated with `| required`), keeps the engine surface small, and
+lets one engine serve both lenient and strict renders depending on
+which fields opt in.

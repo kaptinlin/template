@@ -376,7 +376,7 @@ func (n *ForNode) Execute(ctx *RenderContext, w io.Writer) error {
 				if _, ok := errors.AsType[*ContinueError](err); ok {
 					return true
 				}
-				execErr = err
+				execErr = wrapRender(s, err)
 				return false
 			}
 		}
@@ -711,7 +711,7 @@ func executeBody(body []Node, ctx *RenderContext, w io.Writer) error {
 			continue
 		}
 		if err := s.Execute(ctx, w); err != nil {
-			return err
+			return wrapRender(s, err)
 		}
 	}
 	return nil

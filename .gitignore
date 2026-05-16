@@ -50,6 +50,7 @@ task.md
 .fix.after*
 .todo
 TODO.md
+.plans
 
 # Project-specific
 .ralphy/*.json

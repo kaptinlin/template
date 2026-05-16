@@ -13,7 +13,7 @@ func registerMapFilters() {
 }
 
 // extractFilter retrieves a nested value from a map, slice, or array using a dot-separated key path.
-// It returns an empty string for KeyNotFound and IndexOutOfRange errors to preserve template ergonomics.
+// It returns an empty string for not-found errors to preserve template ergonomics.
 func extractFilter(value any, args ...any) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: extract filter requires a key path argument", ErrInsufficientArgs)
@@ -24,10 +24,10 @@ func extractFilter(value any, args ...any) (any, error) {
 		return result, nil
 	}
 
-	if errors.Is(err, filter.ErrKeyNotFound) || errors.Is(err, filter.ErrIndexOutOfRange) {
+	if errors.Is(err, filter.ErrNotFound) {
 		return "", nil
 	}
-	if errors.Is(err, filter.ErrInvalidKeyType) {
+	if errors.Is(err, filter.ErrInvalidInput) {
 		return nil, ErrContextInvalidKeyType
 	}
 	return nil, err

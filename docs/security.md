@@ -222,6 +222,47 @@ For these contexts, use `filter.Escape` only as a baseline. Treat
 embedded JS/CSS/URL values as separate escape problems and solve them
 at the data layer before passing to the template.
 
+### Secret redaction in logs
+
+Render-time errors are returned as `*template.RenderError`, which carries
+the template name, line, column, and the underlying cause. Logging
+`err.Error()` is safe — it does **not** include the template body, the
+render data, or any rendered bytes. Only the failure category and the
+position information appear in the message.
+
+The render bytes themselves are written to the `io.Writer` passed to
+`Engine.RenderTo`. The library never holds them after the write, never
+hashes them, and never reports them through error values. If you need to
+redact secrets from rendered output (audit log, telemetry stream), do it
+at the writer:
+
+```go
+type redactingWriter struct {
+    inner    io.Writer
+    secrets  []string
+    replace  string
+}
+
+func (w *redactingWriter) Write(p []byte) (int, error) {
+    out := p
+    for _, s := range w.secrets {
+        out = bytes.ReplaceAll(out, []byte(s), []byte(w.replace))
+    }
+    _, err := w.inner.Write(out)
+    return len(p), err
+}
+```
+
+If you need to redact a value before it ever reaches the template,
+register an engine-local filter and pipe sensitive fields through it
+(`{{ token | redact }}`). Filters run before auto-escape, so the redacted
+form is what `OutputNode` receives.
+
+The library deliberately does not ship a `WithSecrets(...)` option:
+redaction policy depends on the calling system (which fields are
+sensitive, what placeholder is used, whether it is per-request) and
+belongs at the integration boundary, not in a render primitive.
+
 ### CSRF, authentication, authorization
 
 This is a template engine. It doesn't know who the user is, what

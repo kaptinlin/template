@@ -24,7 +24,7 @@ func TestNumberFilters(t *testing.T) {
 			name:     "BytesFilterForKilobytes",
 			template: "{{ value | bytes }}",
 			context:  map[string]any{"value": 1024},
-			expected: "1.0 kB",
+			expected: "1.0 KB",
 		},
 		{
 			name:     "BytesFilterForMegabytes",
