@@ -53,7 +53,7 @@ func (v *Value) IsTrue() bool {
 	if !rv.IsValid() {
 		return false
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Bool:
 		return rv.Bool()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -95,7 +95,7 @@ func (v *Value) String() string {
 		return s.String()
 	}
 
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.String:
 		return rv.String()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -144,7 +144,7 @@ func formatSliceItem(rv reflect.Value) string {
 	if !rv.IsValid() {
 		return "null"
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.String:
 		return rv.String()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -172,7 +172,7 @@ func (v *Value) Int() (int64, error) {
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToInt
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return rv.Int(), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -199,7 +199,7 @@ func (v *Value) Float() (float64, error) {
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToFloat
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Float32, reflect.Float64:
 		return rv.Float(), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -222,7 +222,7 @@ func (v *Value) Len() (int, error) {
 	if !rv.IsValid() {
 		return 0, nil
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.String, reflect.Slice, reflect.Map, reflect.Array:
 		return rv.Len(), nil
 	default:
@@ -236,7 +236,7 @@ func (v *Value) Index(i int) (*Value, error) {
 	if !rv.IsValid() {
 		return nil, ErrCannotIndexNil
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		if i < 0 || i >= rv.Len() {
 			return nil, fmt.Errorf("%w: %d", ErrIndexOutOfRange, i)
@@ -276,7 +276,7 @@ func (v *Value) Field(name string) (*Value, error) {
 	if !rv.IsValid() {
 		return nil, ErrCannotGetFieldFromNil
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Struct:
 		field, found := findStructField(rv, name)
 		if !found {
@@ -337,7 +337,7 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 	if !rv.IsValid() {
 		return nil
 	}
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		count := rv.Len()
 		for i := range count {

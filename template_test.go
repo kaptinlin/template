@@ -795,7 +795,7 @@ type DepartmentAddress struct {
 	SliceMap [][]map[string]string          `json:"sliceMap"`
 }
 
-func (d DepartmentAddress) GetName() string {
+func (d *DepartmentAddress) GetName() string {
 	return d.Street + " " + d.City
 }
 
@@ -1697,7 +1697,7 @@ Department SliceMap: {{ user.address.department.sliceMap }}`,
 			context: map[string]any{
 				"user": User{
 					Address: Address{
-						Department: DepartmentAddress{
+						Department: &DepartmentAddress{
 							Street:   "123 Main St",
 							City:     "New York",
 							Map:      testMap,
@@ -1842,7 +1842,7 @@ Second member's city: Boston`,
 {% if department.department.city %}Department city: {{ department.department.city }}{% endif %}`,
 			context: map[string]any{
 				"department": Address{
-					Department: DepartmentAddress{
+					Department: &DepartmentAddress{
 						Street: "123 Main St",
 						City:   "New York",
 					},

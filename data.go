@@ -252,7 +252,7 @@ func valueToDataValue(rv reflect.Value) (any, bool) {
 		return nil, false
 	}
 
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Bool:
 		return rv.Bool(), true
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -345,7 +345,7 @@ func isEmptyJSONValue(rv reflect.Value) bool {
 		return true
 	}
 
-	switch rv.Kind() { //nolint:exhaustive
+	switch rv.Kind() {
 	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
 		return rv.Len() == 0
 	case reflect.Bool:

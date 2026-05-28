@@ -5,7 +5,7 @@
 
 A Go template engine with Django-style control flow, Liquid-style filters, and optional layout-aware HTML rendering.
 
-For development guidelines and project conventions, see [AGENTS.md](AGENTS.md).
+For development guidelines and project conventions, see [CLAUDE.md](CLAUDE.md).
 
 ## Features
 
@@ -165,7 +165,7 @@ go run ./examples/<name>
 task test           # Run all tests with race detection
 task test-coverage  # Generate coverage.out and coverage.html
 task bench          # Run benchmarks
-task fmt            # Run go fmt ./...
+task fmt            # Run configured Go formatters
 task vet            # Run go vet ./...
 task lint           # Run golangci-lint and go mod tidy checks
 task verify         # Run deps, fmt, vet, lint, and test
