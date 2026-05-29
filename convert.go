@@ -9,6 +9,8 @@ import (
 // toString converts the value to its string representation.
 func toString(value any) string {
 	switch v := value.(type) {
+	case nil:
+		return ""
 	case string:
 		return v
 	case fmt.Stringer:

@@ -527,3 +527,17 @@ func TestRenderContextGetPriority(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderContextGetLocalRootShadowsDataPath(t *testing.T) {
+	t.Parallel()
+
+	ctx := NewRenderContext(Data{
+		"user": map[string]any{"name": "global"},
+	})
+	ctx.Set("user", map[string]any{})
+
+	got, ok := ctx.Get("user.name")
+	if ok {
+		t.Fatalf("Get(%q) = (%v, true), want local user to shadow data path", "user.name", got)
+	}
+}

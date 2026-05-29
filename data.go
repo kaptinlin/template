@@ -387,6 +387,10 @@ func (ec *RenderContext) Get(name string) (any, bool) {
 	if val, err := ec.Locals.Get(name); err == nil {
 		return val, true
 	}
+	root, _, _ := strings.Cut(name, ".")
+	if _, ok := ec.Locals[root]; ok {
+		return nil, false
+	}
 	if val, err := ec.Data.Get(name); err == nil {
 		return val, true
 	}

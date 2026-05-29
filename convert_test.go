@@ -79,7 +79,7 @@ func TestToString(t *testing.T) {
 		{
 			name:     "nil value",
 			input:    nil,
-			expected: "<nil>",
+			expected: "",
 		},
 		{
 			name:     "slice of ints",

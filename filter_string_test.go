@@ -282,6 +282,40 @@ func TestStringFilters(t *testing.T) {
 	}
 }
 
+func TestStringFiltersTreatMissingValuesAsEmpty(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		template string
+		want     string
+	}{
+		{
+			name:     "length",
+			template: "{{ missing | length }}",
+			want:     "0",
+		},
+		{
+			name:     "upcase",
+			template: "{{ missing | upcase }}",
+			want:     "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tpl, err := parseSourceTemplate(tc.template)
+			require.NoError(t, err)
+
+			got, err := tpl.Render(nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func TestStringFilterErrors(t *testing.T) {
 	t.Run("SplitMissingDelimiter", func(t *testing.T) {
 		_, err := splitFilter("hello")
