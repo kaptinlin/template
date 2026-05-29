@@ -162,10 +162,44 @@ func TestArrayFilters(t *testing.T) {
 			expected: "apple,Banana,Cherry",
 		},
 		{
+			name:     "SortNaturalFilterByKey",
+			template: "{{ value | sort_natural:'name' | map:'name' | join:',' }}",
+			context: map[string]any{
+				"value": []map[string]any{
+					{"name": "charlie"},
+					{"name": "Bob"},
+					{"name": "alice"},
+				},
+			},
+			expected: "alice,Bob,charlie",
+		},
+		{
 			name:     "CompactFilter",
 			template: "{{ value | compact | join:',' }}",
 			context:  map[string]any{"value": []any{1, nil, 2, nil, 3}},
 			expected: "1,2,3",
+		},
+		{
+			name:     "CompactFilterByKey",
+			template: "{{ value | compact:'name' | map:'id' | join:',' }}",
+			context: map[string]any{
+				"value": []map[string]any{
+					{"id": 1, "name": "Alice"},
+					{"id": 2, "name": nil},
+					{"id": 3, "name": "Charlie"},
+					{"id": 4},
+				},
+			},
+			expected: "1,3",
+		},
+		{
+			name:     "ConcatFilter",
+			template: "{{ value | concat:other | join:',' }}",
+			context: map[string]any{
+				"value": []int{1, 2},
+				"other": []int{3, 4},
+			},
+			expected: "1,2,3,4",
 		},
 		{
 			name:     "WhereFilter",
@@ -175,6 +209,19 @@ func TestArrayFilters(t *testing.T) {
 					{"name": "Alice", "active": "true"},
 					{"name": "Bob", "active": "false"},
 					{"name": "Charlie", "active": "true"},
+				},
+			},
+			expected: "Alice,Charlie",
+		},
+		{
+			name:     "WhereFilterTruthy",
+			template: "{{ value | where:'active' | map:'name' | join:',' }}",
+			context: map[string]any{
+				"value": []map[string]any{
+					{"name": "Alice", "active": true},
+					{"name": "Bob", "active": false},
+					{"name": "Charlie", "active": "yes"},
+					{"name": "Dana"},
 				},
 			},
 			expected: "Alice,Charlie",
@@ -190,6 +237,19 @@ func TestArrayFilters(t *testing.T) {
 				},
 			},
 			expected: "Alice,Charlie",
+		},
+		{
+			name:     "RejectFilterTruthy",
+			template: "{{ value | reject:'active' | map:'name' | join:',' }}",
+			context: map[string]any{
+				"value": []map[string]any{
+					{"name": "Alice", "active": true},
+					{"name": "Bob", "active": false},
+					{"name": "Charlie", "active": nil},
+					{"name": "Dana"},
+				},
+			},
+			expected: "Bob,Charlie,Dana",
 		},
 		{
 			name:     "FindFilter",
@@ -235,6 +295,17 @@ func TestArrayFilters(t *testing.T) {
 				},
 			},
 			expected: "false",
+		},
+		{
+			name:     "HasFilterTruthy",
+			template: "{{ value | has:'active' }}",
+			context: map[string]any{
+				"value": []map[string]any{
+					{"active": false},
+					{"active": true},
+				},
+			},
+			expected: "true",
 		},
 	}
 

@@ -53,6 +53,88 @@ type errWriter struct{}
 
 func (errWriter) Write([]byte) (int, error) { return 0, errWrite }
 
+type shortWriter struct{}
+
+func (shortWriter) Write(p []byte) (int, error) { return len(p) - 1, nil }
+
+type failOnMarker struct {
+	marker string
+	buf    bytes.Buffer
+}
+
+func (w *failOnMarker) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte(w.marker)) {
+		return 0, errWrite
+	}
+	return w.buf.Write(p)
+}
+
+func TestRedactingWriterRedactsAndReportsInputLength(t *testing.T) {
+	t.Parallel()
+
+	input := []byte("token=" + secretToken)
+	var buf bytes.Buffer
+	w := &redactingWriter{
+		inner:   &buf,
+		secrets: []string{"", secretToken},
+		replace: redacted,
+	}
+
+	n, err := w.Write(input)
+	if err != nil {
+		t.Fatalf("Write() err = %v", err)
+	}
+	if n != len(input) {
+		t.Fatalf("Write() n = %d, want %d", n, len(input))
+	}
+	if got := buf.String(); got != "token="+redacted {
+		t.Fatalf("Write() output = %q, want redacted token", got)
+	}
+}
+
+func TestRedactingWriterReturnsInnerError(t *testing.T) {
+	t.Parallel()
+
+	w := &redactingWriter{inner: errWriter{}, secrets: []string{secretToken}, replace: redacted}
+	if _, err := w.Write([]byte(secretToken)); !errors.Is(err, errWrite) {
+		t.Fatalf("Write() err = %v, want %v", err, errWrite)
+	}
+}
+
+func TestRedactingWriterRejectsShortWrite(t *testing.T) {
+	t.Parallel()
+
+	w := &redactingWriter{inner: shortWriter{}, secrets: []string{secretToken}, replace: redacted}
+	if _, err := w.Write([]byte(secretToken)); !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("Write() err = %v, want %v", err, io.ErrShortWrite)
+	}
+}
+
+func TestRunReturnsErrorsFromOutputStages(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		marker string
+	}{
+		{name: "filter heading", marker: "filter redaction:"},
+		{name: "filtered render", marker: "filtered user="},
+		{name: "error heading", marker: "safe render error:"},
+		{name: "render diagnostic", marker: "broken.txt:"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			w := &failOnMarker{marker: tt.marker}
+			if err := run(w); !errors.Is(err, errWrite) {
+				t.Fatalf("run() err = %v, want %v", err, errWrite)
+			}
+		})
+	}
+}
+
 func TestRunReturnsWriterError(t *testing.T) {
 	t.Parallel()
 

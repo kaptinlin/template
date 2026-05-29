@@ -131,7 +131,8 @@ func classifyGetError(err error, key string) error {
 		errors.Is(err, jsonpointer.ErrInvalidIndex):
 		return fmt.Errorf("%w: '%s'", ErrContextIndexOutOfRange, key)
 	case errors.Is(err, jsonpointer.ErrInvalidPath),
-		errors.Is(err, jsonpointer.ErrInvalidPathStep):
+		errors.Is(err, jsonpointer.ErrInvalidPathStep),
+		errors.Is(err, jsonpointer.ErrNilPointer):
 		return fmt.Errorf("%w: '%s'", ErrContextInvalidKeyType, key)
 	default:
 		return fmt.Errorf("accessing '%s': %w", key, err)

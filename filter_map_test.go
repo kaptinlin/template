@@ -91,8 +91,15 @@ func TestExtractFilterErrors(t *testing.T) {
 		assert.ErrorIs(t, err, ErrInsufficientArgs)
 	})
 
-	t.Run("NonMapInput", func(_ *testing.T) {
-		// Extracting from a non-map/non-slice returns empty or error.
-		_, _ = extractFilter(42, "key")
+	t.Run("NonMapInput", func(t *testing.T) {
+		_, err := extractFilter(42, "key")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrContextInvalidKeyType)
+	})
+
+	t.Run("InvalidArrayIndex", func(t *testing.T) {
+		_, err := extractFilter(map[string]any{"items": []any{"first"}}, "items.one")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrContextInvalidKeyType)
 	})
 }

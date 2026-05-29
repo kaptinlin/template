@@ -325,6 +325,58 @@ func TestContextIndexOutOfRange(t *testing.T) {
 	}
 }
 
+func TestContextGetClassifiesJSONPointerErrors(t *testing.T) {
+	t.Parallel()
+
+	type profile struct {
+		Name string `json:"name"`
+	}
+	var nilProfile *profile
+
+	tests := []struct {
+		name string
+		data Data
+		key  string
+		want error
+	}{
+		{
+			name: "non-numeric slice index",
+			data: Data{"items": []string{"first"}},
+			key:  "items.one",
+			want: ErrContextIndexOutOfRange,
+		},
+		{
+			name: "negative slice index",
+			data: Data{"items": []string{"first"}},
+			key:  "items.-1",
+			want: ErrContextIndexOutOfRange,
+		},
+		{
+			name: "nil pointer path",
+			data: Data{"profile": nilProfile},
+			key:  "profile.name",
+			want: ErrContextInvalidKeyType,
+		},
+		{
+			name: "scalar traversal stops as missing key",
+			data: Data{"profile": map[string]any{"name": "Ada"}},
+			key:  "profile.name.first",
+			want: ErrContextKeyNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := tt.data.Get(tt.key)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("Get(%q) error = %v, want %v", tt.key, err, tt.want)
+			}
+		})
+	}
+}
+
 func TestContextOverwrite(t *testing.T) {
 	tests := []struct {
 		name     string
