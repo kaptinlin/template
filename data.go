@@ -126,14 +126,14 @@ func classifyGetError(err error, key string) error {
 	case errors.Is(err, jsonpointer.ErrNotFound),
 		errors.Is(err, jsonpointer.ErrKeyNotFound),
 		errors.Is(err, jsonpointer.ErrFieldNotFound):
-		return fmt.Errorf("%w: '%s'", ErrContextKeyNotFound, key)
+		return fmt.Errorf("context path '%s': %w", key, errors.Join(ErrContextKeyNotFound, err))
 	case errors.Is(err, jsonpointer.ErrIndexOutOfBounds),
 		errors.Is(err, jsonpointer.ErrInvalidIndex):
-		return fmt.Errorf("%w: '%s'", ErrContextIndexOutOfRange, key)
+		return fmt.Errorf("context path '%s': %w", key, errors.Join(ErrContextIndexOutOfRange, err))
 	case errors.Is(err, jsonpointer.ErrInvalidPath),
 		errors.Is(err, jsonpointer.ErrInvalidPathStep),
 		errors.Is(err, jsonpointer.ErrNilPointer):
-		return fmt.Errorf("%w: '%s'", ErrContextInvalidKeyType, key)
+		return fmt.Errorf("context path '%s': %w", key, errors.Join(ErrContextInvalidKeyType, err))
 	default:
 		return fmt.Errorf("accessing '%s': %w", key, err)
 	}

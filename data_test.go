@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaptinlin/jsonpointer"
 )
 
 func parseContextTestTemplate(t *testing.T, source string) *Template {
@@ -374,6 +376,18 @@ func TestContextGetClassifiesJSONPointerErrors(t *testing.T) {
 				t.Fatalf("Get(%q) error = %v, want %v", tt.key, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestContextGetPreservesJSONPointerCause(t *testing.T) {
+	t.Parallel()
+
+	_, err := (Data{"items": []string{"first"}}).Get("items.one")
+	if !errors.Is(err, ErrContextIndexOutOfRange) {
+		t.Fatalf("Get() error = %v, want %v", err, ErrContextIndexOutOfRange)
+	}
+	if !errors.Is(err, jsonpointer.ErrInvalidIndex) {
+		t.Fatalf("Get() error = %v, want %v", err, jsonpointer.ErrInvalidIndex)
 	}
 }
 
