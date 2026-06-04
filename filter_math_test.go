@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -119,6 +120,45 @@ func TestMathFilters(t *testing.T) {
 			got, err := tpl.Render(map[string]any(ctx))
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+func TestMathFilterArithmeticErrorsMatchTemplateSentinels(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		template string
+		want     error
+	}{
+		{
+			name:     "Divide",
+			template: "{{ value | divide:0 }}",
+			want:     ErrDivisionByZero,
+		},
+		{
+			name:     "DividedBy",
+			template: "{{ value | divided_by:0 }}",
+			want:     ErrDivisionByZero,
+		},
+		{
+			name:     "Modulo",
+			template: "{{ value | modulo:0 }}",
+			want:     ErrModuloByZero,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tpl, err := New().ParseString(tc.template)
+			require.NoError(t, err)
+
+			_, err = tpl.Render(Data{"value": 10})
+			require.Error(t, err)
+			assert.True(t, errors.Is(err, tc.want), "got %v, want %v", err, tc.want)
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kaptinlin/filter"
@@ -93,7 +94,14 @@ func divideFilter(value any, args ...any) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: divide filter requires one argument", ErrInsufficientArgs)
 	}
-	return filter.Divide(value, args[0])
+	result, err := filter.Divide(value, args[0])
+	if err != nil {
+		if errors.Is(err, filter.ErrArithmetic) {
+			return nil, errors.Join(ErrDivisionByZero, err)
+		}
+		return nil, err
+	}
+	return result, nil
 }
 
 // moduloFilter returns the remainder of the division of the first value by the second.
@@ -101,5 +109,12 @@ func moduloFilter(value any, args ...any) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("%w: modulo filter requires one argument", ErrInsufficientArgs)
 	}
-	return filter.Modulo(value, args[0])
+	result, err := filter.Modulo(value, args[0])
+	if err != nil {
+		if errors.Is(err, filter.ErrArithmetic) {
+			return nil, errors.Join(ErrModuloByZero, err)
+		}
+		return nil, err
+	}
+	return result, nil
 }
