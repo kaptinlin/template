@@ -207,7 +207,29 @@ func splitDotPath(path string) []string {
 	if path == "" {
 		return nil
 	}
-	return strings.Split(path, ".")
+
+	parts := make([]string, 0, strings.Count(path, ".")+1)
+	var b strings.Builder
+	b.Grow(len(path))
+
+	for i := 0; i < len(path); i++ {
+		switch path[i] {
+		case '.':
+			parts = append(parts, b.String())
+			b.Reset()
+		case '\\':
+			if i+1 < len(path) && (path[i+1] == '.' || path[i+1] == '\\') {
+				b.WriteByte(path[i+1])
+				i++
+			} else {
+				b.WriteByte(path[i])
+			}
+		default:
+			b.WriteByte(path[i])
+		}
+	}
+	parts = append(parts, b.String())
+	return parts
 }
 
 // KeyValue sets a key-value pair and returns the builder for chaining.

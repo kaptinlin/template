@@ -1,11 +1,11 @@
 github.com/agentable/go-humanize v0.1.2 h1:7MwIhxNNzTj4dLG7F/paVyhWN/UhmeEOxGteUUjomx8=
 github.com/agentable/go-humanize v0.1.2/go.mod h1:nOwlHN69HIaHb2tWCHSFd9OJ92tEVQl0dVG/OduwleQ=
-github.com/agentable/go-time v0.6.2 h1:w0tfgUsFHKuje1ay8ZrDmhH9aZxryoS066IIEddbvvo=
-github.com/agentable/go-time v0.6.2/go.mod h1:GEUh1NwGA9attI9hbQDqlqww06lc/iA1wYc+ZYmEIZg=
+github.com/agentable/go-time v0.6.3 h1:mHUvW+FE1CHh8MsXOzrhaTeutqUESYsnqVDyKoOZOGg=
+github.com/agentable/go-time v0.6.3/go.mod h1:RvDcpSuiOi8il9psGyMkwmGKXpCmEgP6S7eVpZDwB24=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/go-json-experiment/json v0.0.0-20260520185125-572e7c383686 h1:NZBJxCpbHS1gzS6xAmyxbJznosZIIPk9IB42v62UvKA=
-github.com/go-json-experiment/json v0.0.0-20260520185125-572e7c383686/go.mod h1:tphK2c80bpPhMOI4v6bIc2xWywPfbqi1Z06+RcrMkDg=
+github.com/go-json-experiment/json v0.0.0-20260601182631-00ed12fed2a6 h1:nxP4pPoyqOAgX8lYDFCfl3DyKeXErCvSvhcyzwGV9CE=
+github.com/go-json-experiment/json v0.0.0-20260601182631-00ed12fed2a6/go.mod h1:tphK2c80bpPhMOI4v6bIc2xWywPfbqi1Z06+RcrMkDg=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
 github.com/gosimple/slug v1.15.0 h1:wRZHsRrRcs6b0XnxMUBM6WK1U1Vg5B0R7VkIf1Xzobo=

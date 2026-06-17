@@ -3,7 +3,7 @@ module github.com/kaptinlin/template
 go 1.26.3
 
 require (
-	github.com/go-json-experiment/json v0.0.0-20260520185125-572e7c383686
+	github.com/go-json-experiment/json v0.0.0-20260601182631-00ed12fed2a6
 	github.com/google/go-cmp v0.7.0
 	github.com/kaptinlin/filter v0.5.0
 	github.com/stretchr/testify v1.11.1
@@ -11,7 +11,7 @@ require (
 
 require (
 	github.com/agentable/go-humanize v0.1.2 // indirect
-	github.com/agentable/go-time v0.6.2 // indirect
+	github.com/agentable/go-time v0.6.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gosimple/slug v1.15.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect

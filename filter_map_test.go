@@ -3,6 +3,7 @@ package template
 import (
 	"testing"
 
+	"github.com/kaptinlin/filter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,6 +86,8 @@ func TestExtractFilter(t *testing.T) {
 }
 
 func TestExtractFilterErrors(t *testing.T) {
+	t.Parallel()
+
 	t.Run("MissingKeyPath", func(t *testing.T) {
 		_, err := extractFilter(map[string]any{"key": "value"})
 		require.Error(t, err)
@@ -101,5 +104,12 @@ func TestExtractFilterErrors(t *testing.T) {
 		_, err := extractFilter(map[string]any{"items": []any{"first"}}, "items.one")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrContextInvalidKeyType)
+	})
+
+	t.Run("InvalidInputPreservesCause", func(t *testing.T) {
+		_, err := extractFilter(42, "key")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrContextInvalidKeyType)
+		assert.ErrorIs(t, err, filter.ErrInvalidInput)
 	})
 }

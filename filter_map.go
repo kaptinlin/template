@@ -28,7 +28,7 @@ func extractFilter(value any, args ...any) (any, error) {
 		return "", nil
 	}
 	if errors.Is(err, filter.ErrInvalidInput) {
-		return nil, ErrContextInvalidKeyType
+		return nil, fmt.Errorf("invalid extract path: %w", errors.Join(ErrContextInvalidKeyType, err))
 	}
 	return nil, err
 }

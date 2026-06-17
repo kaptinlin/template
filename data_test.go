@@ -1299,6 +1299,24 @@ func TestContextGetEmptyPathComponent(t *testing.T) {
 	}
 }
 
+func TestContextGetEscapedDotPathComponent(t *testing.T) {
+	t.Parallel()
+
+	c := Data{
+		"labels": map[string]any{
+			"app.kubernetes.io/name": "api",
+		},
+	}
+
+	got, err := c.Get(`labels.app\.kubernetes\.io/name`)
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if got != "api" {
+		t.Errorf("Get() = %v, want %q", got, "api")
+	}
+}
+
 func TestContextGetEmptyKey(t *testing.T) {
 	c := NewData()
 	c.Set("x", 1)
