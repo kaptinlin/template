@@ -8,44 +8,44 @@ import (
 )
 
 // parseTemplate is a test helper that tokenizes and parses the input.
-func parseTemplate(t *testing.T, input string) ([]Statement, error) {
+func parseTemplate(t *testing.T, input string) ([]statement, error) {
 	t.Helper()
-	tokens, err := NewLexer(input).Tokenize()
+	tokens, err := newLexer(input).Tokenize()
 	if err != nil {
 		t.Fatalf("Tokenize(%q) returned unexpected error: %v", input, err)
 	}
-	return NewParser(tokens).Parse()
+	return newParser(tokens).Parse()
 }
 
 // =============================================================================
-// Test Group 1: Basic Text Node Parsing
+// Test Group 1: Basic Text node Parsing
 // =============================================================================
 
 func TestParserTextNode(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  []Statement
+		want  []statement
 	}{
 		{
 			name:  "plain_text",
 			input: "Hello, World!",
-			want: []Statement{
-				&TextNode{Text: "Hello, World!", Line: 1, Col: 1},
+			want: []statement{
+				&textNode{Text: "Hello, World!", Line: 1, Col: 1},
 			},
 		},
 		{
 			name:  "multiline_text",
 			input: "Line 1\nLine 2\nLine 3",
-			want: []Statement{
-				&TextNode{Text: "Line 1\nLine 2\nLine 3", Line: 1, Col: 1},
+			want: []statement{
+				&textNode{Text: "Line 1\nLine 2\nLine 3", Line: 1, Col: 1},
 			},
 		},
 		{
 			name:  "special_characters",
 			input: "Hello <html> & \"quotes\"",
-			want: []Statement{
-				&TextNode{Text: "Hello <html> & \"quotes\"", Line: 1, Col: 1},
+			want: []statement{
+				&textNode{Text: "Hello <html> & \"quotes\"", Line: 1, Col: 1},
 			},
 		},
 		{
@@ -69,21 +69,21 @@ func TestParserTextNode(t *testing.T) {
 }
 
 // =============================================================================
-// Test Group 2: Output Node (Variable) Parsing
+// Test Group 2: Output node (Variable) Parsing
 // =============================================================================
 
 func TestParserOutputNode(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  []Statement
+		want  []statement
 	}{
 		{
 			name:  "simple_variable",
 			input: "{{ name }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &VariableNode{Name: "name", Line: 1, Col: 4},
+			want: []statement{
+				&outputNode{
+					Expr: &variableNode{Name: "name", Line: 1, Col: 4},
 					Line: 1,
 					Col:  1,
 				},
@@ -92,9 +92,9 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "number_literal",
 			input: "{{ 42 }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &LiteralNode{Value: 42.0, Line: 1, Col: 4},
+			want: []statement{
+				&outputNode{
+					Expr: &literalNode{Value: 42.0, Line: 1, Col: 4},
 					Line: 1,
 					Col:  1,
 				},
@@ -103,9 +103,9 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "string_literal",
 			input: `{{ "hello" }}`,
-			want: []Statement{
-				&OutputNode{
-					Expr: &LiteralNode{Value: "hello", Line: 1, Col: 4},
+			want: []statement{
+				&outputNode{
+					Expr: &literalNode{Value: "hello", Line: 1, Col: 4},
 					Line: 1,
 					Col:  1,
 				},
@@ -114,9 +114,9 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "boolean_literal",
 			input: "{{ true }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &LiteralNode{Value: true, Line: 1, Col: 4},
+			want: []statement{
+				&outputNode{
+					Expr: &literalNode{Value: true, Line: 1, Col: 4},
 					Line: 1,
 					Col:  1,
 				},
@@ -125,10 +125,10 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "property_access",
 			input: "{{ user.name }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &PropertyAccessNode{
-						Object:   &VariableNode{Name: "user", Line: 1, Col: 4},
+			want: []statement{
+				&outputNode{
+					Expr: &propertyAccessNode{
+						Object:   &variableNode{Name: "user", Line: 1, Col: 4},
 						Property: "name",
 						Line:     1,
 						Col:      8,
@@ -141,11 +141,11 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "subscript_access",
 			input: "{{ items[0] }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &SubscriptNode{
-						Object: &VariableNode{Name: "items", Line: 1, Col: 4},
-						Index:  &LiteralNode{Value: 0.0, Line: 1, Col: 10},
+			want: []statement{
+				&outputNode{
+					Expr: &subscriptNode{
+						Object: &variableNode{Name: "items", Line: 1, Col: 4},
+						Index:  &literalNode{Value: 0.0, Line: 1, Col: 10},
 						Line:   1,
 						Col:    9,
 					},
@@ -157,10 +157,10 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "filter",
 			input: "{{ name|upper }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &FilterNode{
-						Expr: &VariableNode{Name: "name", Line: 1, Col: 4},
+			want: []statement{
+				&outputNode{
+					Expr: &filterNode{
+						Expr: &variableNode{Name: "name", Line: 1, Col: 4},
 						Name: "upper",
 						Args: nil,
 						Line: 1,
@@ -174,13 +174,13 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "filter_with_arg",
 			input: "{{ price|add:10 }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &FilterNode{
-						Expr: &VariableNode{Name: "price", Line: 1, Col: 4},
+			want: []statement{
+				&outputNode{
+					Expr: &filterNode{
+						Expr: &variableNode{Name: "price", Line: 1, Col: 4},
 						Name: "add",
-						Args: []Expression{
-							&LiteralNode{Value: 10.0, Line: 1, Col: 14},
+						Args: []expression{
+							&literalNode{Value: 10.0, Line: 1, Col: 14},
 						},
 						Line: 1,
 						Col:  9,
@@ -193,12 +193,12 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "binary_operation",
 			input: "{{ a + b }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &BinaryOpNode{
+			want: []statement{
+				&outputNode{
+					Expr: &binaryOpNode{
 						Operator: "+",
-						Left:     &VariableNode{Name: "a", Line: 1, Col: 4},
-						Right:    &VariableNode{Name: "b", Line: 1, Col: 8},
+						Left:     &variableNode{Name: "a", Line: 1, Col: 4},
+						Right:    &variableNode{Name: "b", Line: 1, Col: 8},
 						Line:     1,
 						Col:      6,
 					},
@@ -210,12 +210,12 @@ func TestParserOutputNode(t *testing.T) {
 		{
 			name:  "comparison",
 			input: "{{ x > 10 }}",
-			want: []Statement{
-				&OutputNode{
-					Expr: &BinaryOpNode{
+			want: []statement{
+				&outputNode{
+					Expr: &binaryOpNode{
 						Operator: ">",
-						Left:     &VariableNode{Name: "x", Line: 1, Col: 4},
-						Right:    &LiteralNode{Value: 10.0, Line: 1, Col: 8},
+						Left:     &variableNode{Name: "x", Line: 1, Col: 4},
+						Right:    &literalNode{Value: 10.0, Line: 1, Col: 8},
 						Line:     1,
 						Col:      6,
 					},
@@ -247,18 +247,18 @@ func TestParserIfTag(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  []Statement
+		want  []statement
 	}{
 		{
 			name:  "simple_if",
 			input: "{% if x %}yes{% endif %}",
-			want: []Statement{
-				&IfNode{
-					Branches: []IfBranch{
+			want: []statement{
+				&ifNode{
+					Branches: []ifBranch{
 						{
-							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
-							Body: []Node{
-								&TextNode{Text: "yes", Line: 1, Col: 11},
+							Condition: &variableNode{Name: "x", Line: 1, Col: 7},
+							Body: []node{
+								&textNode{Text: "yes", Line: 1, Col: 11},
 							},
 						},
 					},
@@ -270,18 +270,18 @@ func TestParserIfTag(t *testing.T) {
 		{
 			name:  "if_else",
 			input: "{% if x %}yes{% else %}no{% endif %}",
-			want: []Statement{
-				&IfNode{
-					Branches: []IfBranch{
+			want: []statement{
+				&ifNode{
+					Branches: []ifBranch{
 						{
-							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
-							Body: []Node{
-								&TextNode{Text: "yes", Line: 1, Col: 11},
+							Condition: &variableNode{Name: "x", Line: 1, Col: 7},
+							Body: []node{
+								&textNode{Text: "yes", Line: 1, Col: 11},
 							},
 						},
 					},
-					ElseBody: []Node{
-						&TextNode{Text: "no", Line: 1, Col: 24},
+					ElseBody: []node{
+						&textNode{Text: "no", Line: 1, Col: 24},
 					},
 					Line: 1,
 					Col:  4,
@@ -291,19 +291,19 @@ func TestParserIfTag(t *testing.T) {
 		{
 			name:  "if_elif",
 			input: "{% if x %}a{% elif y %}b{% endif %}",
-			want: []Statement{
-				&IfNode{
-					Branches: []IfBranch{
+			want: []statement{
+				&ifNode{
+					Branches: []ifBranch{
 						{
-							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
-							Body: []Node{
-								&TextNode{Text: "a", Line: 1, Col: 11},
+							Condition: &variableNode{Name: "x", Line: 1, Col: 7},
+							Body: []node{
+								&textNode{Text: "a", Line: 1, Col: 11},
 							},
 						},
 						{
-							Condition: &VariableNode{Name: "y", Line: 1, Col: 20},
-							Body: []Node{
-								&TextNode{Text: "b", Line: 1, Col: 24},
+							Condition: &variableNode{Name: "y", Line: 1, Col: 20},
+							Body: []node{
+								&textNode{Text: "b", Line: 1, Col: 24},
 							},
 						},
 					},
@@ -315,24 +315,24 @@ func TestParserIfTag(t *testing.T) {
 		{
 			name:  "if_elif_else",
 			input: "{% if x %}a{% elif y %}b{% else %}c{% endif %}",
-			want: []Statement{
-				&IfNode{
-					Branches: []IfBranch{
+			want: []statement{
+				&ifNode{
+					Branches: []ifBranch{
 						{
-							Condition: &VariableNode{Name: "x", Line: 1, Col: 7},
-							Body: []Node{
-								&TextNode{Text: "a", Line: 1, Col: 11},
+							Condition: &variableNode{Name: "x", Line: 1, Col: 7},
+							Body: []node{
+								&textNode{Text: "a", Line: 1, Col: 11},
 							},
 						},
 						{
-							Condition: &VariableNode{Name: "y", Line: 1, Col: 20},
-							Body: []Node{
-								&TextNode{Text: "b", Line: 1, Col: 24},
+							Condition: &variableNode{Name: "y", Line: 1, Col: 20},
+							Body: []node{
+								&textNode{Text: "b", Line: 1, Col: 24},
 							},
 						},
 					},
-					ElseBody: []Node{
-						&TextNode{Text: "c", Line: 1, Col: 35},
+					ElseBody: []node{
+						&textNode{Text: "c", Line: 1, Col: 35},
 					},
 					Line: 1,
 					Col:  4,
@@ -362,18 +362,18 @@ func TestParserForTag(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  []Statement
+		want  []statement
 	}{
 		{
 			name:  "simple_for",
 			input: "{% for item in items %}{{ item }}{% endfor %}",
-			want: []Statement{
-				&ForNode{
+			want: []statement{
+				&forNode{
 					Vars:       []string{"item"},
-					Collection: &VariableNode{Name: "items", Line: 1, Col: 16},
-					Body: []Node{
-						&OutputNode{
-							Expr: &VariableNode{Name: "item", Line: 1, Col: 27},
+					Collection: &variableNode{Name: "items", Line: 1, Col: 16},
+					Body: []node{
+						&outputNode{
+							Expr: &variableNode{Name: "item", Line: 1, Col: 27},
 							Line: 1,
 							Col:  24,
 						},
@@ -386,13 +386,13 @@ func TestParserForTag(t *testing.T) {
 		{
 			name:  "for_with_key_value",
 			input: "{% for k, v in dict %}{{ k }}{% endfor %}",
-			want: []Statement{
-				&ForNode{
+			want: []statement{
+				&forNode{
 					Vars:       []string{"k", "v"},
-					Collection: &VariableNode{Name: "dict", Line: 1, Col: 16},
-					Body: []Node{
-						&OutputNode{
-							Expr: &VariableNode{Name: "k", Line: 1, Col: 26},
+					Collection: &variableNode{Name: "dict", Line: 1, Col: 16},
+					Body: []node{
+						&outputNode{
+							Expr: &variableNode{Name: "k", Line: 1, Col: 26},
 							Line: 1,
 							Col:  23,
 						},
@@ -425,19 +425,19 @@ func TestParserMixedContent(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  []Statement
+		want  []statement
 	}{
 		{
 			name:  "text_and_variable",
 			input: "Hello {{ name }}!",
-			want: []Statement{
-				&TextNode{Text: "Hello ", Line: 1, Col: 1},
-				&OutputNode{
-					Expr: &VariableNode{Name: "name", Line: 1, Col: 10},
+			want: []statement{
+				&textNode{Text: "Hello ", Line: 1, Col: 1},
+				&outputNode{
+					Expr: &variableNode{Name: "name", Line: 1, Col: 10},
 					Line: 1,
 					Col:  7,
 				},
-				&TextNode{Text: "!", Line: 1, Col: 17},
+				&textNode{Text: "!", Line: 1, Col: 17},
 			},
 		},
 	}
@@ -516,63 +516,63 @@ func TestParserErrors(t *testing.T) {
 }
 
 // =============================================================================
-// Test Group 7: Parser Helpers
+// Test Group 7: parser Helpers
 // =============================================================================
 
 func TestParserHelpers(t *testing.T) {
 	t.Run("notEOF_empty", func(t *testing.T) {
-		p := NewParser(nil)
+		p := newParser(nil)
 		if p.notEOF() {
 			t.Error("notEOF() = true for empty parser, want false")
 		}
 	})
 
 	t.Run("notEOF_with_eof", func(t *testing.T) {
-		p := NewParser([]*Token{{Type: TokenEOF}})
+		p := newParser([]*token{{Type: tokenEOF}})
 		if p.notEOF() {
 			t.Error("notEOF() = true for EOF token, want false")
 		}
 	})
 
 	t.Run("notEOF_with_token", func(t *testing.T) {
-		p := NewParser([]*Token{{Type: TokenText, Value: "hi"}})
+		p := newParser([]*token{{Type: tokenText, value: "hi"}})
 		if !p.notEOF() {
 			t.Error("notEOF() = false for text token, want true")
 		}
 	})
 
 	t.Run("peek_negative_offset", func(t *testing.T) {
-		p := NewParser([]*Token{{Type: TokenText, Value: "a"}})
+		p := newParser([]*token{{Type: tokenText, value: "a"}})
 		if got := p.peek(-1); got != nil {
 			t.Errorf("peek(-1) = %v, want nil", got)
 		}
 	})
 
 	t.Run("peek_beyond_end", func(t *testing.T) {
-		p := NewParser([]*Token{{Type: TokenText, Value: "a"}})
+		p := newParser([]*token{{Type: tokenText, value: "a"}})
 		if got := p.peek(5); got != nil {
 			t.Errorf("peek(5) = %v, want nil", got)
 		}
 	})
 
 	t.Run("peek_valid_offset", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenText, Value: "a"},
-			{Type: TokenText, Value: "b"},
+		tokens := []*token{
+			{Type: tokenText, value: "a"},
+			{Type: tokenText, value: "b"},
 		}
-		p := NewParser(tokens)
-		if got := p.peek(1); got == nil || got.Value != "b" {
+		p := newParser(tokens)
+		if got := p.peek(1); got == nil || got.value != "b" {
 			t.Errorf("peek(1) = %v, want token with value %q", got, "b")
 		}
 	})
 
 	t.Run("remaining", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenText, Value: "a"},
-			{Type: TokenText, Value: "b"},
-			{Type: TokenEOF},
+		tokens := []*token{
+			{Type: tokenText, value: "a"},
+			{Type: tokenText, value: "b"},
+			{Type: tokenEOF},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		if got, want := p.Remaining(), 3; got != want {
 			t.Errorf("Remaining() = %d, want %d", got, want)
 		}
@@ -583,7 +583,7 @@ func TestParserHelpers(t *testing.T) {
 	})
 
 	t.Run("advance_past_end", func(t *testing.T) {
-		p := NewParser([]*Token{{Type: TokenText, Value: "a"}})
+		p := newParser([]*token{{Type: tokenText, value: "a"}})
 		p.Advance()
 		p.Advance() // Should not panic.
 		p.Advance() // Should not panic.
@@ -593,7 +593,7 @@ func TestParserHelpers(t *testing.T) {
 	})
 
 	t.Run("current_past_end", func(t *testing.T) {
-		p := NewParser([]*Token{{Type: TokenText, Value: "a"}})
+		p := newParser([]*token{{Type: tokenText, value: "a"}})
 		p.Advance()
 		if got := p.Current(); got != nil {
 			t.Errorf("Current() past end = %v, want nil", got)
@@ -601,56 +601,56 @@ func TestParserHelpers(t *testing.T) {
 	})
 
 	t.Run("match_success", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenSymbol, Value: ","},
+		p := newParser([]*token{
+			{Type: tokenSymbol, value: ","},
 		})
-		tok := p.Match(TokenSymbol, ",")
+		tok := p.Match(tokenSymbol, ",")
 		if tok == nil {
-			t.Fatal("Match(TokenSymbol, \",\") = nil, want token")
+			t.Fatal("Match(tokenSymbol, \",\") = nil, want token")
 		}
-		if got, want := tok.Value, ","; got != want {
+		if got, want := tok.value, ","; got != want {
 			t.Errorf("Match token value = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("match_failure_wrong_value", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenSymbol, Value: "."},
+		p := newParser([]*token{
+			{Type: tokenSymbol, value: "."},
 		})
-		if tok := p.Match(TokenSymbol, ","); tok != nil {
-			t.Errorf("Match(TokenSymbol, \",\") = %v, want nil", tok)
+		if tok := p.Match(tokenSymbol, ","); tok != nil {
+			t.Errorf("Match(tokenSymbol, \",\") = %v, want nil", tok)
 		}
 	})
 
 	t.Run("match_failure_wrong_type", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenIdentifier, Value: ","},
+		p := newParser([]*token{
+			{Type: tokenIdentifier, value: ","},
 		})
-		if tok := p.Match(TokenSymbol, ","); tok != nil {
+		if tok := p.Match(tokenSymbol, ","); tok != nil {
 			t.Errorf("Match wrong type = %v, want nil", tok)
 		}
 	})
 
 	t.Run("match_nil_token", func(t *testing.T) {
-		p := NewParser(nil)
-		if tok := p.Match(TokenSymbol, ","); tok != nil {
+		p := newParser(nil)
+		if tok := p.Match(tokenSymbol, ","); tok != nil {
 			t.Errorf("Match on empty parser = %v, want nil", tok)
 		}
 	})
 
 	t.Run("collectUntil_empty", func(t *testing.T) {
-		p := NewParser(nil)
-		got := p.collectUntil(TokenTagEnd)
+		p := newParser(nil)
+		got := p.collectUntil(tokenTagEnd)
 		if got != nil {
 			t.Errorf("collectUntil on empty parser = %v, want nil", got)
 		}
 	})
 
 	t.Run("collectUntil_immediate_match", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenTagEnd, Value: "%}"},
+		p := newParser([]*token{
+			{Type: tokenTagEnd, value: "%}"},
 		})
-		got := p.collectUntil(TokenTagEnd)
+		got := p.collectUntil(tokenTagEnd)
 		if got != nil {
 			t.Errorf("collectUntil immediate match = %v, want nil", got)
 		}
@@ -680,21 +680,21 @@ func TestNewParseError(t *testing.T) {
 
 func TestParserExpectIdentifier(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenIdentifier, Value: "foo", Line: 1, Col: 1},
+		p := newParser([]*token{
+			{Type: tokenIdentifier, value: "foo", Line: 1, Col: 1},
 		})
 		tok, err := p.ExpectIdentifier()
 		if err != nil {
 			t.Fatalf("ExpectIdentifier() returned unexpected error: %v", err)
 		}
-		if tok.Value != "foo" {
-			t.Errorf("ExpectIdentifier() value = %q, want %q", tok.Value, "foo")
+		if tok.value != "foo" {
+			t.Errorf("ExpectIdentifier() value = %q, want %q", tok.value, "foo")
 		}
 	})
 
 	t.Run("wrong_type", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenNumber, Value: "42", Line: 1, Col: 1},
+		p := newParser([]*token{
+			{Type: tokenNumber, value: "42", Line: 1, Col: 1},
 		})
 		_, err := p.ExpectIdentifier()
 		if err == nil {
@@ -706,7 +706,7 @@ func TestParserExpectIdentifier(t *testing.T) {
 	})
 
 	t.Run("empty_parser", func(t *testing.T) {
-		p := NewParser(nil)
+		p := newParser(nil)
 		_, err := p.ExpectIdentifier()
 		if err == nil {
 			t.Fatal("ExpectIdentifier() on empty = nil error, want error")
@@ -723,8 +723,8 @@ func TestParserExpectIdentifier(t *testing.T) {
 
 func TestParserErrorHelpers(t *testing.T) {
 	t.Run("error_with_token", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenText, Value: "x", Line: 3, Col: 7},
+		p := newParser([]*token{
+			{Type: tokenText, value: "x", Line: 3, Col: 7},
 		})
 		err := p.Error("something wrong")
 		if !strings.Contains(err.Error(), "line 3") {
@@ -733,7 +733,7 @@ func TestParserErrorHelpers(t *testing.T) {
 	})
 
 	t.Run("error_without_token", func(t *testing.T) {
-		p := NewParser(nil)
+		p := newParser(nil)
 		err := p.Error("something wrong")
 		if !strings.Contains(err.Error(), "something wrong") {
 			t.Errorf("Error() = %q, want it to contain message", err.Error())
@@ -741,8 +741,8 @@ func TestParserErrorHelpers(t *testing.T) {
 	})
 
 	t.Run("errorf_formatting", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenText, Value: "x", Line: 1, Col: 1},
+		p := newParser([]*token{
+			{Type: tokenText, value: "x", Line: 1, Col: 1},
 		})
 		err := p.Errorf("got %s, want %s", "a", "b")
 		if !strings.Contains(err.Error(), "got a, want b") {
@@ -764,16 +764,16 @@ func TestConvertStatementsToNodes(t *testing.T) {
 	})
 
 	t.Run("empty_input", func(t *testing.T) {
-		got := convertStatementsToNodes([]Statement{})
+		got := convertStatementsToNodes([]statement{})
 		if got != nil {
 			t.Errorf("convertStatementsToNodes([]) = %v, want nil", got)
 		}
 	})
 
 	t.Run("with_statements", func(t *testing.T) {
-		stmts := []Statement{
-			&TextNode{Text: "a", Line: 1, Col: 1},
-			&TextNode{Text: "b", Line: 1, Col: 2},
+		stmts := []statement{
+			&textNode{Text: "a", Line: 1, Col: 1},
+			&textNode{Text: "b", Line: 1, Col: 2},
 		}
 		got := convertStatementsToNodes(stmts)
 		if len(got) != 2 {
@@ -791,10 +791,10 @@ func TestConvertStatementsToNodes(t *testing.T) {
 
 func TestParserEndTagHelpers(t *testing.T) {
 	t.Run("isEndTag_match", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenTagBegin, Value: "{%"},
-			{Type: TokenIdentifier, Value: "endif"},
-			{Type: TokenTagEnd, Value: "%}"},
+		p := newParser([]*token{
+			{Type: tokenTagBegin, value: "{%"},
+			{Type: tokenIdentifier, value: "endif"},
+			{Type: tokenTagEnd, value: "%}"},
 		})
 		if !p.isEndTag("endif", "else") {
 			t.Error("isEndTag(endif, else) = false, want true")
@@ -802,10 +802,10 @@ func TestParserEndTagHelpers(t *testing.T) {
 	})
 
 	t.Run("isEndTag_no_match", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenTagBegin, Value: "{%"},
-			{Type: TokenIdentifier, Value: "for"},
-			{Type: TokenTagEnd, Value: "%}"},
+		p := newParser([]*token{
+			{Type: tokenTagBegin, value: "{%"},
+			{Type: tokenIdentifier, value: "for"},
+			{Type: tokenTagEnd, value: "%}"},
 		})
 		if p.isEndTag("endif", "else") {
 			t.Error("isEndTag(endif, else) = true, want false")
@@ -813,8 +813,8 @@ func TestParserEndTagHelpers(t *testing.T) {
 	})
 
 	t.Run("isEndTag_not_tag_begin", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenText, Value: "hello"},
+		p := newParser([]*token{
+			{Type: tokenText, value: "hello"},
 		})
 		if p.isEndTag("endif") {
 			t.Error("isEndTag on text token = true, want false")
@@ -822,9 +822,9 @@ func TestParserEndTagHelpers(t *testing.T) {
 	})
 
 	t.Run("isEndTag_no_identifier_after_begin", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenTagBegin, Value: "{%"},
-			{Type: TokenTagEnd, Value: "%}"},
+		p := newParser([]*token{
+			{Type: tokenTagBegin, value: "{%"},
+			{Type: tokenTagEnd, value: "%}"},
 		})
 		if p.isEndTag("endif") {
 			t.Error("isEndTag with no identifier = true, want false")
@@ -832,9 +832,9 @@ func TestParserEndTagHelpers(t *testing.T) {
 	})
 
 	t.Run("endTagName_valid", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenTagBegin, Value: "{%"},
-			{Type: TokenIdentifier, Value: "endif"},
+		p := newParser([]*token{
+			{Type: tokenTagBegin, value: "{%"},
+			{Type: tokenIdentifier, value: "endif"},
 		})
 		if got, want := p.endTagName(), "endif"; got != want {
 			t.Errorf("endTagName() = %q, want %q", got, want)
@@ -842,8 +842,8 @@ func TestParserEndTagHelpers(t *testing.T) {
 	})
 
 	t.Run("endTagName_no_identifier", func(t *testing.T) {
-		p := NewParser([]*Token{
-			{Type: TokenTagBegin, Value: "{%"},
+		p := newParser([]*token{
+			{Type: tokenTagBegin, value: "{%"},
 		})
 		if got := p.endTagName(); got != "" {
 			t.Errorf("endTagName() = %q, want empty", got)
@@ -856,11 +856,11 @@ func TestParserEndTagHelpers(t *testing.T) {
 // =============================================================================
 
 func TestParserUnexpectedToken(t *testing.T) {
-	tokens := []*Token{
-		{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1},
-		{Type: TokenEOF, Line: 1, Col: 3},
+	tokens := []*token{
+		{Type: tokenVarEnd, value: "}}", Line: 1, Col: 1},
+		{Type: tokenEOF, Line: 1, Col: 3},
 	}
-	p := NewParser(tokens)
+	p := newParser(tokens)
 	_, err := p.Parse()
 	if err == nil {
 		t.Fatal("Parse with unexpected token = nil error, want error")
@@ -871,22 +871,22 @@ func TestParserUnexpectedToken(t *testing.T) {
 }
 
 // =============================================================================
-// Test Group 14: ParseExpression on Parser
+// Test Group 14: ParseExpression on parser
 // =============================================================================
 
 func TestParserParseExpression(t *testing.T) {
-	tokens := []*Token{
-		{Type: TokenIdentifier, Value: "x", Line: 1, Col: 1},
-		{Type: TokenEOF, Line: 1, Col: 2},
+	tokens := []*token{
+		{Type: tokenIdentifier, value: "x", Line: 1, Col: 1},
+		{Type: tokenEOF, Line: 1, Col: 2},
 	}
-	p := NewParser(tokens)
+	p := newParser(tokens)
 	expr, err := p.ParseExpression()
 	if err != nil {
 		t.Fatalf("ParseExpression() returned unexpected error: %v", err)
 	}
-	v, ok := expr.(*VariableNode)
+	v, ok := expr.(*variableNode)
 	if !ok {
-		t.Fatalf("ParseExpression() = %T, want *VariableNode", expr)
+		t.Fatalf("ParseExpression() = %T, want *variableNode", expr)
 	}
 	if v.Name != "x" {
 		t.Errorf("variable name = %q, want %q", v.Name, "x")
@@ -894,17 +894,17 @@ func TestParserParseExpression(t *testing.T) {
 }
 
 // =============================================================================
-// Test Group 15: Parser Edge Cases (coverage gaps)
+// Test Group 15: parser Edge Cases (coverage gaps)
 // =============================================================================
 
 func TestParserParseUntil(t *testing.T) {
 	// ParseUntil is public API but unused by built-in tags (they use ParseUntilWithArgs).
 	t.Run("basic ParseUntil", func(t *testing.T) {
-		tokens, err := NewLexer("hello{% endif %}").Tokenize()
+		tokens, err := newLexer("hello{% endif %}").Tokenize()
 		if err != nil {
 			t.Fatal(err)
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		nodes, tag, err := p.ParseUntil("endif")
 		if err != nil {
 			t.Fatalf("ParseUntil() error = %v", err)
@@ -918,11 +918,11 @@ func TestParserParseUntil(t *testing.T) {
 	})
 
 	t.Run("ParseUntil EOF", func(t *testing.T) {
-		tokens, err := NewLexer("hello world").Tokenize()
+		tokens, err := newLexer("hello world").Tokenize()
 		if err != nil {
 			t.Fatal(err)
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, _, err = p.ParseUntil("endif")
 		if err == nil {
 			t.Fatal("expected error for unexpected EOF")
@@ -937,21 +937,21 @@ func TestParserParseNextEdgeCases(t *testing.T) {
 	// Test the exhaustive switch branches for unexpected token types.
 	unexpectedTypes := []struct {
 		name string
-		tok  *Token
+		tok  *token
 	}{
-		{"TokenError", &Token{Type: TokenError, Value: "err", Line: 1, Col: 1}},
-		{"TokenVarEnd", &Token{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1}},
-		{"TokenTagEnd", &Token{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 1}},
-		{"TokenIdentifier", &Token{Type: TokenIdentifier, Value: "x", Line: 1, Col: 1}},
-		{"TokenString", &Token{Type: TokenString, Value: "hello", Line: 1, Col: 1}},
-		{"TokenNumber", &Token{Type: TokenNumber, Value: "42", Line: 1, Col: 1}},
-		{"TokenSymbol", &Token{Type: TokenSymbol, Value: "+", Line: 1, Col: 1}},
+		{"tokenError", &token{Type: tokenError, value: "err", Line: 1, Col: 1}},
+		{"tokenVarEnd", &token{Type: tokenVarEnd, value: "}}", Line: 1, Col: 1}},
+		{"tokenTagEnd", &token{Type: tokenTagEnd, value: "%}", Line: 1, Col: 1}},
+		{"tokenIdentifier", &token{Type: tokenIdentifier, value: "x", Line: 1, Col: 1}},
+		{"tokenString", &token{Type: tokenString, value: "hello", Line: 1, Col: 1}},
+		{"tokenNumber", &token{Type: tokenNumber, value: "42", Line: 1, Col: 1}},
+		{"tokenSymbol", &token{Type: tokenSymbol, value: "+", Line: 1, Col: 1}},
 	}
 
 	for _, tt := range unexpectedTypes {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens := []*Token{tt.tok, {Type: TokenEOF, Line: 1, Col: 2}}
-			p := NewParser(tokens)
+			tokens := []*token{tt.tok, {Type: tokenEOF, Line: 1, Col: 2}}
+			p := newParser(tokens)
 			_, err := p.Parse()
 			if err == nil {
 				t.Fatalf("expected error for %s as first token", tt.name)
@@ -966,12 +966,12 @@ func TestParserParseNextEdgeCases(t *testing.T) {
 func TestParserParseVariableEdgeCases(t *testing.T) {
 	t.Run("empty variable expression", func(t *testing.T) {
 		// {{ }}
-		tokens := []*Token{
-			{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
-			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 4},
-			{Type: TokenEOF, Line: 1, Col: 6},
+		tokens := []*token{
+			{Type: tokenVarBegin, value: "{{", Line: 1, Col: 1},
+			{Type: tokenVarEnd, value: "}}", Line: 1, Col: 4},
+			{Type: tokenEOF, Line: 1, Col: 6},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, err := p.Parse()
 		if err == nil {
 			t.Fatal("expected error for empty variable expression")
@@ -983,12 +983,12 @@ func TestParserParseVariableEdgeCases(t *testing.T) {
 
 	t.Run("missing VarEnd", func(t *testing.T) {
 		// {{ x <EOF>
-		tokens := []*Token{
-			{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
-			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 4},
-			{Type: TokenEOF, Line: 1, Col: 5},
+		tokens := []*token{
+			{Type: tokenVarBegin, value: "{{", Line: 1, Col: 1},
+			{Type: tokenIdentifier, value: "x", Line: 1, Col: 4},
+			{Type: tokenEOF, Line: 1, Col: 5},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, err := p.Parse()
 		if err == nil {
 			t.Fatal("expected error for missing }}")
@@ -1000,13 +1000,13 @@ func TestParserParseVariableEdgeCases(t *testing.T) {
 
 	t.Run("expression parse error in variable", func(t *testing.T) {
 		// {{ ]] }}
-		tokens := []*Token{
-			{Type: TokenVarBegin, Value: "{{", Line: 1, Col: 1},
-			{Type: TokenSymbol, Value: "]", Line: 1, Col: 4},
-			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
-			{Type: TokenEOF, Line: 1, Col: 7},
+		tokens := []*token{
+			{Type: tokenVarBegin, value: "{{", Line: 1, Col: 1},
+			{Type: tokenSymbol, value: "]", Line: 1, Col: 4},
+			{Type: tokenVarEnd, value: "}}", Line: 1, Col: 5},
+			{Type: tokenEOF, Line: 1, Col: 7},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, err := p.Parse()
 		if err == nil {
 			t.Fatal("expected error for invalid expression")
@@ -1015,12 +1015,12 @@ func TestParserParseVariableEdgeCases(t *testing.T) {
 }
 
 func TestParserParseExpressionError(t *testing.T) {
-	// Test error propagation in Parser.ParseExpression.
-	tokens := []*Token{
-		{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1},
-		{Type: TokenEOF, Line: 1, Col: 3},
+	// Test error propagation in parser.ParseExpression.
+	tokens := []*token{
+		{Type: tokenVarEnd, value: "}}", Line: 1, Col: 1},
+		{Type: tokenEOF, Line: 1, Col: 3},
 	}
-	p := NewParser(tokens)
+	p := newParser(tokens)
 	_, err := p.ParseExpression()
 	if err == nil {
 		t.Fatal("expected error from ParseExpression")
@@ -1030,12 +1030,12 @@ func TestParserParseExpressionError(t *testing.T) {
 func TestParserConsumeEndTagMissingClose(t *testing.T) {
 	// Test consumeEndTag when %} is missing.
 	// Construct: {% endif <EOF>
-	tokens := []*Token{
-		{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
-		{Type: TokenIdentifier, Value: "endif", Line: 1, Col: 4},
-		{Type: TokenEOF, Line: 1, Col: 9},
+	tokens := []*token{
+		{Type: tokenTagBegin, value: "{%", Line: 1, Col: 1},
+		{Type: tokenIdentifier, value: "endif", Line: 1, Col: 4},
+		{Type: tokenEOF, Line: 1, Col: 9},
 	}
-	p := NewParser(tokens)
+	p := newParser(tokens)
 	// Manually call ParseUntilWithArgs which calls consumeEndTag.
 	// But we need isEndTag to match first. Let's use ParseUntil instead.
 	_, tag, err := p.ParseUntil("endif")
@@ -1054,12 +1054,12 @@ func TestParserConsumeEndTagMissingClose(t *testing.T) {
 func TestParserParseTagEdgeCases(t *testing.T) {
 	t.Run("missing tag name", func(t *testing.T) {
 		// {% %} — no identifier after {%
-		tokens := []*Token{
-			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
-			{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 4},
-			{Type: TokenEOF, Line: 1, Col: 6},
+		tokens := []*token{
+			{Type: tokenTagBegin, value: "{%", Line: 1, Col: 1},
+			{Type: tokenTagEnd, value: "%}", Line: 1, Col: 4},
+			{Type: tokenEOF, Line: 1, Col: 6},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, err := p.Parse()
 		if err == nil {
 			t.Fatal("expected error for missing tag name")
@@ -1071,13 +1071,13 @@ func TestParserParseTagEdgeCases(t *testing.T) {
 
 	t.Run("unknown tag", func(t *testing.T) {
 		// {% foobar %}
-		tokens := []*Token{
-			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
-			{Type: TokenIdentifier, Value: "foobar", Line: 1, Col: 4},
-			{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 11},
-			{Type: TokenEOF, Line: 1, Col: 13},
+		tokens := []*token{
+			{Type: tokenTagBegin, value: "{%", Line: 1, Col: 1},
+			{Type: tokenIdentifier, value: "foobar", Line: 1, Col: 4},
+			{Type: tokenTagEnd, value: "%}", Line: 1, Col: 11},
+			{Type: tokenEOF, Line: 1, Col: 13},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, err := p.Parse()
 		if err == nil {
 			t.Fatal("expected error for unknown tag")
@@ -1089,13 +1089,13 @@ func TestParserParseTagEdgeCases(t *testing.T) {
 
 	t.Run("misused endif standalone", func(t *testing.T) {
 		// {% endif %} at top level
-		tokens := []*Token{
-			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
-			{Type: TokenIdentifier, Value: "endif", Line: 1, Col: 4},
-			{Type: TokenTagEnd, Value: "%}", Line: 1, Col: 10},
-			{Type: TokenEOF, Line: 1, Col: 12},
+		tokens := []*token{
+			{Type: tokenTagBegin, value: "{%", Line: 1, Col: 1},
+			{Type: tokenIdentifier, value: "endif", Line: 1, Col: 4},
+			{Type: tokenTagEnd, value: "%}", Line: 1, Col: 10},
+			{Type: tokenEOF, Line: 1, Col: 12},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, err := p.Parse()
 		if err == nil {
 			t.Fatal("expected error for misused endif")
@@ -1107,13 +1107,13 @@ func TestParserParseTagEdgeCases(t *testing.T) {
 
 	t.Run("missing TagEnd", func(t *testing.T) {
 		// {% if x <EOF>
-		tokens := []*Token{
-			{Type: TokenTagBegin, Value: "{%", Line: 1, Col: 1},
-			{Type: TokenIdentifier, Value: "if", Line: 1, Col: 4},
-			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 7},
-			{Type: TokenEOF, Line: 1, Col: 8},
+		tokens := []*token{
+			{Type: tokenTagBegin, value: "{%", Line: 1, Col: 1},
+			{Type: tokenIdentifier, value: "if", Line: 1, Col: 4},
+			{Type: tokenIdentifier, value: "x", Line: 1, Col: 7},
+			{Type: tokenEOF, Line: 1, Col: 8},
 		}
-		p := NewParser(tokens)
+		p := newParser(tokens)
 		_, err := p.Parse()
 		if err == nil {
 			t.Fatal("expected error for missing %}")

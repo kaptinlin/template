@@ -5,69 +5,69 @@ import (
 	"strings"
 )
 
-// TokenType represents the type of a token.
-type TokenType int
+// tokenType represents the type of a token.
+type tokenType int
 
 const (
-	// TokenError indicates a lexical error.
-	TokenError TokenType = iota
+	// tokenError indicates a lexical error.
+	tokenError tokenType = iota
 
-	// TokenEOF indicates the end of input.
-	TokenEOF
+	// tokenEOF indicates the end of input.
+	tokenEOF
 
-	// TokenText represents plain text outside of template tags.
-	TokenText
+	// tokenText represents plain text outside of template tags.
+	tokenText
 
-	// TokenVarBegin represents the {{ variable tag opener.
-	TokenVarBegin
+	// tokenVarBegin represents the {{ variable tag opener.
+	tokenVarBegin
 
-	// TokenVarEnd represents the }} variable tag closer.
-	TokenVarEnd
+	// tokenVarEnd represents the }} variable tag closer.
+	tokenVarEnd
 
-	// TokenTagBegin represents the {% block tag opener.
-	TokenTagBegin
+	// tokenTagBegin represents the {% block tag opener.
+	tokenTagBegin
 
-	// TokenTagEnd represents the %} block tag closer.
-	TokenTagEnd
+	// tokenTagEnd represents the %} block tag closer.
+	tokenTagEnd
 
-	// TokenIdentifier represents an identifier such as a variable name or keyword.
-	TokenIdentifier
+	// tokenIdentifier represents an identifier such as a variable name or keyword.
+	tokenIdentifier
 
-	// TokenString represents a quoted string literal.
-	TokenString
+	// tokenString represents a quoted string literal.
+	tokenString
 
-	// TokenNumber represents an integer or floating-point literal.
-	TokenNumber
+	// tokenNumber represents an integer or floating-point literal.
+	tokenNumber
 
-	// TokenSymbol represents an operator or punctuation character.
-	TokenSymbol
+	// tokenSymbol represents an operator or punctuation character.
+	tokenSymbol
 )
 
 // tokenTypeNames maps token types to their string representations.
 var tokenTypeNames = [...]string{
-	TokenError:      "ERROR",
-	TokenEOF:        "EOF",
-	TokenText:       "TEXT",
-	TokenVarBegin:   "VAR_BEGIN",
-	TokenVarEnd:     "VAR_END",
-	TokenTagBegin:   "TAG_BEGIN",
-	TokenTagEnd:     "TAG_END",
-	TokenIdentifier: "IDENTIFIER",
-	TokenString:     "STRING",
-	TokenNumber:     "NUMBER",
-	TokenSymbol:     "SYMBOL",
+	tokenError:      "ERROR",
+	tokenEOF:        "EOF",
+	tokenText:       "TEXT",
+	tokenVarBegin:   "VAR_BEGIN",
+	tokenVarEnd:     "VAR_END",
+	tokenTagBegin:   "TAG_BEGIN",
+	tokenTagEnd:     "TAG_END",
+	tokenIdentifier: "IDENTIFIER",
+	tokenString:     "STRING",
+	tokenNumber:     "NUMBER",
+	tokenSymbol:     "SYMBOL",
 }
 
-// Token represents a single lexical token.
-type Token struct {
-	Type  TokenType
-	Value string
+// token represents a single lexical token.
+type token struct {
+	Type  tokenType
+	value string
 	Line  int // 1-based
 	Col   int // 1-based
 }
 
 // String returns a string representation of the token type.
-func (t TokenType) String() string {
+func (t tokenType) String() string {
 	if int(t) >= 0 && int(t) < len(tokenTypeNames) {
 		return tokenTypeNames[t]
 	}
@@ -75,16 +75,16 @@ func (t TokenType) String() string {
 }
 
 // String returns a human-readable representation of the token.
-func (t *Token) String() string {
+func (t *token) String() string {
 	var b strings.Builder
 	b.Grow(48) // pre-size for typical output
 
 	name := t.Type.String()
 	b.WriteString(name)
 
-	if t.Type != TokenEOF {
+	if t.Type != tokenEOF {
 		b.WriteByte('(')
-		v := t.Value
+		v := t.value
 		if len(v) > 20 {
 			b.WriteString(strconv.Quote(v[:20]))
 			b.WriteString("...")
@@ -101,8 +101,8 @@ func (t *Token) String() string {
 	return b.String()
 }
 
-// IsKeyword reports whether ident is a reserved keyword.
-func IsKeyword(ident string) bool {
+// isKeyword reports whether ident is a reserved keyword.
+func isKeyword(ident string) bool {
 	switch ident {
 	case "in", "and", "or", "not", "true", "false",
 		"if", "elif", "else", "endif",
@@ -112,8 +112,8 @@ func IsKeyword(ident string) bool {
 	return false
 }
 
-// IsSymbol reports whether s is a valid operator or punctuation symbol.
-func IsSymbol(s string) bool {
+// isSymbol reports whether s is a valid operator or punctuation symbol.
+func isSymbol(s string) bool {
 	switch s {
 	case "==", "!=", "<", ">", "<=", ">=",
 		"+", "-", "*", "/", "%",

@@ -2,6 +2,10 @@ package template
 
 import "errors"
 
+// ErrEngineCompiled indicates an Engine has started compiling templates and its
+// registries can no longer be changed.
+var ErrEngineCompiled = errors.New("engine already started compiling templates")
+
 // ErrTemplateNotFound indicates a loader could not locate the named template.
 // ErrInvalidTemplateName indicates the template name failed fs.ValidPath validation
 // (contains "..", is absolute, contains NUL, backslash, or similar).
@@ -64,25 +68,10 @@ var (
 	ErrExpectedFilterName           = errors.New("expected filter name after '|'")
 )
 
-// ErrUnexpectedCharacter indicates the lexer encountered an unexpected character.
-// ErrUnterminatedString indicates a string literal was not properly closed.
-var (
-	ErrUnexpectedCharacter = errors.New("unexpected character")
-	ErrUnterminatedString  = errors.New("unterminated string literal")
-)
+var errNilFilterFunction = errors.New("nil filter function")
 
-// ErrInvalidNumber indicates the parser encountered an invalid numeric literal.
-// ErrExpectedRParen indicates a closing parenthesis was expected but not found.
-// ErrUnexpectedToken indicates the parser encountered an unexpected token.
-// ErrUnknownNodeType indicates an unknown AST node type was encountered.
-// ErrIntegerOverflow indicates an unsigned integer value exceeds the maximum int64 value.
-var (
-	ErrInvalidNumber   = errors.New("invalid number")
-	ErrExpectedRParen  = errors.New("expected ')'")
-	ErrUnexpectedToken = errors.New("unexpected token")
-	ErrUnknownNodeType = errors.New("unknown node type")
-	ErrIntegerOverflow = errors.New("unsigned integer value exceeds maximum int64 value")
-)
+// errIntegerOverflow indicates an unsigned integer value exceeds the maximum int64 value.
+var errIntegerOverflow = errors.New("unsigned integer value exceeds maximum int64 value")
 
 // ErrUnsupportedType indicates an unsupported type was encountered.
 // ErrUnsupportedOperator indicates an unsupported operator was used.
@@ -141,7 +130,6 @@ var (
 // ErrCannotGetKeyFromNil indicates a key lookup was attempted on nil.
 // ErrTypeNotMap indicates the type is not a map.
 // ErrCannotGetFieldFromNil indicates a field access was attempted on nil.
-// ErrStructHasNoField indicates the struct does not have the requested field.
 // ErrTypeHasNoField indicates the type does not have the requested field.
 // ErrUnsupportedArrayType indicates an unsupported array type was encountered.
 var (
@@ -153,7 +141,6 @@ var (
 	ErrCannotGetKeyFromNil   = errors.New("cannot get key from nil")
 	ErrTypeNotMap            = errors.New("type is not a map")
 	ErrCannotGetFieldFromNil = errors.New("cannot get field from nil")
-	ErrStructHasNoField      = errors.New("struct has no field")
 	ErrTypeHasNoField        = errors.New("type has no field")
 	ErrUnsupportedArrayType  = errors.New("unsupported array type")
 )
@@ -186,37 +173,22 @@ var (
 	ErrContinueOutsideLoop = errors.New("continue statement outside of loop")
 )
 
-// ErrTagAlreadyRegistered indicates a tag with the same name is already registered.
-//
-// ErrMultipleElseStatements indicates multiple else clauses were found in an if block.
-// ErrUnexpectedTokensAfterCondition indicates unexpected tokens after a condition expression.
-// ErrElseNoArgs indicates the else tag received unexpected arguments.
-// ErrEndifNoArgs indicates the endif tag received unexpected arguments.
-// ErrElifAfterElse indicates an elif clause appeared after an else clause.
-//
-// ErrExpectedVariable indicates a variable name was expected but not found.
-// ErrExpectedSecondVariable indicates a second variable name was expected after a comma.
-// ErrExpectedInKeyword indicates the "in" keyword was expected but not found.
-// ErrUnexpectedTokensAfterCollection indicates unexpected tokens after a collection expression.
-// ErrEndforNoArgs indicates the endfor tag received unexpected arguments.
-//
-// ErrBreakNoArgs indicates the break tag received unexpected arguments.
-// ErrContinueNoArgs indicates the continue tag received unexpected arguments.
+// Tag parser sentinels are internal implementation details. Public callers get
+// the rendered message through ParseError instead of depending on tag grammar
+// micro-states.
 var (
-	ErrTagAlreadyRegistered = errors.New("tag already registered")
+	errTagAlreadyRegistered = errors.New("tag already registered")
 
-	ErrMultipleElseStatements         = errors.New("multiple 'else' statements found in if block, use 'elif' for additional conditions")
-	ErrUnexpectedTokensAfterCondition = errors.New("unexpected tokens after condition")
-	ErrElseNoArgs                     = errors.New("else does not take arguments")
-	ErrEndifNoArgs                    = errors.New("endif does not take arguments")
-	ErrElifAfterElse                  = errors.New("elif cannot appear after else")
+	errUnexpectedTokensAfterCondition = errors.New("unexpected tokens after condition")
+	errElseNoArgs                     = errors.New("else does not take arguments")
+	errEndifNoArgs                    = errors.New("endif does not take arguments")
 
-	ErrExpectedVariable                = errors.New("expected variable name")
-	ErrExpectedSecondVariable          = errors.New("expected second variable name after comma")
-	ErrExpectedInKeyword               = errors.New("expected 'in' keyword")
-	ErrUnexpectedTokensAfterCollection = errors.New("unexpected tokens after collection")
-	ErrEndforNoArgs                    = errors.New("endfor does not take arguments")
+	errExpectedVariable                = errors.New("expected variable name")
+	errExpectedSecondVariable          = errors.New("expected second variable name after comma")
+	errExpectedInKeyword               = errors.New("expected 'in' keyword")
+	errUnexpectedTokensAfterCollection = errors.New("unexpected tokens after collection")
+	errEndforNoArgs                    = errors.New("endfor does not take arguments")
 
-	ErrBreakNoArgs    = errors.New("break does not take arguments")
-	ErrContinueNoArgs = errors.New("continue does not take arguments")
+	errBreakNoArgs    = errors.New("break does not take arguments")
+	errContinueNoArgs = errors.New("continue does not take arguments")
 )

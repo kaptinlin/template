@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,6 +32,87 @@ func renderParsedTemplate(t *testing.T, tpl *Template, data Data) string {
 		t.Fatalf("rendering template: %v", err)
 	}
 	return out
+}
+
+func TestTemplateMissingFieldsAreNilAcrossDataShapes(t *testing.T) {
+	t.Parallel()
+
+	type profile struct {
+		Name string `json:"name"`
+	}
+
+	source := strings.Join([]string{
+		`map-default={{ user.nickname | default:'guest' }}`,
+		`struct-default={{ profile.nickname | default:'guest' }}`,
+		`map-if={% if user.nickname %}yes{% else %}no{% endif %}`,
+		`struct-if={% if profile.nickname %}yes{% else %}no{% endif %}`,
+		`map-output=[{{ user.nickname }}]`,
+		`struct-output=[{{ profile.nickname }}]`,
+	}, ";")
+
+	got := renderCoreTemplate(t, source, Data{
+		"user":    map[string]any{"name": "Ada"},
+		"profile": profile{Name: "Ada"},
+	})
+	want := strings.Join([]string{
+		"map-default=guest",
+		"struct-default=guest",
+		"map-if=no",
+		"struct-if=no",
+		"map-output=[]",
+		"struct-output=[]",
+	}, ";")
+	if got != want {
+		t.Fatalf("Render() = %q, want %q", got, want)
+	}
+}
+
+func TestTemplateMapSubscriptUsesMapKeySemantics(t *testing.T) {
+	t.Parallel()
+
+	source := strings.Join([]string{
+		`int-key={{ prices[1] }}`,
+		`int-miss={{ prices[9] | default:'missing' }}`,
+		`key-mismatch={{ labels[1] | default:'missing' }}`,
+	}, ";")
+
+	got := renderCoreTemplate(t, source, Data{
+		"prices": map[int]string{1: "one"},
+		"labels": map[string]string{
+			"1": "one",
+		},
+	})
+	want := strings.Join([]string{
+		"int-key=one",
+		"int-miss=missing",
+		"key-mismatch=missing",
+	}, ";")
+	if got != want {
+		t.Fatalf("Render() = %q, want %q", got, want)
+	}
+}
+
+func TestTemplateSubscriptRejectsFractionalIndex(t *testing.T) {
+	t.Parallel()
+
+	tpl := parseCoreTemplate(t, `{{ items[1.2] }}`)
+	_, err := tpl.Render(Data{
+		"items": []string{"zero", "one"},
+	})
+	if !errors.Is(err, ErrInvalidIndexType) {
+		t.Fatalf("Render() error = %v, want %v", err, ErrInvalidIndexType)
+	}
+}
+
+func TestTemplateStringSubscriptUsesRunes(t *testing.T) {
+	t.Parallel()
+
+	got := renderCoreTemplate(t, `{{ word[1] }}`, Data{
+		"word": "a界b",
+	})
+	if got != "界" {
+		t.Fatalf("Render() = %q, want %q", got, "界")
+	}
 }
 
 func TestIfConditions(t *testing.T) {
@@ -1790,7 +1872,7 @@ User is older than 20`,
 			name: "Array and slice conditions",
 			tmpl: `// Array and slice condition tests
 {% if user.address.slice.0 %}First slice element: {{ user.address.slice.0 }}{% endif %}
-{% if user.address.sliceMap.0.0.key1 %}Value in nested structure: {{ user.address.sliceMap.0.0.key1 }}{% endif %}`,
+{% if user.address.sliceMap.0.0.key1 %}value in nested structure: {{ user.address.sliceMap.0.0.key1 }}{% endif %}`,
 			context: map[string]any{
 				"user": User{
 					Address: Address{
@@ -1805,7 +1887,7 @@ User is older than 20`,
 			},
 			expected: `// Array and slice condition tests
 First slice element: item1
-Value in nested structure: nestedvalue1`,
+value in nested structure: nestedvalue1`,
 		},
 		{
 			name: "Complex structure conditions",

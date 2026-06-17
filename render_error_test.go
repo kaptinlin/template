@@ -159,7 +159,7 @@ func TestRenderError_ForLoopBodyError(t *testing.T) {
 	if !errors.As(err, &re) {
 		t.Fatalf("errors.As *RenderError = false")
 	}
-	// The deepest wrap is the failing OutputNode inside the loop body.
+	// The deepest wrap is the failing outputNode inside the loop body.
 	if re.Line != 1 {
 		t.Errorf("RenderError.Line = %d, want 1", re.Line)
 	}

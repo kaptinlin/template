@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-// SafeString is a string-compatible alias; constructing and converting
+// SafeHTML is a string-compatible alias; constructing and converting
 // to string is a direct cast.
-func TestSafeString_StringCompatible(t *testing.T) {
+func TestSafeHTML_StringCompatible(t *testing.T) {
 	t.Parallel()
 
-	s := SafeString("hello")
+	s := SafeHTML("hello")
 	if string(s) != "hello" {
-		t.Errorf("string(SafeString) = %q, want %q", string(s), "hello")
+		t.Errorf("string(SafeHTML) = %q, want %q", string(s), "hello")
 	}
 }
 
@@ -61,14 +61,14 @@ func TestEscapeFilter_GlobalReturnsString(t *testing.T) {
 	if _, ok := result.(string); !ok {
 		t.Errorf("escape returned %T, want string", result)
 	}
-	if _, ok := result.(SafeString); ok {
-		t.Error("escape should NOT return SafeString in global scope")
+	if _, ok := result.(SafeHTML); ok {
+		t.Error("escape should NOT return SafeHTML in global scope")
 	}
 }
 
-// Inside FormatHTML the escape filter is overridden with a SafeString-
+// Inside FormatHTML the escape filter is overridden with a SafeHTML-
 // returning variant so the auto-escape pipeline does not double-escape.
-func TestEscapeFilter_FormatHTMLReturnsSafeString(t *testing.T) {
+func TestEscapeFilter_FormatHTMLReturnsSafeHTML(t *testing.T) {
 	t.Parallel()
 
 	engine := New(
@@ -82,7 +82,7 @@ func TestEscapeFilter_FormatHTMLReturnsSafeString(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	// If escape returned a plain string, the auto-escape output path
-	// would double-escape and produce &amp;lt;b&amp;gt;. SafeString
+	// would double-escape and produce &amp;lt;b&amp;gt;. SafeHTML
 	// prevents that.
 	if got != "&lt;b&gt;" {
 		t.Errorf("got %q, want &lt;b&gt;", got)
@@ -113,7 +113,7 @@ func TestEscapeFilter_FormatTextUsesGlobal(t *testing.T) {
 }
 
 // Built-in filter lookup for "safe" returns ErrFilterNotFound via a
-// render that exercises the FilterNode path.
+// render that exercises the filterNode path.
 func TestCoreEngine_NoSafeFilter(t *testing.T) {
 	t.Parallel()
 

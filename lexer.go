@@ -5,15 +5,15 @@ import (
 	"strings"
 )
 
-// LexerError represents a lexical analysis error with position information.
-type LexerError struct {
+// lexerError represents a lexical analysis error with position information.
+type lexerError struct {
 	Message string
 	Line    int
 	Col     int
 }
 
 // Error implements the error interface.
-func (e *LexerError) Error() string {
+func (e *lexerError) Error() string {
 	var b strings.Builder
 	b.Grow(48)
 	b.WriteString("lexer error at line ")
@@ -25,13 +25,13 @@ func (e *LexerError) Error() string {
 	return b.String()
 }
 
-// Lexer performs lexical analysis on template input.
-type Lexer struct {
+// lexer performs lexical analysis on template input.
+type lexer struct {
 	input  string
 	pos    int
 	line   int // 1-based
 	col    int // 1-based
-	tokens []*Token
+	tokens []*token
 	len    int // cached len(input)
 
 	// allowRaw enables {% raw %}...{% endraw %} block scanning. It stays
@@ -39,19 +39,19 @@ type Lexer struct {
 	allowRaw bool
 }
 
-// NewLexer creates a new Lexer for the given input.
-func NewLexer(input string) *Lexer {
-	return &Lexer{
+// newLexer creates a new lexer for the given input.
+func newLexer(input string) *lexer {
+	return &lexer{
 		input:  input,
 		line:   1,
 		col:    1,
-		tokens: make([]*Token, 0, 100),
+		tokens: make([]*token, 0, 100),
 		len:    len(input),
 	}
 }
 
 // Tokenize performs lexical analysis and returns all tokens.
-func (l *Lexer) Tokenize() ([]*Token, error) {
+func (l *lexer) Tokenize() ([]*token, error) {
 	for l.pos < l.len {
 		// Check for tag openers: all start with '{'.
 		if l.input[l.pos] == '{' && l.pos+1 < l.len {
@@ -89,21 +89,21 @@ func (l *Lexer) Tokenize() ([]*Token, error) {
 		}
 	}
 
-	l.emit(TokenEOF, "")
+	l.emit(tokenEOF, "")
 	return l.tokens, nil
 }
 
 // matchRawOpen reports the byte length of a {% raw %} opener at the
 // current position, allowing for flexible whitespace. Returns 0 if the
 // current position is not a raw opener.
-func (l *Lexer) matchRawOpen() int {
+func (l *lexer) matchRawOpen() int {
 	return l.matchBlockTagKeyword("raw")
 }
 
 // matchBlockTagKeyword returns the byte length (including "%}") of a
 // block tag "{% kw %}" at the current position, or 0 on no match.
 // It tolerates whitespace around the keyword.
-func (l *Lexer) matchBlockTagKeyword(kw string) int {
+func (l *lexer) matchBlockTagKeyword(kw string) int {
 	i := l.pos
 	if i+2 > l.len || l.input[i] != '{' || l.input[i+1] != '%' {
 		return 0
@@ -138,9 +138,9 @@ func (l *Lexer) matchBlockTagKeyword(kw string) int {
 
 // scanRawBlock consumes everything from the current {% raw %} opener
 // (openerLen bytes long) up to a matching {% endraw %}, emitting a
-// single TokenText for the body. Returns ErrUnclosedRaw if no endraw
+// single tokenText for the body. Returns ErrUnclosedRaw if no endraw
 // is found.
-func (l *Lexer) scanRawBlock(openerLen int) error {
+func (l *lexer) scanRawBlock(openerLen int) error {
 	startLine, startCol := l.line, l.col
 	// Skip the {% raw %} opener, tracking line/col.
 	l.advance(openerLen)
@@ -152,7 +152,7 @@ func (l *Lexer) scanRawBlock(openerLen int) error {
 		if n := l.matchBlockTagKeyword("endraw"); n > 0 {
 			body := l.input[bodyStart:l.pos]
 			if len(body) > 0 {
-				l.emitAt(TokenText, body, bodyLine, bodyCol)
+				l.emitAt(tokenText, body, bodyLine, bodyCol)
 			}
 			l.advance(n)
 			return nil
@@ -168,9 +168,9 @@ func (l *Lexer) scanRawBlock(openerLen int) error {
 	return l.errorAtErr(startLine, startCol, ErrUnclosedRaw)
 }
 
-// errorAtErr wraps a sentinel error with position info as a LexerError.
-func (l *Lexer) errorAtErr(line, col int, sentinel error) error {
-	return &LexerError{Message: sentinel.Error(), Line: line, Col: col}
+// errorAtErr wraps a sentinel error with position info as a lexerError.
+func (l *lexer) errorAtErr(line, col int, sentinel error) error {
+	return &lexerError{Message: sentinel.Error(), Line: line, Col: col}
 }
 
 // isSpace reports whether b is ASCII whitespace.
@@ -179,7 +179,7 @@ func isSpace(b byte) bool {
 }
 
 // scanText scans plain text until a tag opener is encountered.
-func (l *Lexer) scanText() error {
+func (l *lexer) scanText() error {
 	start := l.pos
 	startLine, startCol := l.line, l.col
 
@@ -202,13 +202,13 @@ func (l *Lexer) scanText() error {
 
 done:
 	if l.pos > start {
-		l.emitAt(TokenText, l.input[start:l.pos], startLine, startCol)
+		l.emitAt(tokenText, l.input[start:l.pos], startLine, startCol)
 	}
 	return nil
 }
 
 // scanComment scans and discards a comment {# ... #}.
-func (l *Lexer) scanComment() error {
+func (l *lexer) scanComment() error {
 	startLine, startCol := l.line, l.col
 	l.advance(2) // skip {#
 
@@ -228,10 +228,10 @@ func (l *Lexer) scanComment() error {
 }
 
 // scanVarTag scans a variable tag {{ ... }}.
-func (l *Lexer) scanVarTag() error {
+func (l *lexer) scanVarTag() error {
 	startLine, startCol := l.line, l.col
 
-	l.emit(TokenVarBegin, "{{")
+	l.emit(tokenVarBegin, "{{")
 	l.advance(2)
 
 	for !l.peek2('}', '}') {
@@ -250,17 +250,17 @@ func (l *Lexer) scanVarTag() error {
 		}
 	}
 
-	l.emit(TokenVarEnd, "}}")
+	l.emit(tokenVarEnd, "}}")
 	l.advance(2)
 
 	return nil
 }
 
 // scanBlockTag scans a block tag {% ... %}.
-func (l *Lexer) scanBlockTag() error {
+func (l *lexer) scanBlockTag() error {
 	startLine, startCol := l.line, l.col
 
-	l.emit(TokenTagBegin, "{%")
+	l.emit(tokenTagBegin, "{%")
 	l.advance(2)
 
 	for !l.peek2('%', '}') {
@@ -279,14 +279,14 @@ func (l *Lexer) scanBlockTag() error {
 		}
 	}
 
-	l.emit(TokenTagEnd, "%}")
+	l.emit(tokenTagEnd, "%}")
 	l.advance(2)
 
 	return nil
 }
 
 // scanInsideTag scans a single token inside {{ }} or {% %}.
-func (l *Lexer) scanInsideTag() error {
+func (l *lexer) scanInsideTag() error {
 	l.skipWhitespace()
 
 	if l.pos >= l.len {
@@ -308,7 +308,7 @@ func (l *Lexer) scanInsideTag() error {
 }
 
 // scanIdentifier scans an identifier or keyword.
-func (l *Lexer) scanIdentifier() error {
+func (l *lexer) scanIdentifier() error {
 	start := l.pos
 	startLine, startCol := l.line, l.col
 
@@ -324,12 +324,12 @@ func (l *Lexer) scanIdentifier() error {
 		l.col++
 	}
 
-	l.emitAt(TokenIdentifier, l.input[start:l.pos], startLine, startCol)
+	l.emitAt(tokenIdentifier, l.input[start:l.pos], startLine, startCol)
 	return nil
 }
 
 // scanNumber scans a number literal (integer or float).
-func (l *Lexer) scanNumber() error {
+func (l *lexer) scanNumber() error {
 	start := l.pos
 	startLine, startCol := l.line, l.col
 
@@ -354,12 +354,12 @@ func (l *Lexer) scanNumber() error {
 		}
 	}
 
-	l.emitAt(TokenNumber, l.input[start:l.pos], startLine, startCol)
+	l.emitAt(tokenNumber, l.input[start:l.pos], startLine, startCol)
 	return nil
 }
 
 // scanString scans a quoted string literal ("..." or '...').
-func (l *Lexer) scanString() error {
+func (l *lexer) scanString() error {
 	startLine, startCol := l.line, l.col
 	quote := l.input[l.pos]
 
@@ -404,7 +404,7 @@ func (l *Lexer) scanString() error {
 		}
 
 		if ch == quote {
-			l.emitAt(TokenString, buf.String(), startLine, startCol)
+			l.emitAt(tokenString, buf.String(), startLine, startCol)
 			l.pos++
 			l.col++
 			return nil
@@ -423,7 +423,7 @@ func (l *Lexer) scanString() error {
 }
 
 // scanSymbol scans an operator or punctuation symbol.
-func (l *Lexer) scanSymbol() error {
+func (l *lexer) scanSymbol() error {
 	ch := l.input[l.pos]
 
 	// Try two-character symbols first.
@@ -431,7 +431,7 @@ func (l *Lexer) scanSymbol() error {
 		next := l.input[l.pos+1]
 		if isTwoCharSymbol(ch, next) {
 			two := l.input[l.pos : l.pos+2]
-			l.emit(TokenSymbol, two)
+			l.emit(tokenSymbol, two)
 			l.pos += 2
 			l.col += 2
 			return nil
@@ -439,7 +439,7 @@ func (l *Lexer) scanSymbol() error {
 	}
 
 	if isOneCharSymbol(ch) {
-		l.emit(TokenSymbol, l.input[l.pos:l.pos+1])
+		l.emit(tokenSymbol, l.input[l.pos:l.pos+1])
 		l.pos++
 		l.col++
 		return nil
@@ -449,39 +449,39 @@ func (l *Lexer) scanSymbol() error {
 }
 
 // emit appends a token at the current position.
-func (l *Lexer) emit(typ TokenType, value string) {
-	l.tokens = append(l.tokens, &Token{
+func (l *lexer) emit(typ tokenType, value string) {
+	l.tokens = append(l.tokens, &token{
 		Type:  typ,
-		Value: value,
+		value: value,
 		Line:  l.line,
 		Col:   l.col,
 	})
 }
 
 // emitAt appends a token with an explicit position.
-func (l *Lexer) emitAt(typ TokenType, value string, line, col int) {
-	l.tokens = append(l.tokens, &Token{
+func (l *lexer) emitAt(typ tokenType, value string, line, col int) {
+	l.tokens = append(l.tokens, &token{
 		Type:  typ,
-		Value: value,
+		value: value,
 		Line:  line,
 		Col:   col,
 	})
 }
 
 // peek2 reports whether the next two bytes match a and b.
-func (l *Lexer) peek2(a, b byte) bool {
+func (l *lexer) peek2(a, b byte) bool {
 	return l.pos+2 <= l.len && l.input[l.pos] == a && l.input[l.pos+1] == b
 }
 
 // advance moves the position forward by n bytes for tag delimiters
 // (e.g. {{ }}, {# #}, {% %}) that never span newlines.
-func (l *Lexer) advance(n int) {
+func (l *lexer) advance(n int) {
 	l.pos += n
 	l.col += n
 }
 
 // skipWhitespace advances past any whitespace characters.
-func (l *Lexer) skipWhitespace() {
+func (l *lexer) skipWhitespace() {
 	for l.pos < l.len {
 		switch l.input[l.pos] {
 		case '\n':
@@ -496,9 +496,9 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-// errorAt returns a LexerError at the given position.
-func (l *Lexer) errorAt(line, col int, msg string) error {
-	return &LexerError{
+// errorAt returns a lexerError at the given position.
+func (l *lexer) errorAt(line, col int, msg string) error {
+	return &lexerError{
 		Message: msg,
 		Line:    line,
 		Col:     col,

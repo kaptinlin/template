@@ -69,7 +69,7 @@ func TestBlockSuper_NoParent_Empty(t *testing.T) {
 	}
 }
 
-// Phase K cycle 4: block.super result is SafeString and not re-escaped
+// Phase K cycle 4: block.super result is SafeHTML and not re-escaped
 // in FormatHTML rendering.
 func TestBlockSuper_FormatHTML_NotReEscaped(t *testing.T) {
 	t.Parallel()

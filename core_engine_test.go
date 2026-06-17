@@ -181,7 +181,7 @@ func TestCoreEngine_NoSafeFilterViaRender(t *testing.T) {
 	}
 }
 
-// The built-in escape filter returns plain string (not SafeString).
+// The built-in escape filter returns plain string (not SafeHTML).
 // This is verified by the built-in escape lookup in safe_test.go.
 // Here we additionally prove the result is written to output as-is
 // with no double-escaping surprise.

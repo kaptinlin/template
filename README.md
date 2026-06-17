@@ -15,7 +15,7 @@ For development guidelines and project conventions, see [CLAUDE.md](CLAUDE.md).
 - **Composable loaders**: `NewMemoryLoader`, `NewDirLoader`, `NewFSLoader`, and `NewChainLoader` for tests, embedded assets, and override layers.
 - **Sandboxed disk reads**: `NewDirLoader` uses `os.Root` so template lookups cannot escape the configured directory.
 - **Typed diagnostics**: `*RenderError` carries the failing template name, line, column, and a sentinel cause for `errors.Is` / `errors.As`.
-- **Engine-local extensions**: Register filters and tags on a single engine without touching global state.
+- **Engine-local extensions**: Register filters on a single engine and provide custom loaders without touching global state.
 
 ## Installation
 
@@ -62,7 +62,7 @@ func main() {
 | Choose output semantics | `WithFormat(FormatText)` / `WithFormat(FormatHTML)` | `FormatHTML` auto-escapes `{{ expr }}` output |
 | Enable layout syntax | `WithLayout()` | Turns on `include`, `extends`, `block`, `raw`, and `safe` |
 | Provide shared defaults | `WithDefaults(Data)` | Render-time keys override engine defaults |
-| Extend behavior | `RegisterFilter`, `ReplaceFilter`, `RegisterTag`, `ReplaceTag` | Scoped to the engine instance |
+| Extend behavior | `WithFilter(...)` | Scoped to the engine instance |
 
 ## Loader-Backed Rendering
 
@@ -124,11 +124,14 @@ read the fields for stable output.
 
 | Need | API |
 |---|---|
-| Custom filter | `Engine.RegisterFilter`, `Engine.ReplaceFilter`, `Engine.MustRegisterFilter` |
-| Custom tag | `Engine.RegisterTag`, `Engine.ReplaceTag`, `Engine.MustRegisterTag` |
+| Custom filter | `WithFilter(...)` at construction; `Engine.RegisterFilter` / `Engine.ReplaceFilter` before first compile |
 | Custom loader | Implement `Loader` and pass it through `WithLoader(...)` |
-| Direct runtime control | `Template.Execute` with `RenderContext` |
-| Trusted HTML | `SafeString` or `| safe` under `FormatHTML` |
+| Trusted HTML | `SafeHTML` or `| safe` under `FormatHTML` |
+
+After an engine starts compiling templates, `RegisterFilter` and
+`ReplaceFilter` return `ErrEngineCompiled`. Use `Clone(...)` to derive a fresh
+configurable engine with an empty cache. Nil filter functions are reported as
+configuration errors instead of panicking.
 
 ## Examples
 
@@ -137,8 +140,7 @@ Runnable examples live in [`examples/`](examples/):
 | Example | Path | What it shows |
 |---|---|---|
 | Basic usage | [`examples/usage`](examples/usage) | Parse and render a source string through `Engine` |
-| Custom filters | [`examples/custom_filters`](examples/custom_filters) | Register an engine-local filter |
-| Custom tags | [`examples/custom_tags`](examples/custom_tags) | Register an engine-local tag parser |
+| Custom filters | [`examples/custom_filters`](examples/custom_filters) | Configure an engine-local filter |
 | HTML layouts | [`examples/layout`](examples/layout) | `WithLayout()`, `FormatHTML`, includes, extends, and `block.super` |
 | Text generation | [`examples/multifile_text`](examples/multifile_text) | `FormatText` with loader-backed multi-file output |
 | Secret redaction | [`examples/secret_redaction`](examples/secret_redaction) | Redact rendered output at the writer or filter boundary |
@@ -158,6 +160,7 @@ go run ./examples/<name>
 - [docs/control-structure.md](docs/control-structure.md) — `if`, `for`, `break`, and `continue`
 - [docs/security.md](docs/security.md) — Loader sandbox, escaping rules, and redaction
 - [docs/liquid-compatibility.md](docs/liquid-compatibility.md) — Compatibility notes and differences
+- [SPECS/01-engine-contract.md](SPECS/01-engine-contract.md) — Durable engine, loader, value, and HTML trust contract
 
 ## Development
 

@@ -60,7 +60,7 @@ func registerStringFilters() {
 
 // defaultFilter returns a default value if the input is falsy.
 func defaultFilter(value any, args ...any) (any, error) {
-	if NewValue(value).IsTrue() {
+	if newValue(value).IsTrue() {
 		return value, nil
 	}
 	if len(args) > 0 {
@@ -268,7 +268,7 @@ func truncateWordsFilter(value any, args ...any) (any, error) {
 // returns a plain string.
 //
 // Engines using FormatHTML override this with escapeFilterSafe (which
-// returns SafeString) so the auto-escape pipeline does not double-escape.
+// returns SafeHTML) so the auto-escape pipeline does not double-escape.
 func escapeFilter(value any, _ ...any) (any, error) {
 	return filter.Escape(toString(value)), nil
 }
@@ -280,16 +280,16 @@ func escapeOnceFilter(value any, _ ...any) (any, error) {
 }
 
 // escapeFilterSafe is the HTML-mode variant registered only in an
-// engine's private filter registry when FormatHTML is enabled. It returns SafeString so the
-// per-template auto-escaper treats the already-escaped content as
-// trusted and does not escape it a second time.
+// engine's private filter registry when FormatHTML is enabled. It returns
+// SafeHTML so the per-template auto-escaper treats the already-escaped
+// content as trusted and does not escape it a second time.
 func escapeFilterSafe(value any, _ ...any) (any, error) {
-	return SafeString(filter.Escape(toString(value))), nil
+	return SafeHTML(filter.Escape(toString(value))), nil
 }
 
 // escapeOnceFilterSafe mirrors escapeFilterSafe for escape_once.
 func escapeOnceFilterSafe(value any, _ ...any) (any, error) {
-	return SafeString(filter.EscapeOnce(toString(value))), nil
+	return SafeHTML(filter.EscapeOnce(toString(value))), nil
 }
 
 // stripHTMLFilter removes all HTML tags from a string.

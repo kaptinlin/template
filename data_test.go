@@ -377,6 +377,61 @@ func TestContextGetClassifiesJSONPointerErrors(t *testing.T) {
 	}
 }
 
+func TestDataGetUsesObjectShapedMapKeys(t *testing.T) {
+	t.Parallel()
+
+	data := Data{
+		"prices": map[int]string{1: "one"},
+		"labels": map[string]string{
+			"1": "one",
+		},
+	}
+
+	tests := []struct {
+		name    string
+		key     string
+		want    any
+		wantErr error
+	}{
+		{name: "numeric path component uses int map key", key: "prices.1", want: "one"},
+		{name: "string map key remains string-shaped", key: "labels.1", want: "one"},
+		{name: "missing numeric map key", key: "prices.2", wantErr: ErrContextKeyNotFound},
+		{name: "wrong map key shape", key: "prices.one", wantErr: ErrContextKeyNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := data.Get(tt.key)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("Get(%q) error = %v, want %v", tt.key, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Get(%q) unexpected error: %v", tt.key, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Get(%q) = %v, want %v", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDataGetStringIndexUsesRunes(t *testing.T) {
+	t.Parallel()
+
+	got, err := Data{"word": "a界b"}.Get("word.1")
+	if err != nil {
+		t.Fatalf("Get(%q) unexpected error: %v", "word.1", err)
+	}
+	if got != "界" {
+		t.Fatalf("Get(%q) = %q, want %q", "word.1", got, "界")
+	}
+}
+
 func TestContextOverwrite(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -645,7 +700,7 @@ func TestContextMapWithStructValues(t *testing.T) {
 func TestContextComplexNestedStructures(t *testing.T) {
 	type Contact struct {
 		Type  string `json:"type"`
-		Value string `json:"value"`
+		value string
 	}
 
 	type Address struct {
@@ -777,8 +832,8 @@ func TestContextComplexNestedStructures(t *testing.T) {
 						PostalCode: "10001", Country: "USA"},
 				},
 				Contacts: []Contact{
-					{Type: "phone", Value: "555-1234"},
-					{Type: "email", Value: "info@xyzcorp.com"},
+					{Type: "phone", value: "555-1234"},
+					{Type: "email", value: "info@xyzcorp.com"},
 				},
 				PreferredItems: []string{"product1", "product3"},
 				Orders: []Order{{
@@ -815,8 +870,8 @@ func TestContextComplexNestedStructures(t *testing.T) {
 						PostalCode: "20002", Country: "USA", IsDefault: true},
 				},
 				Contacts: []Contact{
-					{Type: "phone", Value: "555-5678"},
-					{Type: "email", Value: "john@example.com"},
+					{Type: "phone", value: "555-5678"},
+					{Type: "email", value: "john@example.com"},
 				},
 				PreferredItems: []string{"product2", "product4"},
 				Orders: []Order{{

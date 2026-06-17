@@ -374,11 +374,11 @@ func TestNewChildContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parent := NewRenderContext(tt.data)
+			parent := newRenderContext(tt.data)
 			for k, v := range tt.parentPrivate {
 				parent.Set(k, v)
 			}
-			child := NewChildContext(parent)
+			child := newChildContext(parent)
 			for k, v := range tt.childPrivate {
 				child.Set(k, v)
 			}
@@ -401,8 +401,8 @@ func TestNewChildContext(t *testing.T) {
 }
 
 func TestNewChildContextSharesData(t *testing.T) {
-	parent := NewRenderContext(map[string]any{"shared": "original"})
-	child := NewChildContext(parent)
+	parent := newRenderContext(map[string]any{"shared": "original"})
+	child := newChildContext(parent)
 	child.Data.Set("shared", "modified")
 
 	got, ok := parent.Get("shared")
@@ -415,14 +415,14 @@ func TestNewChildContextSharesData(t *testing.T) {
 }
 
 func TestNewChildContextPreservesRuntimeState(t *testing.T) {
-	parent := NewRenderContext(map[string]any{"shared": "value"})
+	parent := newRenderContext(map[string]any{"shared": "value"})
 	parent.Set("private", "secret")
 	parent.engine = New(WithFormat(FormatHTML))
 	parent.autoescape = true
 	parent.includeDepth = 3
 	parent.currentLeaf = &Template{name: "leaf.txt"}
 
-	child := NewChildContext(parent)
+	child := newChildContext(parent)
 
 	if child.engine != parent.engine {
 		t.Fatal("child.engine was not preserved")
@@ -439,14 +439,14 @@ func TestNewChildContextPreservesRuntimeState(t *testing.T) {
 }
 
 func TestNewIsolatedChildContextPreservesRuntimeState(t *testing.T) {
-	parent := NewRenderContext(map[string]any{"shared": "value"})
+	parent := newRenderContext(map[string]any{"shared": "value"})
 	parent.Set("private", "secret")
 	parent.engine = New(WithFormat(FormatHTML))
 	parent.autoescape = true
 	parent.includeDepth = 2
 	parent.currentLeaf = &Template{name: "leaf.txt"}
 
-	child := NewIsolatedChildContext(parent)
+	child := newIsolatedChildContext(parent)
 
 	if child.Data != nil {
 		t.Fatalf("child.Data = %v, want nil", child.Data)
@@ -513,7 +513,7 @@ func TestRenderContextGetPriority(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ec := NewRenderContext(tt.public)
+			ec := newRenderContext(tt.public)
 			for k, v := range tt.private {
 				ec.Set(k, v)
 			}
@@ -531,7 +531,7 @@ func TestRenderContextGetPriority(t *testing.T) {
 func TestRenderContextGetLocalRootShadowsDataPath(t *testing.T) {
 	t.Parallel()
 
-	ctx := NewRenderContext(Data{
+	ctx := newRenderContext(Data{
 		"user": map[string]any{"name": "global"},
 	})
 	ctx.Set("user", map[string]any{})

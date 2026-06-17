@@ -31,8 +31,8 @@ func TestValue_IsNil(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.value).IsNil(); got != tt.want {
-				t.Errorf("NewValue(%v).IsNil() = %v, want %v", tt.value, got, tt.want)
+			if got := newValue(tt.value).IsNil(); got != tt.want {
+				t.Errorf("newValue(%v).IsNil() = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -86,8 +86,8 @@ func TestValue_IsTrue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.value).IsTrue(); got != tt.want {
-				t.Errorf("NewValue(%v).IsTrue() = %v, want %v", tt.value, got, tt.want)
+			if got := newValue(tt.value).IsTrue(); got != tt.want {
+				t.Errorf("newValue(%v).IsTrue() = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -137,8 +137,8 @@ func TestValue_String(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.value).String(); got != tt.want {
-				t.Errorf("NewValue(%v).String() = %q, want %q", tt.value, got, tt.want)
+			if got := newValue(tt.value).String(); got != tt.want {
+				t.Errorf("newValue(%v).String() = %q, want %q", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -164,30 +164,33 @@ func TestValue_Int(t *testing.T) {
 		{"uint16", uint16(42), 42, false},
 		{"uint32", uint32(42), 42, false},
 		{"uint64", uint64(42), 42, false},
-		{"float32", float32(42.7), 42, false},
-		{"float64", float64(42.7), 42, false},
-		{"pointer to float64", new(42.7), 42, false},
-		{"bool true", true, 1, false},
-		{"bool false", false, 0, false},
-		{"pointer to bool true", new(true), 1, false},
+		{"float32 whole", float32(42), 42, false},
+		{"float64 whole", float64(42), 42, false},
+		{"pointer to float64 whole", new(float64(42)), 42, false},
+		{"float32 fractional", float32(42.7), 0, true},
+		{"float64 fractional", float64(42.7), 0, true},
+		{"pointer to float64 fractional", new(42.7), 0, true},
+		{"bool true", true, 0, true},
+		{"bool false", false, 0, true},
+		{"pointer to bool true", new(true), 0, true},
 		{"string", "hello", 0, true},
 		{"negative int", -42, -42, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(tt.value).Int()
+			got, err := newValue(tt.value).Int()
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("NewValue(%v).Int() error = nil, want error", tt.value)
+					t.Errorf("newValue(%v).Int() error = nil, want error", tt.value)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("NewValue(%v).Int() unexpected error: %v", tt.value, err)
+				t.Errorf("newValue(%v).Int() unexpected error: %v", tt.value, err)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("NewValue(%v).Int() = %v, want %v", tt.value, got, tt.want)
+				t.Errorf("newValue(%v).Int() = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -221,19 +224,19 @@ func TestValue_Float(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(tt.value).Float()
+			got, err := newValue(tt.value).Float()
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("NewValue(%v).Float() error = nil, want error", tt.value)
+					t.Errorf("newValue(%v).Float() error = nil, want error", tt.value)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("NewValue(%v).Float() unexpected error: %v", tt.value, err)
+				t.Errorf("newValue(%v).Float() unexpected error: %v", tt.value, err)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("NewValue(%v).Float() = %v, want %v", tt.value, got, tt.want)
+				t.Errorf("newValue(%v).Float() = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -257,8 +260,8 @@ func TestValue_Bool(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.value).Bool(); got != tt.want {
-				t.Errorf("NewValue(%v).Bool() = %v, want %v", tt.value, got, tt.want)
+			if got := newValue(tt.value).Bool(); got != tt.want {
+				t.Errorf("newValue(%v).Bool() = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -278,6 +281,7 @@ func TestValue_Len(t *testing.T) {
 		{"pointer to slice", func() *[]int { s := []int{1, 2, 3}; return &s }(), 3, false},
 		{"empty string", "", 0, false},
 		{"non-empty string", "hello", 5, false},
+		{"unicode string", "a界b", 3, false},
 		{"pointer to string", new("hello"), 5, false},
 		{"empty map", map[string]int{}, 0, false},
 		{"non-empty map", map[string]int{"a": 1, "b": 2}, 2, false},
@@ -288,19 +292,19 @@ func TestValue_Len(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(tt.value).Len()
+			got, err := newValue(tt.value).Len()
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("NewValue(%v).Len() error = nil, want error", tt.value)
+					t.Errorf("newValue(%v).Len() error = nil, want error", tt.value)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("NewValue(%v).Len() unexpected error: %v", tt.value, err)
+				t.Errorf("newValue(%v).Len() unexpected error: %v", tt.value, err)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("NewValue(%v).Len() = %v, want %v", tt.value, got, tt.want)
+				t.Errorf("newValue(%v).Len() = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -325,6 +329,7 @@ func TestValue_Index(t *testing.T) {
 		{"string-valid", "hello", 1, "e", false},
 		{"string-first", "hello", 0, "h", false},
 		{"string-last", "hello", 4, "o", false},
+		{"string-unicode-rune", "a界b", 1, "界", false},
 		{"string-out-of-range", "hello", 5, nil, true},
 		{"pointer-to-string", new("hello"), 1, "e", false},
 		{"map-not-indexable", map[string]int{"a": 1}, 0, nil, true},
@@ -332,19 +337,19 @@ func TestValue_Index(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(tt.value).Index(tt.index)
+			got, err := newValue(tt.value).Index(tt.index)
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("NewValue(%v).Index(%d) error = nil, want error", tt.value, tt.index)
+					t.Errorf("newValue(%v).Index(%d) error = nil, want error", tt.value, tt.index)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("NewValue(%v).Index(%d) unexpected error: %v", tt.value, tt.index, err)
+				t.Errorf("newValue(%v).Index(%d) unexpected error: %v", tt.value, tt.index, err)
 				return
 			}
 			if got.Interface() != tt.want {
-				t.Errorf("NewValue(%v).Index(%d) = %v, want %v", tt.value, tt.index, got.Interface(), tt.want)
+				t.Errorf("newValue(%v).Index(%d) = %v, want %v", tt.value, tt.index, got.Interface(), tt.want)
 			}
 		})
 	}
@@ -364,25 +369,28 @@ func TestValue_Key(t *testing.T) {
 		{"pointer-to-map", func() *map[string]int { m := map[string]int{"a": 1}; return &m }(), "a", 1, false},
 		{"int-key-found", map[int]string{1: "one", 2: "two"}, 1, "one", false},
 		{"int-key-not-found", map[int]string{1: "one", 2: "two"}, 3, nil, false},
+		{"numeric-template-key-converts", map[int]string{1: "one"}, 1.0, "one", false},
+		{"fractional-numeric-key-misses", map[int]string{1: "one"}, 1.2, nil, false},
+		{"wrong-key-type-misses", map[string]string{"1": "one"}, 1.0, nil, false},
 		{"slice-not-map", []int{1, 2, 3}, 0, nil, true},
 		{"string-not-map", "hello", 0, nil, true},
 		{"int-not-map", 42, 0, nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(tt.value).Key(tt.key)
+			got, err := newValue(tt.value).Key(tt.key)
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("NewValue(%v).Key(%v) error = nil, want error", tt.value, tt.key)
+					t.Errorf("newValue(%v).Key(%v) error = nil, want error", tt.value, tt.key)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("NewValue(%v).Key(%v) unexpected error: %v", tt.value, tt.key, err)
+				t.Errorf("newValue(%v).Key(%v) unexpected error: %v", tt.value, tt.key, err)
 				return
 			}
 			if got.Interface() != tt.want {
-				t.Errorf("NewValue(%v).Key(%v) = %v, want %v", tt.value, tt.key, got.Interface(), tt.want)
+				t.Errorf("newValue(%v).Key(%v) = %v, want %v", tt.value, tt.key, got.Interface(), tt.want)
 			}
 		})
 	}
@@ -404,7 +412,7 @@ func TestValue_Field(t *testing.T) {
 	}{
 		{"nil", nil, "Name", nil, true},
 		{"struct-field-exists", testStruct{Name: "Alice", Age: 30, Email: "alice@example.com"}, "Name", "Alice", false},
-		{"struct-field-not-exists", testStruct{Name: "Alice", Age: 30, Email: "alice@example.com"}, "Phone", nil, true},
+		{"struct-field-not-exists", testStruct{Name: "Alice", Age: 30, Email: "alice@example.com"}, "Phone", nil, false},
 		{"pointer-to-struct", &testStruct{Name: "Bob", Age: 25, Email: "bob@example.com"}, "Age", 25, false},
 		{"map-key-exists", map[string]any{"Name": "Charlie", "Age": 35}, "Name", "Charlie", false},
 		{"map-key-not-exists", map[string]any{"Name": "Charlie", "Age": 35}, "Email", nil, false},
@@ -414,19 +422,19 @@ func TestValue_Field(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(tt.value).Field(tt.field)
+			got, err := newValue(tt.value).Field(tt.field)
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("NewValue(%v).Field(%q) error = nil, want error", tt.value, tt.field)
+					t.Errorf("newValue(%v).Field(%q) error = nil, want error", tt.value, tt.field)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("NewValue(%v).Field(%q) unexpected error: %v", tt.value, tt.field, err)
+				t.Errorf("newValue(%v).Field(%q) unexpected error: %v", tt.value, tt.field, err)
 				return
 			}
 			if got.Interface() != tt.want {
-				t.Errorf("NewValue(%v).Field(%q) = %v, want %v", tt.value, tt.field, got.Interface(), tt.want)
+				t.Errorf("newValue(%v).Field(%q) = %v, want %v", tt.value, tt.field, got.Interface(), tt.want)
 			}
 		})
 	}
@@ -438,6 +446,7 @@ func TestValue_Field_JSONTag(t *testing.T) {
 		Age      int    `json:"age,omitempty"`
 		Hidden   string `json:"-"`
 		NoTag    string
+		private  string
 	}
 
 	val := tagged{
@@ -445,6 +454,7 @@ func TestValue_Field_JSONTag(t *testing.T) {
 		Age:      30,
 		Hidden:   "secret",
 		NoTag:    "visible",
+		private:  "hidden",
 	}
 
 	tests := []struct {
@@ -455,26 +465,28 @@ func TestValue_Field_JSONTag(t *testing.T) {
 	}{
 		{"json-tag-name", "name", "Alice", false},
 		{"json-tag-with-omitempty", "age", 30, false},
-		{"hidden-field-via-dash", "-", nil, true},
+		{"hidden-field-via-dash", "-", nil, false},
+		{"hidden-field-by-exported-name", "Hidden", nil, false},
 		{"field-by-exported-name", "NoTag", "visible", false},
 		{"field-by-exported-name-FullName", "FullName", "Alice", false},
-		{"nonexistent-field", "missing", nil, true},
+		{"unexported-field", "private", nil, false},
+		{"nonexistent-field", "missing", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(val).Field(tt.field)
+			got, err := newValue(val).Field(tt.field)
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("Value.Field(%q) error = nil, want error", tt.field)
+					t.Errorf("value.Field(%q) error = nil, want error", tt.field)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("Value.Field(%q) unexpected error: %v", tt.field, err)
+				t.Errorf("value.Field(%q) unexpected error: %v", tt.field, err)
 				return
 			}
 			if got.Interface() != tt.want {
-				t.Errorf("Value.Field(%q) = %v, want %v", tt.field, got.Interface(), tt.want)
+				t.Errorf("value.Field(%q) = %v, want %v", tt.field, got.Interface(), tt.want)
 			}
 		})
 	}
@@ -540,11 +552,11 @@ func TestValue_Iterate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.value)
+			v := newValue(tt.value)
 			var keys, vals []any
 			var count int
 
-			err := v.Iterate(func(_ int, c int, key, val *Value) bool {
+			err := v.Iterate(func(_ int, c int, key, val *value) bool {
 				count = c
 				keys = append(keys, key.Interface())
 				vals = append(vals, val.Interface())
@@ -553,23 +565,23 @@ func TestValue_Iterate(t *testing.T) {
 
 			if tt.wantError {
 				if err == nil {
-					t.Errorf("NewValue(%v).Iterate() error = nil, want error", tt.value)
+					t.Errorf("newValue(%v).Iterate() error = nil, want error", tt.value)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("NewValue(%v).Iterate() unexpected error: %v", tt.value, err)
+				t.Errorf("newValue(%v).Iterate() unexpected error: %v", tt.value, err)
 				return
 			}
 			if count != tt.wantCount {
-				t.Errorf("NewValue(%v).Iterate() count = %d, want %d", tt.value, count, tt.wantCount)
+				t.Errorf("newValue(%v).Iterate() count = %d, want %d", tt.value, count, tt.wantCount)
 			}
 			if tt.wantCount > 0 {
 				if !elementsMatch(keys, tt.wantKeys) {
-					t.Errorf("NewValue(%v).Iterate() keys = %v, want %v", tt.value, keys, tt.wantKeys)
+					t.Errorf("newValue(%v).Iterate() keys = %v, want %v", tt.value, keys, tt.wantKeys)
 				}
 				if !elementsMatch(vals, tt.wantVals) {
-					t.Errorf("NewValue(%v).Iterate() vals = %v, want %v", tt.value, vals, tt.wantVals)
+					t.Errorf("newValue(%v).Iterate() vals = %v, want %v", tt.value, vals, tt.wantVals)
 				}
 			}
 		})
@@ -600,10 +612,10 @@ func elementsMatch(a, b []any) bool {
 }
 
 func TestValue_Iterate_EarlyExit(t *testing.T) {
-	v := NewValue([]int{1, 2, 3, 4, 5})
+	v := newValue([]int{1, 2, 3, 4, 5})
 	var got []int
 
-	err := v.Iterate(func(idx, _ int, _ *Value, val *Value) bool {
+	err := v.Iterate(func(idx, _ int, _ *value, val *value) bool {
 		got = append(got, val.Interface().(int))
 		return idx < 2
 	})
@@ -645,7 +657,7 @@ func TestValue_Compare(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewValue(tt.a).Compare(NewValue(tt.b))
+			got, err := newValue(tt.a).Compare(newValue(tt.b))
 			if err != nil {
 				t.Fatalf("Compare(%v, %v) unexpected error: %v", tt.a, tt.b, err)
 			}
@@ -693,7 +705,7 @@ func TestValue_Equals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValue(tt.a).Equals(NewValue(tt.b)); got != tt.want {
+			if got := newValue(tt.a).Equals(newValue(tt.b)); got != tt.want {
 				t.Errorf("Equals(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
 			}
 		})
@@ -711,7 +723,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "int nil",
 			run: func() error {
-				_, err := NewValue(nil).Int()
+				_, err := newValue(nil).Int()
 				return err
 			},
 			wantErr: ErrCannotConvertNilToInt,
@@ -719,7 +731,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "int unsupported",
 			run: func() error {
-				_, err := NewValue("hello").Int()
+				_, err := newValue("hello").Int()
 				return err
 			},
 			wantErr: ErrCannotConvertToInt,
@@ -727,7 +739,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "float nil",
 			run: func() error {
-				_, err := NewValue(nil).Float()
+				_, err := newValue(nil).Float()
 				return err
 			},
 			wantErr: ErrCannotConvertNilToFloat,
@@ -735,7 +747,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "float unsupported",
 			run: func() error {
-				_, err := NewValue("hello").Float()
+				_, err := newValue("hello").Float()
 				return err
 			},
 			wantErr: ErrCannotConvertToFloat,
@@ -743,7 +755,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "len unsupported",
 			run: func() error {
-				_, err := NewValue(42).Len()
+				_, err := newValue(42).Len()
 				return err
 			},
 			wantErr: ErrTypeHasNoLength,
@@ -751,7 +763,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "index nil",
 			run: func() error {
-				_, err := NewValue(nil).Index(0)
+				_, err := newValue(nil).Index(0)
 				return err
 			},
 			wantErr: ErrCannotIndexNil,
@@ -759,7 +771,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "index out of range",
 			run: func() error {
-				_, err := NewValue([]int{1}).Index(1)
+				_, err := newValue([]int{1}).Index(1)
 				return err
 			},
 			wantErr: ErrIndexOutOfRange,
@@ -767,7 +779,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "index unsupported",
 			run: func() error {
-				_, err := NewValue(42).Index(0)
+				_, err := newValue(42).Index(0)
 				return err
 			},
 			wantErr: ErrTypeNotIndexable,
@@ -775,7 +787,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "key nil",
 			run: func() error {
-				_, err := NewValue(nil).Key("name")
+				_, err := newValue(nil).Key("name")
 				return err
 			},
 			wantErr: ErrCannotGetKeyFromNil,
@@ -783,7 +795,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "key unsupported",
 			run: func() error {
-				_, err := NewValue([]int{1}).Key("name")
+				_, err := newValue([]int{1}).Key("name")
 				return err
 			},
 			wantErr: ErrTypeNotMap,
@@ -791,23 +803,15 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "field nil",
 			run: func() error {
-				_, err := NewValue(nil).Field("Name")
+				_, err := newValue(nil).Field("Name")
 				return err
 			},
 			wantErr: ErrCannotGetFieldFromNil,
 		},
 		{
-			name: "field missing",
-			run: func() error {
-				_, err := NewValue(struct{ Name string }{}).Field("Missing")
-				return err
-			},
-			wantErr: ErrStructHasNoField,
-		},
-		{
 			name: "field unsupported",
 			run: func() error {
-				_, err := NewValue(42).Field("Name")
+				_, err := newValue(42).Field("Name")
 				return err
 			},
 			wantErr: ErrTypeHasNoField,
@@ -815,7 +819,7 @@ func TestValue_ErrorSentinels(t *testing.T) {
 		{
 			name: "iterate unsupported",
 			run: func() error {
-				return NewValue(42).Iterate(func(_, _ int, _, _ *Value) bool { return true })
+				return newValue(42).Iterate(func(_, _ int, _, _ *value) bool { return true })
 			},
 			wantErr: ErrTypeNotIterable,
 		},
@@ -847,9 +851,9 @@ func TestValue_Interface(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewValue(tt.value).Interface()
+			got := newValue(tt.value).Interface()
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewValue(%v).Interface() = %v, want %v", tt.value, got, tt.want)
+				t.Errorf("newValue(%v).Interface() = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}
@@ -870,12 +874,12 @@ func TestNewValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.input)
+			v := newValue(tt.input)
 			if v == nil {
-				t.Fatal("NewValue() returned nil")
+				t.Fatal("newValue() returned nil")
 			}
 			if !reflect.DeepEqual(v.Interface(), tt.input) {
-				t.Errorf("NewValue(%v).Interface() = %v, want %v", tt.input, v.Interface(), tt.input)
+				t.Errorf("newValue(%v).Interface() = %v, want %v", tt.input, v.Interface(), tt.input)
 			}
 		})
 	}
@@ -901,7 +905,7 @@ func TestValueIsTrueEdgeCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.input)
+			v := newValue(tt.input)
 			if got := v.IsTrue(); got != tt.expected {
 				t.Errorf("IsTrue() = %v, want %v", got, tt.expected)
 			}
@@ -911,33 +915,33 @@ func TestValueIsTrueEdgeCases(t *testing.T) {
 
 func TestValueFormatSliceItemEdgeCases(t *testing.T) {
 	// Nested slices.
-	v := NewValue([][]int{{1, 2}, {3, 4}})
+	v := newValue([][]int{{1, 2}, {3, 4}})
 	got := v.String()
 	if got != "[[1,2],[3,4]]" {
 		t.Errorf("String() = %q, want %q", got, "[[1,2],[3,4]]")
 	}
 
 	// Slice of maps.
-	v2 := NewValue([]map[string]int{{"a": 1}})
+	v2 := newValue([]map[string]int{{"a": 1}})
 	s := v2.String()
 	if s == "" {
 		t.Error("String() returned empty for slice of maps")
 	}
 
 	// Slice of bools.
-	v3 := NewValue([]bool{true, false})
+	v3 := newValue([]bool{true, false})
 	if got := v3.String(); got != "[true,false]" {
 		t.Errorf("String() = %q, want %q", got, "[true,false]")
 	}
 
 	// Slice of uints.
-	v4 := NewValue([]uint{10, 20})
+	v4 := newValue([]uint{10, 20})
 	if got := v4.String(); got != "[10,20]" {
 		t.Errorf("String() = %q, want %q", got, "[10,20]")
 	}
 
 	// Slice of floats.
-	v5 := NewValue([]float64{1.5, 2.5})
+	v5 := newValue([]float64{1.5, 2.5})
 	if got := v5.String(); got != "[1.5,2.5]" {
 		t.Errorf("String() = %q, want %q", got, "[1.5,2.5]")
 	}
@@ -947,7 +951,7 @@ func TestValueSortingEdgeCases(t *testing.T) {
 	// Test string keys sorting
 	keys := []reflect.Value{reflect.ValueOf("banana"), reflect.ValueOf("apple")}
 	slices.SortFunc(keys, func(a, b reflect.Value) int {
-		va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+		va, vb := newValue(a.Interface()), newValue(b.Interface())
 		if fa, err := va.Float(); err == nil {
 			if fb, err := vb.Float(); err == nil {
 				if fa < fb {
@@ -973,7 +977,7 @@ func TestValueSortingEdgeCases(t *testing.T) {
 	// Test numeric keys sorting
 	numKeys := []reflect.Value{reflect.ValueOf(3), reflect.ValueOf(1)}
 	slices.SortFunc(numKeys, func(a, b reflect.Value) int {
-		va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+		va, vb := newValue(a.Interface()), newValue(b.Interface())
 		if fa, err := va.Float(); err == nil {
 			if fb, err := vb.Float(); err == nil {
 				if fa < fb {
@@ -999,7 +1003,7 @@ func TestValueSortingEdgeCases(t *testing.T) {
 	// Test mixed keys: one numeric, one not — falls back to string
 	mixedKeys := []reflect.Value{reflect.ValueOf("abc"), reflect.ValueOf(1)}
 	slices.SortFunc(mixedKeys, func(a, b reflect.Value) int {
-		va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+		va, vb := newValue(a.Interface()), newValue(b.Interface())
 		if fa, err := va.Float(); err == nil {
 			if fb, err := vb.Float(); err == nil {
 				if fa < fb {
@@ -1023,7 +1027,7 @@ func TestValueSortingEdgeCases(t *testing.T) {
 }
 
 func TestValueStringUint(t *testing.T) {
-	v := NewValue(uint(42))
+	v := newValue(uint(42))
 	if got := v.String(); got != "42" {
 		t.Errorf("String() = %q, want %q", got, "42")
 	}
@@ -1034,14 +1038,14 @@ type stringerVal string
 func (s stringerVal) String() string { return "stringer:" + string(s) }
 
 func TestValueStringStringer(t *testing.T) {
-	v := NewValue(stringerVal("hello"))
+	v := newValue(stringerVal("hello"))
 	if got := v.String(); got != "stringer:hello" {
 		t.Errorf("String() = %q, want %q", got, "stringer:hello")
 	}
 }
 
 func TestValueStringJSONFallback(t *testing.T) {
-	v := NewValue(map[string]int{"x": 1})
+	v := newValue(map[string]int{"x": 1})
 	got := v.String()
 	if got == "" {
 		t.Error("String() returned empty for map")

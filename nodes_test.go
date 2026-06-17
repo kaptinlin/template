@@ -28,7 +28,7 @@ type errExpr struct{ err error }
 
 func (e *errExpr) Position() (int, int)                      { return 1, 1 }
 func (e *errExpr) String() string                            { return "errExpr" }
-func (e *errExpr) Evaluate(_ *RenderContext) (*Value, error) { return nil, e.err }
+func (e *errExpr) Evaluate(_ *renderContext) (*value, error) { return nil, e.err }
 
 // errWriter is a mock writer that always returns an error.
 type errWriter struct{ err error }
@@ -36,17 +36,17 @@ type errWriter struct{ err error }
 func (w *errWriter) Write(_ []byte) (int, error) { return 0, w.err }
 
 type captureLoopStmt struct {
-	last *LoopContext
+	last *loopContext
 }
 
 func (s *captureLoopStmt) Position() (int, int) { return 1, 1 }
 func (s *captureLoopStmt) String() string       { return "captureLoopStmt" }
-func (s *captureLoopStmt) Execute(ctx *RenderContext, _ io.Writer) error {
+func (s *captureLoopStmt) Execute(ctx *renderContext, _ io.Writer) error {
 	v, ok := ctx.Get("loop")
 	if !ok {
 		return errLoopMissing
 	}
-	lc, ok := v.(*LoopContext)
+	lc, ok := v.(*loopContext)
 	if !ok {
 		return errLoopBadType
 	}
@@ -56,7 +56,7 @@ func (s *captureLoopStmt) Execute(ctx *RenderContext, _ io.Writer) error {
 }
 
 func TestTextNode(t *testing.T) {
-	n := NewTextNode("hello", 1, 5)
+	n := newTextNode("hello", 1, 5)
 	line, col := n.Position()
 	if line != 1 || col != 5 {
 		t.Errorf("Position() = (%d, %d), want (1, 5)", line, col)
@@ -65,7 +65,7 @@ func TestTextNode(t *testing.T) {
 		t.Errorf("String() = %q, want %q", got, `Text("hello")`)
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -75,13 +75,13 @@ func TestTextNode(t *testing.T) {
 }
 
 func TestOutputNode(t *testing.T) {
-	n := NewOutputNode(NewLiteralNode("world", 1, 1), 2, 3)
+	n := newOutputNode(newLiteralNode("world", 1, 1), 2, 3)
 	line, col := n.Position()
 	if line != 2 || col != 3 {
 		t.Errorf("Position() = (%d, %d), want (2, 3)", line, col)
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -101,8 +101,8 @@ func TestLiteralNode(t *testing.T) {
 		{value: nil, want: ""},
 	}
 	for _, tt := range tests {
-		n := NewLiteralNode(tt.value, 1, 1)
-		ctx := NewRenderContext(map[string]any{})
+		n := newLiteralNode(tt.value, 1, 1)
+		ctx := newRenderContext(map[string]any{})
 		val, err := n.Evaluate(ctx)
 		if err != nil {
 			t.Fatalf("Evaluate(%v) error: %v", tt.value, err)
@@ -114,13 +114,13 @@ func TestLiteralNode(t *testing.T) {
 }
 
 func TestVariableNode(t *testing.T) {
-	n := NewVariableNode("name", 3, 7)
+	n := newVariableNode("name", 3, 7)
 	if got := n.String(); got != "Var(name)" {
 		t.Errorf("String() = %q, want %q", got, "Var(name)")
 	}
 
 	t.Run("defined", func(t *testing.T) {
-		ctx := NewRenderContext(map[string]any{"name": "Alice"})
+		ctx := newRenderContext(map[string]any{"name": "Alice"})
 		val, err := n.Evaluate(ctx)
 		if err != nil {
 			t.Fatalf("Evaluate() error: %v", err)
@@ -131,7 +131,7 @@ func TestVariableNode(t *testing.T) {
 	})
 
 	t.Run("undefined", func(t *testing.T) {
-		ctx := NewRenderContext(map[string]any{})
+		ctx := newRenderContext(map[string]any{})
 		val, err := n.Evaluate(ctx)
 		if err != nil {
 			t.Fatalf("Evaluate() error: %v", err)
@@ -168,10 +168,10 @@ func TestBinaryOpNode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.op, func(t *testing.T) {
-			n := NewBinaryOpNode(tt.op,
-				NewLiteralNode(tt.left, 1, 1),
-				NewLiteralNode(tt.right, 1, 1), 1, 1)
-			ctx := NewRenderContext(map[string]any{})
+			n := newBinaryOpNode(tt.op,
+				newLiteralNode(tt.left, 1, 1),
+				newLiteralNode(tt.right, 1, 1), 1, 1)
+			ctx := newRenderContext(map[string]any{})
 			val, err := n.Evaluate(ctx)
 			if err != nil {
 				t.Fatalf("Evaluate() error: %v", err)
@@ -194,10 +194,10 @@ func TestBinaryOpNode(t *testing.T) {
 }
 
 func TestBinaryOpNodeStringConcat(t *testing.T) {
-	n := NewBinaryOpNode("+",
-		NewLiteralNode("hello ", 1, 1),
-		NewLiteralNode("world", 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("+",
+		newLiteralNode("hello ", 1, 1),
+		newLiteralNode("world", 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	val, err := n.Evaluate(ctx)
 	if err != nil {
 		t.Fatalf("Evaluate() error: %v", err)
@@ -208,10 +208,10 @@ func TestBinaryOpNodeStringConcat(t *testing.T) {
 }
 
 func TestBinaryOpNodeDivisionByZero(t *testing.T) {
-	n := NewBinaryOpNode("/",
-		NewLiteralNode(10.0, 1, 1),
-		NewLiteralNode(0.0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("/",
+		newLiteralNode(10.0, 1, 1),
+		newLiteralNode(0.0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrDivisionByZero) {
 		t.Errorf("error = %v, want %v", err, ErrDivisionByZero)
@@ -219,10 +219,10 @@ func TestBinaryOpNodeDivisionByZero(t *testing.T) {
 }
 
 func TestBinaryOpNodeModuloByZero(t *testing.T) {
-	n := NewBinaryOpNode("%",
-		NewLiteralNode(10, 1, 1),
-		NewLiteralNode(0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("%",
+		newLiteralNode(10, 1, 1),
+		newLiteralNode(0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrModuloByZero) {
 		t.Errorf("error = %v, want %v", err, ErrModuloByZero)
@@ -230,10 +230,10 @@ func TestBinaryOpNodeModuloByZero(t *testing.T) {
 }
 
 func TestBinaryOpNodeUnsupported(t *testing.T) {
-	n := NewBinaryOpNode("^^",
-		NewLiteralNode(1.0, 1, 1),
-		NewLiteralNode(2.0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("^^",
+		newLiteralNode(1.0, 1, 1),
+		newLiteralNode(2.0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrUnsupportedOperator) {
 		t.Errorf("error = %v, want %v", err, ErrUnsupportedOperator)
@@ -242,8 +242,8 @@ func TestBinaryOpNodeUnsupported(t *testing.T) {
 
 func TestUnaryOpNode(t *testing.T) {
 	t.Run("not", func(t *testing.T) {
-		n := NewUnaryOpNode("not", NewLiteralNode(true, 1, 1), 1, 1)
-		ctx := NewRenderContext(map[string]any{})
+		n := newUnaryOpNode("not", newLiteralNode(true, 1, 1), 1, 1)
+		ctx := newRenderContext(map[string]any{})
 		val, err := n.Evaluate(ctx)
 		if err != nil {
 			t.Fatalf("Evaluate() error: %v", err)
@@ -254,8 +254,8 @@ func TestUnaryOpNode(t *testing.T) {
 	})
 
 	t.Run("negate", func(t *testing.T) {
-		n := NewUnaryOpNode("-", NewLiteralNode(5.0, 1, 1), 1, 1)
-		ctx := NewRenderContext(map[string]any{})
+		n := newUnaryOpNode("-", newLiteralNode(5.0, 1, 1), 1, 1)
+		ctx := newRenderContext(map[string]any{})
 		val, err := n.Evaluate(ctx)
 		if err != nil {
 			t.Fatalf("Evaluate() error: %v", err)
@@ -267,8 +267,8 @@ func TestUnaryOpNode(t *testing.T) {
 	})
 
 	t.Run("unsupported", func(t *testing.T) {
-		n := NewUnaryOpNode("~", NewLiteralNode(1.0, 1, 1), 1, 1)
-		ctx := NewRenderContext(map[string]any{})
+		n := newUnaryOpNode("~", newLiteralNode(1.0, 1, 1), 1, 1)
+		ctx := newRenderContext(map[string]any{})
 		_, err := n.Evaluate(ctx)
 		if !errors.Is(err, ErrUnsupportedUnaryOp) {
 			t.Errorf("error = %v, want %v", err, ErrUnsupportedUnaryOp)
@@ -278,16 +278,16 @@ func TestUnaryOpNode(t *testing.T) {
 
 func TestIfNode(t *testing.T) {
 	t.Run("true branch", func(t *testing.T) {
-		n := &IfNode{
-			Branches: []IfBranch{{
-				Condition: NewLiteralNode(true, 1, 1),
-				Body:      []Node{NewTextNode("yes", 1, 1)},
+		n := &ifNode{
+			Branches: []ifBranch{{
+				Condition: newLiteralNode(true, 1, 1),
+				Body:      []node{newTextNode("yes", 1, 1)},
 			}},
-			ElseBody: []Node{NewTextNode("no", 1, 1)},
+			ElseBody: []node{newTextNode("no", 1, 1)},
 			Line:     1, Col: 1,
 		}
 		var buf bytes.Buffer
-		ctx := NewRenderContext(map[string]any{})
+		ctx := newRenderContext(map[string]any{})
 		if err := n.Execute(ctx, &buf); err != nil {
 			t.Fatalf("Execute() error: %v", err)
 		}
@@ -297,16 +297,16 @@ func TestIfNode(t *testing.T) {
 	})
 
 	t.Run("else branch", func(t *testing.T) {
-		n := &IfNode{
-			Branches: []IfBranch{{
-				Condition: NewLiteralNode(false, 1, 1),
-				Body:      []Node{NewTextNode("yes", 1, 1)},
+		n := &ifNode{
+			Branches: []ifBranch{{
+				Condition: newLiteralNode(false, 1, 1),
+				Body:      []node{newTextNode("yes", 1, 1)},
 			}},
-			ElseBody: []Node{NewTextNode("no", 1, 1)},
+			ElseBody: []node{newTextNode("no", 1, 1)},
 			Line:     1, Col: 1,
 		}
 		var buf bytes.Buffer
-		ctx := NewRenderContext(map[string]any{})
+		ctx := newRenderContext(map[string]any{})
 		if err := n.Execute(ctx, &buf); err != nil {
 			t.Fatalf("Execute() error: %v", err)
 		}
@@ -316,15 +316,15 @@ func TestIfNode(t *testing.T) {
 	})
 
 	t.Run("no match no else", func(t *testing.T) {
-		n := &IfNode{
-			Branches: []IfBranch{{
-				Condition: NewLiteralNode(false, 1, 1),
-				Body:      []Node{NewTextNode("yes", 1, 1)},
+		n := &ifNode{
+			Branches: []ifBranch{{
+				Condition: newLiteralNode(false, 1, 1),
+				Body:      []node{newTextNode("yes", 1, 1)},
 			}},
 			Line: 1, Col: 1,
 		}
 		var buf bytes.Buffer
-		ctx := NewRenderContext(map[string]any{})
+		ctx := newRenderContext(map[string]any{})
 		if err := n.Execute(ctx, &buf); err != nil {
 			t.Fatalf("Execute() error: %v", err)
 		}
@@ -335,16 +335,16 @@ func TestIfNode(t *testing.T) {
 }
 
 func TestForNode(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
-		Body: []Node{
-			NewOutputNode(NewVariableNode("item", 1, 1), 1, 1),
+		Collection: newLiteralNode([]any{"a", "b", "c"}, 1, 1),
+		Body: []node{
+			newOutputNode(newVariableNode("item", 1, 1), 1, 1),
 		},
 		Line: 1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestForNode(t *testing.T) {
 }
 
 func TestBreakNode(t *testing.T) {
-	n := &BreakNode{Line: 1, Col: 1}
+	n := &breakNode{Line: 1, Col: 1}
 	line, col := n.Position()
 	if line != 1 || col != 1 {
 		t.Errorf("Position() = (%d, %d), want (1, 1)", line, col)
@@ -363,14 +363,14 @@ func TestBreakNode(t *testing.T) {
 		t.Errorf("String() = %q, want %q", got, "Break")
 	}
 	err := n.Execute(nil, nil)
-	var breakErr *BreakError
+	var breakErr *breakError
 	if !errors.As(err, &breakErr) {
-		t.Errorf("Execute() error type = %T, want *BreakError", err)
+		t.Errorf("Execute() error type = %T, want *breakError", err)
 	}
 }
 
 func TestContinueNode(t *testing.T) {
-	n := &ContinueNode{Line: 2, Col: 3}
+	n := &continueNode{Line: 2, Col: 3}
 	line, col := n.Position()
 	if line != 2 || col != 3 {
 		t.Errorf("Position() = (%d, %d), want (2, 3)", line, col)
@@ -379,17 +379,17 @@ func TestContinueNode(t *testing.T) {
 		t.Errorf("String() = %q, want %q", got, "Continue")
 	}
 	err := n.Execute(nil, nil)
-	var contErr *ContinueError
+	var contErr *continueError
 	if !errors.As(err, &contErr) {
-		t.Errorf("Execute() error type = %T, want *ContinueError", err)
+		t.Errorf("Execute() error type = %T, want *continueError", err)
 	}
 }
 
 func TestPropertyAccessNode(t *testing.T) {
 	type User struct{ Name string }
-	n := NewPropertyAccessNode(
-		NewVariableNode("user", 1, 1), "Name", 1, 1)
-	ctx := NewRenderContext(map[string]any{
+	n := newPropertyAccessNode(
+		newVariableNode("user", 1, 1), "Name", 1, 1)
+	ctx := newRenderContext(map[string]any{
 		"user": User{Name: "Alice"},
 	})
 	val, err := n.Evaluate(ctx)
@@ -402,10 +402,10 @@ func TestPropertyAccessNode(t *testing.T) {
 }
 
 func TestSubscriptNode(t *testing.T) {
-	n := NewSubscriptNode(
-		NewVariableNode("items", 1, 1),
-		NewLiteralNode(1, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{
+	n := newSubscriptNode(
+		newVariableNode("items", 1, 1),
+		newLiteralNode(1, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{
 		"items": []string{"a", "b", "c"},
 	})
 	val, err := n.Evaluate(ctx)
@@ -418,10 +418,10 @@ func TestSubscriptNode(t *testing.T) {
 }
 
 func TestFilterNode(t *testing.T) {
-	n := NewFilterNode(
-		NewLiteralNode("hello", 1, 1),
+	n := newFilterNode(
+		newLiteralNode("hello", 1, 1),
 		"upper", nil, 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	val, err := n.Evaluate(ctx)
 	if err != nil {
 		t.Fatalf("Evaluate() error: %v", err)
@@ -432,10 +432,10 @@ func TestFilterNode(t *testing.T) {
 }
 
 func TestFilterNodeNotFound(t *testing.T) {
-	n := NewFilterNode(
-		NewLiteralNode("hello", 1, 1),
+	n := newFilterNode(
+		newLiteralNode("hello", 1, 1),
 		"nonexistent_xyz", nil, 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrFilterNotFound) {
 		t.Errorf("error = %v, want %v", err, ErrFilterNotFound)
@@ -443,83 +443,83 @@ func TestFilterNodeNotFound(t *testing.T) {
 }
 
 func TestForNodeKeyValue(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"k", "v"},
-		Collection: NewLiteralNode(map[string]any{"x": 1}, 1, 1),
-		Body: []Node{
-			NewOutputNode(NewVariableNode("k", 1, 1), 1, 1),
+		Collection: newLiteralNode(map[string]any{"x": 1}, 1, 1),
+		Body: []node{
+			newOutputNode(newVariableNode("k", 1, 1), 1, 1),
 		},
 		Line: 1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
-		t.Fatalf("ForNode.Execute() error: %v", err)
+		t.Fatalf("forNode.Execute() error: %v", err)
 	}
 	if got := buf.String(); got != "x" {
-		t.Errorf("ForNode.Execute() = %q, want %q", got, "x")
+		t.Errorf("forNode.Execute() = %q, want %q", got, "x")
 	}
 }
 
 func TestForNodeLoopContext(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewLiteralNode([]any{"a", "b"}, 1, 1),
-		Body:       []Node{NewTextNode(".", 1, 1)},
+		Collection: newLiteralNode([]any{"a", "b"}, 1, 1),
+		Body:       []node{newTextNode(".", 1, 1)},
 		Line:       1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
-		t.Fatalf("ForNode.Execute() error: %v", err)
+		t.Fatalf("forNode.Execute() error: %v", err)
 	}
 	// After loop, loop context should still be accessible
 	if got := buf.String(); got != ".." {
-		t.Errorf("ForNode.Execute() = %q, want %q", got, "..")
+		t.Errorf("forNode.Execute() = %q, want %q", got, "..")
 	}
 }
 
 func TestForNodeString(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewVariableNode("items", 1, 1),
+		Collection: newVariableNode("items", 1, 1),
 		Line:       1, Col: 1,
 	}
 	want := "For([item] in Var(items))"
 	if got := n.String(); got != want {
-		t.Errorf("ForNode.String() = %q, want %q", got, want)
+		t.Errorf("forNode.String() = %q, want %q", got, want)
 	}
 }
 
 func TestOutputNodeString(t *testing.T) {
-	n := NewOutputNode(NewVariableNode("x", 1, 1), 1, 1)
+	n := newOutputNode(newVariableNode("x", 1, 1), 1, 1)
 	want := "Output(Var(x))"
 	if got := n.String(); got != want {
-		t.Errorf("OutputNode.String() = %q, want %q", got, want)
+		t.Errorf("outputNode.String() = %q, want %q", got, want)
 	}
 }
 
 func TestFilterNodeString(t *testing.T) {
 	t.Run("without args", func(t *testing.T) {
-		n := NewFilterNode(NewVariableNode("x", 1, 1), "upper", nil, 1, 1)
+		n := newFilterNode(newVariableNode("x", 1, 1), "upper", nil, 1, 1)
 		want := "Filter(Var(x)|upper)"
 		if got := n.String(); got != want {
-			t.Errorf("FilterNode.String() = %q, want %q", got, want)
+			t.Errorf("filterNode.String() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("with args", func(t *testing.T) {
-		args := []Expression{NewLiteralNode(10.0, 1, 1)}
-		n := NewFilterNode(NewVariableNode("x", 1, 1), "add", args, 1, 1)
+		args := []expression{newLiteralNode(10.0, 1, 1)}
+		n := newFilterNode(newVariableNode("x", 1, 1), "add", args, 1, 1)
 		if got := n.String(); got == "" {
-			t.Error("FilterNode.String() returned empty string")
+			t.Error("filterNode.String() returned empty string")
 		}
 	})
 }
 
 func TestUnaryOpNodePlus(t *testing.T) {
-	n := NewUnaryOpNode("+", NewLiteralNode(5.0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newUnaryOpNode("+", newLiteralNode(5.0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	val, err := n.Evaluate(ctx)
 	if err != nil {
 		t.Fatalf("Evaluate() error: %v", err)
@@ -531,10 +531,10 @@ func TestUnaryOpNodePlus(t *testing.T) {
 }
 
 func TestBinaryOpNodeModulo(t *testing.T) {
-	n := NewBinaryOpNode("%",
-		NewLiteralNode(10, 1, 1),
-		NewLiteralNode(3, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("%",
+		newLiteralNode(10, 1, 1),
+		newLiteralNode(3, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	val, err := n.Evaluate(ctx)
 	if err != nil {
 		t.Fatalf("Evaluate() error: %v", err)
@@ -546,10 +546,10 @@ func TestBinaryOpNodeModulo(t *testing.T) {
 }
 
 func TestSubscriptNodeStringKey(t *testing.T) {
-	n := NewSubscriptNode(
-		NewVariableNode("dict", 1, 1),
-		NewLiteralNode("key", 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{
+	n := newSubscriptNode(
+		newVariableNode("dict", 1, 1),
+		newLiteralNode("key", 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{
 		"dict": map[string]any{"key": "val"},
 	})
 	val, err := n.Evaluate(ctx)
@@ -562,21 +562,21 @@ func TestSubscriptNodeStringKey(t *testing.T) {
 }
 
 func TestIfNodeElif(t *testing.T) {
-	n := &IfNode{
-		Branches: []IfBranch{
+	n := &ifNode{
+		Branches: []ifBranch{
 			{
-				Condition: NewLiteralNode(false, 1, 1),
-				Body:      []Node{NewTextNode("first", 1, 1)},
+				Condition: newLiteralNode(false, 1, 1),
+				Body:      []node{newTextNode("first", 1, 1)},
 			},
 			{
-				Condition: NewLiteralNode(true, 1, 1),
-				Body:      []Node{NewTextNode("second", 1, 1)},
+				Condition: newLiteralNode(true, 1, 1),
+				Body:      []node{newTextNode("second", 1, 1)},
 			},
 		},
 		Line: 1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -586,13 +586,13 @@ func TestIfNodeElif(t *testing.T) {
 }
 
 func TestExecuteBody(t *testing.T) {
-	body := []Node{
-		NewTextNode("a", 1, 1),
-		NewTextNode("b", 1, 2),
-		NewTextNode("c", 1, 3),
+	body := []node{
+		newTextNode("a", 1, 1),
+		newTextNode("b", 1, 2),
+		newTextNode("c", 1, 3),
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := executeBody(body, ctx, &buf); err != nil {
 		t.Fatalf("executeBody() error: %v", err)
 	}
@@ -602,14 +602,14 @@ func TestExecuteBody(t *testing.T) {
 }
 
 func TestExecuteBodySkipsNonStatements(t *testing.T) {
-	// LiteralNode implements Expression but not Statement.
-	body := []Node{
-		NewTextNode("a", 1, 1),
-		NewLiteralNode("skip", 1, 1),
-		NewTextNode("b", 1, 2),
+	// literalNode implements expression but not statement.
+	body := []node{
+		newTextNode("a", 1, 1),
+		newLiteralNode("skip", 1, 1),
+		newTextNode("b", 1, 2),
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := executeBody(body, ctx, &buf); err != nil {
 		t.Fatalf("executeBody() error: %v", err)
 	}
@@ -619,26 +619,26 @@ func TestExecuteBodySkipsNonStatements(t *testing.T) {
 }
 
 func TestBreakErrorMessage(t *testing.T) {
-	err := &BreakError{}
+	err := &breakError{}
 	want := ErrBreakOutsideLoop.Error()
 	if got := err.Error(); got != want {
-		t.Errorf("BreakError.Error() = %q, want %q", got, want)
+		t.Errorf("breakError.Error() = %q, want %q", got, want)
 	}
 }
 
 func TestContinueErrorMessage(t *testing.T) {
-	err := &ContinueError{}
+	err := &continueError{}
 	want := ErrContinueOutsideLoop.Error()
 	if got := err.Error(); got != want {
-		t.Errorf("ContinueError.Error() = %q, want %q", got, want)
+		t.Errorf("continueError.Error() = %q, want %q", got, want)
 	}
 }
 
 func TestBinaryOpNodeSubtractTypeError(t *testing.T) {
-	n := NewBinaryOpNode("-",
-		NewLiteralNode("a", 1, 1),
-		NewLiteralNode(1.0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("-",
+		newLiteralNode("a", 1, 1),
+		newLiteralNode(1.0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrCannotSubtractTypes) {
 		t.Errorf("error = %v, want %v", err, ErrCannotSubtractTypes)
@@ -646,10 +646,10 @@ func TestBinaryOpNodeSubtractTypeError(t *testing.T) {
 }
 
 func TestBinaryOpNodeMultiplyTypeError(t *testing.T) {
-	n := NewBinaryOpNode("*",
-		NewLiteralNode("a", 1, 1),
-		NewLiteralNode(1.0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("*",
+		newLiteralNode("a", 1, 1),
+		newLiteralNode(1.0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrCannotMultiplyTypes) {
 		t.Errorf("error = %v, want %v", err, ErrCannotMultiplyTypes)
@@ -657,10 +657,10 @@ func TestBinaryOpNodeMultiplyTypeError(t *testing.T) {
 }
 
 func TestBinaryOpNodeDivideTypeError(t *testing.T) {
-	n := NewBinaryOpNode("/",
-		NewLiteralNode("a", 1, 1),
-		NewLiteralNode(1.0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("/",
+		newLiteralNode("a", 1, 1),
+		newLiteralNode(1.0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrCannotDivideTypes) {
 		t.Errorf("error = %v, want %v", err, ErrCannotDivideTypes)
@@ -668,10 +668,10 @@ func TestBinaryOpNodeDivideTypeError(t *testing.T) {
 }
 
 func TestBinaryOpNodeModuloTypeError(t *testing.T) {
-	n := NewBinaryOpNode("%",
-		NewLiteralNode("a", 1, 1),
-		NewLiteralNode(1, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("%",
+		newLiteralNode("a", 1, 1),
+		newLiteralNode(1, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrCannotModuloTypes) {
 		t.Errorf("error = %v, want %v", err, ErrCannotModuloTypes)
@@ -679,8 +679,8 @@ func TestBinaryOpNodeModuloTypeError(t *testing.T) {
 }
 
 func TestUnaryOpNodeNegateTypeError(t *testing.T) {
-	n := NewUnaryOpNode("-", NewLiteralNode("text", 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newUnaryOpNode("-", newLiteralNode("text", 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrCannotNegate) {
 		t.Errorf("error = %v, want %v", err, ErrCannotNegate)
@@ -688,8 +688,8 @@ func TestUnaryOpNodeNegateTypeError(t *testing.T) {
 }
 
 func TestUnaryOpNodePlusTypeError(t *testing.T) {
-	n := NewUnaryOpNode("+", NewLiteralNode("text", 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newUnaryOpNode("+", newLiteralNode("text", 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if !errors.Is(err, ErrCannotApplyUnaryPlus) {
 		t.Errorf("error = %v, want %v", err, ErrCannotApplyUnaryPlus)
@@ -697,16 +697,16 @@ func TestUnaryOpNodePlusTypeError(t *testing.T) {
 }
 
 func TestForNodeMapSingleVar(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"k"},
-		Collection: NewLiteralNode(map[string]any{"x": 1}, 1, 1),
-		Body: []Node{
-			NewOutputNode(NewVariableNode("k", 1, 1), 1, 1),
+		Collection: newLiteralNode(map[string]any{"x": 1}, 1, 1),
+		Body: []node{
+			newOutputNode(newVariableNode("k", 1, 1), 1, 1),
 		},
 		Line: 1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -716,17 +716,17 @@ func TestForNodeMapSingleVar(t *testing.T) {
 }
 
 func TestForNodeBreak(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
-		Body: []Node{
-			NewOutputNode(NewVariableNode("item", 1, 1), 1, 1),
-			&BreakNode{Line: 1, Col: 1},
+		Collection: newLiteralNode([]any{"a", "b", "c"}, 1, 1),
+		Body: []node{
+			newOutputNode(newVariableNode("item", 1, 1), 1, 1),
+			&breakNode{Line: 1, Col: 1},
 		},
 		Line: 1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -736,17 +736,17 @@ func TestForNodeBreak(t *testing.T) {
 }
 
 func TestForNodeContinue(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
-		Body: []Node{
-			&ContinueNode{Line: 1, Col: 1},
-			NewOutputNode(NewVariableNode("item", 1, 1), 1, 1),
+		Collection: newLiteralNode([]any{"a", "b", "c"}, 1, 1),
+		Body: []node{
+			&continueNode{Line: 1, Col: 1},
+			newOutputNode(newVariableNode("item", 1, 1), 1, 1),
 		},
 		Line: 1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -756,8 +756,8 @@ func TestForNodeContinue(t *testing.T) {
 }
 
 func TestPropertyAccessNodeString(t *testing.T) {
-	n := NewPropertyAccessNode(
-		NewVariableNode("user", 1, 1), "Name", 1, 1)
+	n := newPropertyAccessNode(
+		newVariableNode("user", 1, 1), "Name", 1, 1)
 	want := "PropAccess(Var(user).Name)"
 	if got := n.String(); got != want {
 		t.Errorf("String() = %q, want %q", got, want)
@@ -765,9 +765,9 @@ func TestPropertyAccessNodeString(t *testing.T) {
 }
 
 func TestSubscriptNodeString(t *testing.T) {
-	n := NewSubscriptNode(
-		NewVariableNode("items", 1, 1),
-		NewLiteralNode(0, 1, 1), 1, 1)
+	n := newSubscriptNode(
+		newVariableNode("items", 1, 1),
+		newLiteralNode(0, 1, 1), 1, 1)
 	want := "Subscript(Var(items)[Literal(0)])"
 	if got := n.String(); got != want {
 		t.Errorf("String() = %q, want %q", got, want)
@@ -775,9 +775,9 @@ func TestSubscriptNodeString(t *testing.T) {
 }
 
 func TestBinaryOpNodeString(t *testing.T) {
-	n := NewBinaryOpNode("+",
-		NewVariableNode("a", 1, 1),
-		NewVariableNode("b", 1, 1), 1, 1)
+	n := newBinaryOpNode("+",
+		newVariableNode("a", 1, 1),
+		newVariableNode("b", 1, 1), 1, 1)
 	want := "BinOp(Var(a) + Var(b))"
 	if got := n.String(); got != want {
 		t.Errorf("String() = %q, want %q", got, want)
@@ -785,8 +785,8 @@ func TestBinaryOpNodeString(t *testing.T) {
 }
 
 func TestUnaryOpNodeString(t *testing.T) {
-	n := NewUnaryOpNode("not",
-		NewVariableNode("x", 1, 1), 1, 1)
+	n := newUnaryOpNode("not",
+		newVariableNode("x", 1, 1), 1, 1)
 	want := "UnaryOp(not Var(x))"
 	if got := n.String(); got != want {
 		t.Errorf("String() = %q, want %q", got, want)
@@ -794,7 +794,7 @@ func TestUnaryOpNodeString(t *testing.T) {
 }
 
 func TestLiteralNodeString(t *testing.T) {
-	n := NewLiteralNode(42, 1, 1)
+	n := newLiteralNode(42, 1, 1)
 	want := "Literal(42)"
 	if got := n.String(); got != want {
 		t.Errorf("String() = %q, want %q", got, want)
@@ -802,10 +802,10 @@ func TestLiteralNodeString(t *testing.T) {
 }
 
 func TestIfNodeString(t *testing.T) {
-	n := &IfNode{
-		Branches: []IfBranch{
-			{Condition: NewLiteralNode(true, 1, 1)},
-			{Condition: NewLiteralNode(false, 1, 1)},
+	n := &ifNode{
+		Branches: []ifBranch{
+			{Condition: newLiteralNode(true, 1, 1)},
+			{Condition: newLiteralNode(false, 1, 1)},
 		},
 		Line: 1, Col: 1,
 	}
@@ -817,14 +817,14 @@ func TestIfNodeString(t *testing.T) {
 
 func TestForNodeLoopContextFields(t *testing.T) {
 	capture := &captureLoopStmt{}
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewLiteralNode([]any{"a", "b", "c"}, 1, 1),
-		Body:       []Node{capture},
+		Collection: newLiteralNode([]any{"a", "b", "c"}, 1, 1),
+		Body:       []node{capture},
 		Line:       1, Col: 1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
@@ -854,9 +854,9 @@ func TestForNodeLoopContextFields(t *testing.T) {
 
 func TestOutputNodeEvaluateError(t *testing.T) {
 	mockErr := errMockEval
-	n := NewOutputNode(&errExpr{err: mockErr}, 1, 1)
+	n := newOutputNode(&errExpr{err: mockErr}, 1, 1)
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	err := n.Execute(ctx, &buf)
 	if err == nil {
 		t.Fatal("expected error")
@@ -867,8 +867,8 @@ func TestOutputNodeEvaluateError(t *testing.T) {
 }
 
 func TestOutputNodeWriteError(t *testing.T) {
-	n := NewOutputNode(NewLiteralNode("hello", 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newOutputNode(newLiteralNode("hello", 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	writeErr := errMockWrite
 	err := n.Execute(ctx, &errWriter{err: writeErr})
 	if err == nil {
@@ -881,8 +881,8 @@ func TestOutputNodeWriteError(t *testing.T) {
 
 func TestPropertyAccessNodeEvaluateError(t *testing.T) {
 	mockErr := errMockObjectEval
-	n := NewPropertyAccessNode(&errExpr{err: mockErr}, "name", 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newPropertyAccessNode(&errExpr{err: mockErr}, "name", 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if err == nil {
 		t.Fatal("expected error")
@@ -891,8 +891,8 @@ func TestPropertyAccessNodeEvaluateError(t *testing.T) {
 
 func TestPropertyAccessNodeFieldNotFound(t *testing.T) {
 	// Access a non-existent field on a primitive value.
-	n := NewPropertyAccessNode(NewLiteralNode(42, 1, 1), "foo", 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newPropertyAccessNode(newLiteralNode(42, 1, 1), "foo", 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if err == nil {
 		t.Fatal("expected error for field access on non-struct")
@@ -901,8 +901,8 @@ func TestPropertyAccessNodeFieldNotFound(t *testing.T) {
 
 func TestSubscriptNodeObjectError(t *testing.T) {
 	mockErr := errMockObjectEval
-	n := NewSubscriptNode(&errExpr{err: mockErr}, NewLiteralNode(0, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newSubscriptNode(&errExpr{err: mockErr}, newLiteralNode(0, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if err == nil {
 		t.Fatal("expected error")
@@ -911,8 +911,8 @@ func TestSubscriptNodeObjectError(t *testing.T) {
 
 func TestSubscriptNodeIndexError(t *testing.T) {
 	mockErr := errMockIndexEval
-	n := NewSubscriptNode(NewLiteralNode([]int{1, 2, 3}, 1, 1), &errExpr{err: mockErr}, 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newSubscriptNode(newLiteralNode([]int{1, 2, 3}, 1, 1), &errExpr{err: mockErr}, 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if err == nil {
 		t.Fatal("expected error")
@@ -920,14 +920,15 @@ func TestSubscriptNodeIndexError(t *testing.T) {
 }
 
 func TestSubscriptNodeStringKeyFallback(t *testing.T) {
-	// When index is a non-integer (string), falls through Int() to Key().
+	// Map subscripts use map-key semantics, so string keys do not pass
+	// through integer-index conversion.
 	m := map[string]any{"name": "Alice"}
-	n := NewSubscriptNode(
-		NewLiteralNode(m, 1, 1),
-		NewLiteralNode("name", 1, 1),
+	n := newSubscriptNode(
+		newLiteralNode(m, 1, 1),
+		newLiteralNode("name", 1, 1),
 		1, 1,
 	)
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	val, err := n.Evaluate(ctx)
 	if err != nil {
 		t.Fatalf("Evaluate() error: %v", err)
@@ -939,8 +940,8 @@ func TestSubscriptNodeStringKeyFallback(t *testing.T) {
 
 func TestBinaryOpNodeLeftError(t *testing.T) {
 	mockErr := errMockLeftEval
-	n := NewBinaryOpNode("+", &errExpr{err: mockErr}, NewLiteralNode(1, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("+", &errExpr{err: mockErr}, newLiteralNode(1, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if err == nil {
 		t.Fatal("expected error")
@@ -949,8 +950,8 @@ func TestBinaryOpNodeLeftError(t *testing.T) {
 
 func TestBinaryOpNodeRightError(t *testing.T) {
 	mockErr := errMockRightEval
-	n := NewBinaryOpNode("+", NewLiteralNode(1, 1, 1), &errExpr{err: mockErr}, 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("+", newLiteralNode(1, 1, 1), &errExpr{err: mockErr}, 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if err == nil {
 		t.Fatal("expected error")
@@ -959,8 +960,8 @@ func TestBinaryOpNodeRightError(t *testing.T) {
 
 func TestBinaryOpNodeStringConcatFallback(t *testing.T) {
 	// "+" with string left, numeric right — falls back to string concatenation.
-	n := NewBinaryOpNode("+", NewLiteralNode("count: ", 1, 1), NewLiteralNode(42, 1, 1), 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newBinaryOpNode("+", newLiteralNode("count: ", 1, 1), newLiteralNode(42, 1, 1), 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	val, err := n.Evaluate(ctx)
 	if err != nil {
 		t.Fatalf("Evaluate() error: %v", err)
@@ -993,11 +994,11 @@ func TestBinaryOpNodeComparisonSuccess(t *testing.T) {
 	for _, tt := range tests {
 		name := fmt.Sprintf("%v_%s_%v", tt.left, tt.op, tt.right)
 		t.Run(name, func(t *testing.T) {
-			n := NewBinaryOpNode(tt.op,
-				NewLiteralNode(tt.left, 1, 1),
-				NewLiteralNode(tt.right, 1, 1),
+			n := newBinaryOpNode(tt.op,
+				newLiteralNode(tt.left, 1, 1),
+				newLiteralNode(tt.right, 1, 1),
 				1, 1)
-			ctx := NewRenderContext(map[string]any{})
+			ctx := newRenderContext(map[string]any{})
 			val, err := n.Evaluate(ctx)
 			if err != nil {
 				t.Fatalf("Evaluate() error: %v", err)
@@ -1011,8 +1012,8 @@ func TestBinaryOpNodeComparisonSuccess(t *testing.T) {
 
 func TestUnaryOpNodeOperandError(t *testing.T) {
 	mockErr := errMockOperand
-	n := NewUnaryOpNode("not", &errExpr{err: mockErr}, 1, 1)
-	ctx := NewRenderContext(map[string]any{})
+	n := newUnaryOpNode("not", &errExpr{err: mockErr}, 1, 1)
+	ctx := newRenderContext(map[string]any{})
 	_, err := n.Evaluate(ctx)
 	if err == nil {
 		t.Fatal("expected error")
@@ -1021,7 +1022,7 @@ func TestUnaryOpNodeOperandError(t *testing.T) {
 
 func TestForNodeCollectionError(t *testing.T) {
 	mockErr := errMockCollection
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
 		Collection: &errExpr{err: mockErr},
 		Body:       nil,
@@ -1029,7 +1030,7 @@ func TestForNodeCollectionError(t *testing.T) {
 		Col:        1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	err := n.Execute(ctx, &buf)
 	if err == nil {
 		t.Fatal("expected error")
@@ -1038,18 +1039,18 @@ func TestForNodeCollectionError(t *testing.T) {
 
 func TestForNodeBodyError(t *testing.T) {
 	// Body statement returns a non-break/continue error.
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewLiteralNode([]int{1, 2}, 1, 1),
-		Body: []Node{
-			// Use an OutputNode with an errExpr to trigger error in body.
-			NewOutputNode(&errExpr{err: errMockBody}, 1, 1),
+		Collection: newLiteralNode([]int{1, 2}, 1, 1),
+		Body: []node{
+			// Use an outputNode with an errExpr to trigger error in body.
+			newOutputNode(&errExpr{err: errMockBody}, 1, 1),
 		},
 		Line: 1,
 		Col:  1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	err := n.Execute(ctx, &buf)
 	if err == nil {
 		t.Fatal("expected error from body execution")
@@ -1077,15 +1078,15 @@ func TestForNodeNestedLoop(t *testing.T) {
 }
 
 func TestForNodeEmptyCollection(t *testing.T) {
-	n := &ForNode{
+	n := &forNode{
 		Vars:       []string{"item"},
-		Collection: NewLiteralNode([]int{}, 1, 1),
-		Body:       []Node{NewTextNode("x", 1, 1)},
+		Collection: newLiteralNode([]int{}, 1, 1),
+		Body:       []node{newTextNode("x", 1, 1)},
 		Line:       1,
 		Col:        1,
 	}
 	var buf bytes.Buffer
-	ctx := NewRenderContext(map[string]any{})
+	ctx := newRenderContext(map[string]any{})
 	if err := n.Execute(ctx, &buf); err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}

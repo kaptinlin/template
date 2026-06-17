@@ -189,13 +189,15 @@ returned by filters are wrapped into a `*RenderError` carrying template
 name, line, and column:
 
 ```go
-engine := template.New(template.WithLoader(loader))
-engine.RegisterFilter("required", func(in any, _ ...any) (any, error) {
-    if in == nil || in == "" {
-        return nil, fmt.Errorf("%w: value is required", template.ErrUndefinedVariable)
-    }
-    return in, nil
-})
+engine := template.New(
+    template.WithLoader(loader),
+    template.WithFilter("required", func(in any, _ ...any) (any, error) {
+        if in == nil || in == "" {
+            return nil, fmt.Errorf("%w: value is required", template.ErrUndefinedVariable)
+        }
+        return in, nil
+    }),
+)
 ```
 
 Template:

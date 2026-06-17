@@ -1,28 +1,28 @@
 package template
 
-// parseForTag parses a for-endfor loop block into a ForNode.
+// parseForTag parses a for-endfor loop block into a forNode.
 //
 // Syntax:
 //
 //	{% for item in items %}...{% endfor %}
 //	{% for key, value in dict %}...{% endfor %}
-func parseForTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
+func parseForTag(doc *parser, start *token, args *parser) (statement, error) {
 	first, err := args.ExpectIdentifier()
 	if err != nil {
-		return nil, args.Error(ErrExpectedVariable.Error())
+		return nil, args.Error(errExpectedVariable.Error())
 	}
-	vars := []string{first.Value}
+	vars := []string{first.value}
 
-	if args.Match(TokenSymbol, ",") != nil {
+	if args.Match(tokenSymbol, ",") != nil {
 		second, err := args.ExpectIdentifier()
 		if err != nil {
-			return nil, args.Error(ErrExpectedSecondVariable.Error())
+			return nil, args.Error(errExpectedSecondVariable.Error())
 		}
-		vars = append(vars, second.Value)
+		vars = append(vars, second.value)
 	}
 
-	if cur := args.Current(); cur == nil || cur.Type != TokenIdentifier || cur.Value != "in" {
-		return nil, args.Error(ErrExpectedInKeyword.Error())
+	if cur := args.Current(); cur == nil || cur.Type != tokenIdentifier || cur.value != "in" {
+		return nil, args.Error(errExpectedInKeyword.Error())
 	}
 	args.Advance()
 
@@ -31,7 +31,7 @@ func parseForTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 		return nil, err
 	}
 	if args.Remaining() > 0 {
-		return nil, args.Error(ErrUnexpectedTokensAfterCollection.Error())
+		return nil, args.Error(errUnexpectedTokensAfterCollection.Error())
 	}
 
 	body, tag, ap, err := doc.ParseUntilWithArgs("endfor")
@@ -42,10 +42,10 @@ func parseForTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 		return nil, doc.Errorf("expected endfor, got %s", tag)
 	}
 	if ap.Remaining() > 0 {
-		return nil, ap.Error(ErrEndforNoArgs.Error())
+		return nil, ap.Error(errEndforNoArgs.Error())
 	}
 
-	return &ForNode{
+	return &forNode{
 		Vars:       vars,
 		Collection: collection,
 		Body:       convertStatementsToNodes(body),

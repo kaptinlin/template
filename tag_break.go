@@ -1,8 +1,8 @@
 package template
 
-func parseBreakTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
+func parseBreakTag(_ *parser, start *token, args *parser) (statement, error) {
 	if args.Remaining() > 0 {
-		return nil, args.Error(ErrBreakNoArgs.Error())
+		return nil, args.Error(errBreakNoArgs.Error())
 	}
-	return &BreakNode{Line: start.Line, Col: start.Col}, nil
+	return &breakNode{Line: start.Line, Col: start.Col}, nil
 }

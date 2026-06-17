@@ -23,18 +23,18 @@ func runMain(out io.Writer, fatal func(...any)) {
 }
 
 func run(out io.Writer) error {
-	engine := template.New()
-
-	engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
-		s := fmt.Sprint(value)
-		n := 2
-		if len(args) > 0 {
-			if parsed, err := strconv.Atoi(fmt.Sprint(args[0])); err == nil {
-				n = parsed
+	engine := template.New(
+		template.WithFilter("repeat", func(value any, args ...any) (any, error) {
+			s := fmt.Sprint(value)
+			n := 2
+			if len(args) > 0 {
+				if parsed, err := strconv.Atoi(fmt.Sprint(args[0])); err == nil {
+					n = parsed
+				}
 			}
-		}
-		return strings.Repeat(s, n), nil
-	})
+			return strings.Repeat(s, n), nil
+		}),
+	)
 
 	tpl, err := engine.ParseString(`{{ word|repeat:3 }}`)
 	if err != nil {

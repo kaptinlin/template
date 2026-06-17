@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newLayoutTextExtendsEngine(loader Loader, opts ...EngineOption) *Engine {
@@ -168,6 +169,32 @@ func TestExtends_CircularChain_Errors(t *testing.T) {
 	_, err := engine.Load("a.txt")
 	if !errors.Is(err, ErrCircularExtends) {
 		t.Errorf("err = %v, want ErrCircularExtends", err)
+	}
+}
+
+func TestExtends_CircularChain_ChainLoaderUsesResolvedIdentity(t *testing.T) {
+	t.Parallel()
+
+	engine := newLayoutTextExtendsEngine(NewChainLoader(
+		NewMemoryLoader(map[string]string{
+			"a.txt": `{% extends "b.txt" %}`,
+			"b.txt": `{% extends "a.txt" %}`,
+		}),
+	))
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := engine.Load("a.txt")
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrCircularExtends) {
+			t.Fatalf("Load(a.txt) err = %v, want ErrCircularExtends", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Load(a.txt) did not return; likely waiting on an in-flight resolved template")
 	}
 }
 

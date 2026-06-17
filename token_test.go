@@ -8,29 +8,29 @@ import (
 func TestTokenTypeString(t *testing.T) {
 	tests := []struct {
 		name string
-		typ  TokenType
+		typ  tokenType
 		want string
 	}{
-		{name: "TokenError", typ: TokenError, want: "ERROR"},
-		{name: "TokenEOF", typ: TokenEOF, want: "EOF"},
-		{name: "TokenText", typ: TokenText, want: "TEXT"},
-		{name: "TokenVarBegin", typ: TokenVarBegin, want: "VAR_BEGIN"},
-		{name: "TokenVarEnd", typ: TokenVarEnd, want: "VAR_END"},
-		{name: "TokenTagBegin", typ: TokenTagBegin, want: "TAG_BEGIN"},
-		{name: "TokenTagEnd", typ: TokenTagEnd, want: "TAG_END"},
-		{name: "TokenIdentifier", typ: TokenIdentifier, want: "IDENTIFIER"},
-		{name: "TokenString", typ: TokenString, want: "STRING"},
-		{name: "TokenNumber", typ: TokenNumber, want: "NUMBER"},
-		{name: "TokenSymbol", typ: TokenSymbol, want: "SYMBOL"},
-		{name: "unknown type 999", typ: TokenType(999), want: "UNKNOWN(" + strconv.Itoa(999) + ")"},
-		{name: "unknown type -1", typ: TokenType(-1), want: "UNKNOWN(" + strconv.Itoa(-1) + ")"},
+		{name: "tokenError", typ: tokenError, want: "ERROR"},
+		{name: "tokenEOF", typ: tokenEOF, want: "EOF"},
+		{name: "tokenText", typ: tokenText, want: "TEXT"},
+		{name: "tokenVarBegin", typ: tokenVarBegin, want: "VAR_BEGIN"},
+		{name: "tokenVarEnd", typ: tokenVarEnd, want: "VAR_END"},
+		{name: "tokenTagBegin", typ: tokenTagBegin, want: "TAG_BEGIN"},
+		{name: "tokenTagEnd", typ: tokenTagEnd, want: "TAG_END"},
+		{name: "tokenIdentifier", typ: tokenIdentifier, want: "IDENTIFIER"},
+		{name: "tokenString", typ: tokenString, want: "STRING"},
+		{name: "tokenNumber", typ: tokenNumber, want: "NUMBER"},
+		{name: "tokenSymbol", typ: tokenSymbol, want: "SYMBOL"},
+		{name: "unknown type 999", typ: tokenType(999), want: "UNKNOWN(" + strconv.Itoa(999) + ")"},
+		{name: "unknown type -1", typ: tokenType(-1), want: "UNKNOWN(" + strconv.Itoa(-1) + ")"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.typ.String()
 			if got != tt.want {
-				t.Errorf("TokenType(%d).String() = %q, want %q", tt.typ, got, tt.want)
+				t.Errorf("tokenType(%d).String() = %q, want %q", tt.typ, got, tt.want)
 			}
 		})
 	}
@@ -39,57 +39,57 @@ func TestTokenTypeString(t *testing.T) {
 func TestTokenString(t *testing.T) {
 	tests := []struct {
 		name  string
-		token Token
+		token token
 		want  string
 	}{
 		{
 			name:  "EOF token",
-			token: Token{Type: TokenEOF, Line: 1, Col: 1},
+			token: token{Type: tokenEOF, Line: 1, Col: 1},
 			want:  "EOF at line 1, col 1",
 		},
 		{
 			name:  "EOF at different position",
-			token: Token{Type: TokenEOF, Line: 10, Col: 25},
+			token: token{Type: tokenEOF, Line: 10, Col: 25},
 			want:  "EOF at line 10, col 25",
 		},
 		{
 			name:  "short identifier",
-			token: Token{Type: TokenIdentifier, Value: "name", Line: 1, Col: 5},
+			token: token{Type: tokenIdentifier, value: "name", Line: 1, Col: 5},
 			want:  `IDENTIFIER("name") at line 1, col 5`,
 		},
 		{
 			name:  "empty value",
-			token: Token{Type: TokenText, Value: "", Line: 1, Col: 1},
+			token: token{Type: tokenText, value: "", Line: 1, Col: 1},
 			want:  `TEXT("") at line 1, col 1`,
 		},
 		{
 			name:  "exactly 20 characters not truncated",
-			token: Token{Type: TokenText, Value: "12345678901234567890", Line: 2, Col: 1},
+			token: token{Type: tokenText, value: "12345678901234567890", Line: 2, Col: 1},
 			want:  `TEXT("12345678901234567890") at line 2, col 1`,
 		},
 		{
 			name:  "21 characters truncated",
-			token: Token{Type: TokenText, Value: "123456789012345678901", Line: 3, Col: 1},
+			token: token{Type: tokenText, value: "123456789012345678901", Line: 3, Col: 1},
 			want:  `TEXT("12345678901234567890"...) at line 3, col 1`,
 		},
 		{
 			name:  "long text truncated",
-			token: Token{Type: TokenText, Value: "This is a very long text that exceeds twenty characters", Line: 1, Col: 1},
+			token: token{Type: tokenText, value: "This is a very long text that exceeds twenty characters", Line: 1, Col: 1},
 			want:  `TEXT("This is a very long "...) at line 1, col 1`,
 		},
 		{
 			name:  "string literal token",
-			token: Token{Type: TokenString, Value: "hello", Line: 1, Col: 10},
+			token: token{Type: tokenString, value: "hello", Line: 1, Col: 10},
 			want:  `STRING("hello") at line 1, col 10`,
 		},
 		{
 			name:  "number token",
-			token: Token{Type: TokenNumber, Value: "42", Line: 5, Col: 3},
+			token: token{Type: tokenNumber, value: "42", Line: 5, Col: 3},
 			want:  `NUMBER("42") at line 5, col 3`,
 		},
 		{
 			name:  "symbol token",
-			token: Token{Type: TokenSymbol, Value: "==", Line: 1, Col: 8},
+			token: token{Type: tokenSymbol, value: "==", Line: 1, Col: 8},
 			want:  `SYMBOL("==") at line 1, col 8`,
 		},
 	}
@@ -98,7 +98,7 @@ func TestTokenString(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.token.String()
 			if got != tt.want {
-				t.Errorf("Token.String() = %q, want %q", got, tt.want)
+				t.Errorf("token.String() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -138,9 +138,9 @@ func TestIsKeyword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsKeyword(tt.ident)
+			got := isKeyword(tt.ident)
 			if got != tt.want {
-				t.Errorf("IsKeyword(%q) = %v, want %v", tt.ident, got, tt.want)
+				t.Errorf("isKeyword(%q) = %v, want %v", tt.ident, got, tt.want)
 			}
 		})
 	}
@@ -191,9 +191,9 @@ func TestIsSymbol(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsSymbol(tt.input)
+			got := isSymbol(tt.input)
 			if got != tt.want {
-				t.Errorf("IsSymbol(%q) = %v, want %v", tt.input, got, tt.want)
+				t.Errorf("isSymbol(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}

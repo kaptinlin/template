@@ -61,17 +61,17 @@ func (e *RenderError) Unwrap() error { return e.Cause }
 // wrapRender attaches node position context to a render-time error.
 // It returns nil unchanged, leaves an existing *RenderError alone (so the
 // deepest position wins), and never wraps loop-control sentinels.
-func wrapRender(n Node, err error) error {
+func wrapRender(n node, err error) error {
 	if err == nil {
 		return nil
 	}
 	if _, ok := errors.AsType[*RenderError](err); ok {
 		return err
 	}
-	if _, ok := errors.AsType[*BreakError](err); ok {
+	if _, ok := errors.AsType[*breakError](err); ok {
 		return err
 	}
-	if _, ok := errors.AsType[*ContinueError](err); ok {
+	if _, ok := errors.AsType[*continueError](err); ok {
 		return err
 	}
 	line, col := n.Position()

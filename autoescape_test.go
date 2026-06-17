@@ -118,7 +118,7 @@ func TestFormatHTML_EscapeIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	// escape filter returns SafeString, so the output-level auto-escape
+	// escape filter returns SafeHTML, so the output-level auto-escape
 	// does not double-escape.
 	if got != "&lt;b&gt;" {
 		t.Errorf("got %q", got)

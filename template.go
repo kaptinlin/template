@@ -13,7 +13,7 @@ import (
 // reference and a resolved name for caching, dependency tracking, and
 // multi-file rendering.
 type Template struct {
-	root []Statement
+	root []statement
 
 	// name is the loader-resolved name (including any loader prefix);
 	// "" for templates parsed from an unnamed source string.
@@ -27,38 +27,31 @@ type Template struct {
 
 	// blocks is this template's own block definitions, keyed by block name.
 	// Populated only when the template contains {% block %} tags.
-	blocks map[string]*BlockNode
+	blocks map[string]*blockNode
 }
 
-// BlockNode is a forward declaration stub filled in when {% block %} is
+// blockNode is a forward declaration stub filled in when {% block %} is
 // implemented. Defined here so Template.blocks can reference it without
 // import cycles.
-type BlockNode struct {
+type blockNode struct {
 	Name string
-	Body []Node
+	Body []node
 	Line int
 	Col  int
 }
 
-// NewTemplate creates a new Template from parsed AST nodes.
-//
-// Most callers should use [Engine.ParseString] or [Engine.Load], which handle
-// lexing and parsing automatically.
-func NewTemplate(root []Statement) *Template {
+func newTemplate(root []statement) *Template {
 	return &Template{root: root}
 }
 
-// Execute writes the template output to w using the given render context.
+// execute writes the template output to w using the given render context.
 //
-// For most use cases, [Template.Render] is simpler. Use Execute when you need
-// control over the output destination or render context.
-//
-// When the template extends a parent (via {% extends %}), Execute walks up
+// When the template extends a parent (via {% extends %}), execute walks up
 // to the root of the extends chain and runs that template's body. The
-// current template is recorded as ctx.currentLeaf so BlockNode.Execute
+// current template is recorded as ctx.currentLeaf so blockNode.Execute
 // can resolve overrides across the chain. For templates without a parent
 // the loop is a no-op and the template runs its own body.
-func (t *Template) Execute(ctx *RenderContext, w io.Writer) error {
+func (t *Template) execute(ctx *renderContext, w io.Writer) error {
 	root := t
 	for root.parent != nil {
 		root = root.parent
@@ -83,7 +76,7 @@ func (t *Template) Execute(ctx *RenderContext, w io.Writer) error {
 
 // executeRoot runs this template's own top-level statements without
 // walking the extends chain.
-func (t *Template) executeRoot(ctx *RenderContext, w io.Writer) error {
+func (t *Template) executeRoot(ctx *renderContext, w io.Writer) error {
 	for _, stmt := range t.root {
 		if err := stmt.Execute(ctx, w); err != nil {
 			return wrapRender(stmt, err)
@@ -105,10 +98,7 @@ func (t *Template) Render(data Data) (string, error) {
 }
 
 // RenderTo writes the template output to w using plain render data.
-//
-// Use RenderTo for the common writer-based path. Reach for [Template.Execute]
-// only when you need direct control over [RenderContext].
 func (t *Template) RenderTo(w io.Writer, data Data) error {
-	ctx := NewRenderContext(data)
-	return t.Execute(ctx, w)
+	ctx := newRenderContext(data)
+	return t.execute(ctx, w)
 }

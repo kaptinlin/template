@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newLayoutTextEngine(loader Loader, opts ...EngineOption) *Engine {
@@ -30,6 +31,26 @@ func TestInclude_StaticPath_RendersTargetTemplate(t *testing.T) {
 	}
 	if got != "before middle after" {
 		t.Errorf("got %q, want %q", got, "before middle after")
+	}
+}
+
+func TestInclude_StaticPath_ChainLoaderRendersTargetTemplate(t *testing.T) {
+	t.Parallel()
+
+	engine := newLayoutTextEngine(NewChainLoader(
+		NewMemoryLoader(map[string]string{}),
+		NewMemoryLoader(map[string]string{
+			"a.txt": `before {% include "b.txt" %} after`,
+			"b.txt": `middle`,
+		}),
+	))
+
+	got, err := engine.Render("a.txt", nil)
+	if err != nil {
+		t.Fatalf("Render(a.txt) err = %v", err)
+	}
+	if got != "before middle after" {
+		t.Errorf("Render(a.txt) = %q, want %q", got, "before middle after")
 	}
 }
 
@@ -222,6 +243,25 @@ func TestInclude_IfExists_MissingIsNoop(t *testing.T) {
 	}
 }
 
+func TestInclude_IfExists_ChainLoaderMissingIsNoop(t *testing.T) {
+	t.Parallel()
+
+	engine := newLayoutTextEngine(NewChainLoader(
+		NewMemoryLoader(map[string]string{}),
+		NewMemoryLoader(map[string]string{
+			"a.txt": `before{% include "missing.txt" if_exists %}after`,
+		}),
+	))
+
+	got, err := engine.Render("a.txt", nil)
+	if err != nil {
+		t.Fatalf("Render(a.txt) err = %v", err)
+	}
+	if got != "beforeafter" {
+		t.Errorf("Render(a.txt) = %q, want %q", got, "beforeafter")
+	}
+}
+
 // Phase D cycle 8: "if_exists" on a present template renders normally.
 func TestInclude_IfExists_PresentWorks(t *testing.T) {
 	t.Parallel()
@@ -328,6 +368,37 @@ func TestInclude_MutualRecursion_ParseDowngradesToLazy(t *testing.T) {
 	_, err = engine.Render("a.txt", nil)
 	if !errors.Is(err, ErrIncludeDepthExceeded) {
 		t.Errorf("execute err = %v, want ErrIncludeDepthExceeded", err)
+	}
+}
+
+func TestInclude_MutualRecursion_ChainLoaderUsesResolvedIdentity(t *testing.T) {
+	t.Parallel()
+
+	engine := newLayoutTextEngine(NewChainLoader(
+		NewMemoryLoader(map[string]string{
+			"a.txt": `A{% include "b.txt" %}`,
+			"b.txt": `B{% include "a.txt" %}`,
+		}),
+	))
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := engine.Load("a.txt")
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Load(a.txt) err = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Load(a.txt) did not return; likely waiting on an in-flight resolved template")
+	}
+
+	_, err := engine.Render("a.txt", nil)
+	if !errors.Is(err, ErrIncludeDepthExceeded) {
+		t.Errorf("Render(a.txt) err = %v, want ErrIncludeDepthExceeded", err)
 	}
 }
 

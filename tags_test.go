@@ -13,16 +13,16 @@ import (
 )
 
 // saveTagRegistry returns a snapshot of the current global tag registry.
-func saveTagRegistry() map[string]TagParser {
+func saveTagRegistry() map[string]tagParser {
 	defaultTagRegistry.mu.RLock()
 	defer defaultTagRegistry.mu.RUnlock()
-	saved := make(map[string]TagParser, len(defaultTagRegistry.tags))
+	saved := make(map[string]tagParser, len(defaultTagRegistry.tags))
 	maps.Copy(saved, defaultTagRegistry.tags)
 	return saved
 }
 
 // restoreTagRegistry restores the global tag registry from a snapshot.
-func restoreTagRegistry(saved map[string]TagParser) {
+func restoreTagRegistry(saved map[string]tagParser) {
 	defaultTagRegistry.mu.Lock()
 	defer defaultTagRegistry.mu.Unlock()
 	defaultTagRegistry.tags = saved
@@ -36,13 +36,13 @@ func TestBuiltinRegistryRegisterTag(t *testing.T) {
 		name    string
 		setup   func()
 		tagName string
-		parser  TagParser
+		parser  tagParser
 		wantErr error
 	}{
 		{
 			name: "new tag",
 			setup: func() {
-				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]tagParser)
 			},
 			tagName: "customtag",
 			parser:  parseIfTag,
@@ -50,17 +50,17 @@ func TestBuiltinRegistryRegisterTag(t *testing.T) {
 		{
 			name: "duplicate tag",
 			setup: func() {
-				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]tagParser)
 				defaultTagRegistry.tags["duplicate"] = parseIfTag
 			},
 			tagName: "duplicate",
 			parser:  parseForTag,
-			wantErr: ErrTagAlreadyRegistered,
+			wantErr: errTagAlreadyRegistered,
 		},
 		{
 			name: "multiple different tags",
 			setup: func() {
-				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]tagParser)
 			},
 			tagName: "tag1",
 			parser:  parseIfTag,
@@ -100,7 +100,7 @@ func TestBuiltinRegistryTagLookup(t *testing.T) {
 		{
 			name: "existing tag",
 			setup: func() {
-				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]tagParser)
 				defaultTagRegistry.tags["if"] = parseIfTag
 			},
 			tagName: "if",
@@ -109,14 +109,14 @@ func TestBuiltinRegistryTagLookup(t *testing.T) {
 		{
 			name: "non-existing tag",
 			setup: func() {
-				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]tagParser)
 			},
 			tagName: "nonexistent",
 		},
 		{
 			name: "built-in for tag",
 			setup: func() {
-				defaultTagRegistry.tags = make(map[string]TagParser)
+				defaultTagRegistry.tags = make(map[string]tagParser)
 				defaultTagRegistry.tags["for"] = parseForTag
 			},
 			tagName: "for",
@@ -147,15 +147,15 @@ func TestParseIfTag(t *testing.T) {
 		tmpl        string
 		wantErr     bool
 		errContains string
-		validate    func(*testing.T, Statement)
+		validate    func(*testing.T, statement)
 	}{
 		{
 			name: "simple if",
 			tmpl: `{% if x %}yes{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 1 {
 					t.Errorf("len(Branches) = %d, want 1", got)
@@ -163,8 +163,8 @@ func TestParseIfTag(t *testing.T) {
 				if got := len(n.ElseBody); got != 0 {
 					t.Errorf("len(ElseBody) = %d, want 0", got)
 				}
-				if _, ok := n.Branches[0].Condition.(*VariableNode); !ok {
-					t.Errorf("condition type = %T, want *VariableNode", n.Branches[0].Condition)
+				if _, ok := n.Branches[0].Condition.(*variableNode); !ok {
+					t.Errorf("condition type = %T, want *variableNode", n.Branches[0].Condition)
 				}
 				if got := len(n.Branches[0].Body); got != 1 {
 					t.Errorf("len(Body) = %d, want 1", got)
@@ -174,10 +174,10 @@ func TestParseIfTag(t *testing.T) {
 		{
 			name: "if-else",
 			tmpl: `{% if x %}yes{% else %}no{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 1 {
 					t.Errorf("len(Branches) = %d, want 1", got)
@@ -190,10 +190,10 @@ func TestParseIfTag(t *testing.T) {
 		{
 			name: "if-elif-else",
 			tmpl: `{% if x > 5 %}big{% elif x > 0 %}small{% else %}zero{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 2 {
 					t.Errorf("len(Branches) = %d, want 2", got)
@@ -206,10 +206,10 @@ func TestParseIfTag(t *testing.T) {
 		{
 			name: "multiple elif",
 			tmpl: `{% if x == 1 %}one{% elif x == 2 %}two{% elif x == 3 %}three{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 3 {
 					t.Errorf("len(Branches) = %d, want 3", got)
@@ -222,42 +222,42 @@ func TestParseIfTag(t *testing.T) {
 		{
 			name: "if with comparison",
 			tmpl: `{% if count > 10 %}many{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 1 {
 					t.Errorf("len(Branches) = %d, want 1", got)
 				}
-				if _, ok := n.Branches[0].Condition.(*BinaryOpNode); !ok {
-					t.Errorf("condition type = %T, want *BinaryOpNode", n.Branches[0].Condition)
+				if _, ok := n.Branches[0].Condition.(*binaryOpNode); !ok {
+					t.Errorf("condition type = %T, want *binaryOpNode", n.Branches[0].Condition)
 				}
 			},
 		},
 		{
 			name: "if with logical and",
 			tmpl: `{% if x > 0 and x < 10 %}valid{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 1 {
 					t.Errorf("len(Branches) = %d, want 1", got)
 				}
-				if _, ok := n.Branches[0].Condition.(*BinaryOpNode); !ok {
-					t.Errorf("condition type = %T, want *BinaryOpNode", n.Branches[0].Condition)
+				if _, ok := n.Branches[0].Condition.(*binaryOpNode); !ok {
+					t.Errorf("condition type = %T, want *binaryOpNode", n.Branches[0].Condition)
 				}
 			},
 		},
 		{
 			name: "empty if body",
 			tmpl: `{% if x %}{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 1 {
 					t.Errorf("len(Branches) = %d, want 1", got)
@@ -271,19 +271,19 @@ func TestParseIfTag(t *testing.T) {
 			name:        "extra tokens after condition",
 			tmpl:        `{% if x y %}yes{% endif %}`,
 			wantErr:     true,
-			errContains: ErrUnexpectedTokensAfterCondition.Error(),
+			errContains: errUnexpectedTokensAfterCondition.Error(),
 		},
 		{
 			name:        "else with arguments",
 			tmpl:        `{% if x %}yes{% else x %}no{% endif %}`,
 			wantErr:     true,
-			errContains: ErrElseNoArgs.Error(),
+			errContains: errElseNoArgs.Error(),
 		},
 		{
 			name:        "endif with arguments",
 			tmpl:        `{% if x %}yes{% endif x %}`,
 			wantErr:     true,
-			errContains: ErrEndifNoArgs.Error(),
+			errContains: errEndifNoArgs.Error(),
 		},
 		{
 			name:    "missing endif",
@@ -329,15 +329,15 @@ func TestParseForTag(t *testing.T) {
 		tmpl        string
 		wantErr     bool
 		errContains string
-		validate    func(*testing.T, Statement)
+		validate    func(*testing.T, statement)
 	}{
 		{
 			name: "simple for loop",
 			tmpl: `{% for item in items %}{{ item }}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
 				if diff := cmp.Diff([]string{"item"}, n.Vars); diff != "" {
 					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
@@ -345,18 +345,18 @@ func TestParseForTag(t *testing.T) {
 				if got := len(n.Body); got != 1 {
 					t.Errorf("len(Body) = %d, want 1", got)
 				}
-				if _, ok := n.Collection.(*VariableNode); !ok {
-					t.Errorf("collection type = %T, want *VariableNode", n.Collection)
+				if _, ok := n.Collection.(*variableNode); !ok {
+					t.Errorf("collection type = %T, want *variableNode", n.Collection)
 				}
 			},
 		},
 		{
 			name: "for loop with key-value",
 			tmpl: `{% for key, value in dict %}{{ key }}: {{ value }}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
 				if diff := cmp.Diff([]string{"key", "value"}, n.Vars); diff != "" {
 					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
@@ -369,10 +369,10 @@ func TestParseForTag(t *testing.T) {
 		{
 			name: "for loop with index-item",
 			tmpl: `{% for i, item in list %}{{ i }}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
 				if diff := cmp.Diff([]string{"i", "item"}, n.Vars); diff != "" {
 					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
@@ -382,10 +382,10 @@ func TestParseForTag(t *testing.T) {
 		{
 			name: "empty for body",
 			tmpl: `{% for item in items %}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
 				if got := len(n.Body); got != 0 {
 					t.Errorf("len(Body) = %d, want 0", got)
@@ -395,13 +395,13 @@ func TestParseForTag(t *testing.T) {
 		{
 			name: "for with complex collection",
 			tmpl: `{% for item in user.items %}{{ item }}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
-				if _, ok := n.Collection.(*PropertyAccessNode); !ok {
-					t.Errorf("collection type = %T, want *PropertyAccessNode", n.Collection)
+				if _, ok := n.Collection.(*propertyAccessNode); !ok {
+					t.Errorf("collection type = %T, want *propertyAccessNode", n.Collection)
 				}
 			},
 		},
@@ -409,31 +409,31 @@ func TestParseForTag(t *testing.T) {
 			name:        "missing variable name",
 			tmpl:        `{% for in items %}{% endfor %}`,
 			wantErr:     true,
-			errContains: ErrExpectedInKeyword.Error(),
+			errContains: errExpectedInKeyword.Error(),
 		},
 		{
 			name:        "missing in keyword",
 			tmpl:        `{% for item items %}{% endfor %}`,
 			wantErr:     true,
-			errContains: ErrExpectedInKeyword.Error(),
+			errContains: errExpectedInKeyword.Error(),
 		},
 		{
 			name:        "missing second variable after comma",
 			tmpl:        `{% for item, in items %}{% endfor %}`,
 			wantErr:     true,
-			errContains: ErrExpectedInKeyword.Error(),
+			errContains: errExpectedInKeyword.Error(),
 		},
 		{
 			name:        "extra tokens after collection",
 			tmpl:        `{% for item in items extra %}{% endfor %}`,
 			wantErr:     true,
-			errContains: ErrUnexpectedTokensAfterCollection.Error(),
+			errContains: errUnexpectedTokensAfterCollection.Error(),
 		},
 		{
 			name:        "endfor with arguments",
 			tmpl:        `{% for item in items %}{% endfor x %}`,
 			wantErr:     true,
-			errContains: ErrEndforNoArgs.Error(),
+			errContains: errEndforNoArgs.Error(),
 		},
 		{
 			name:    "missing endfor",
@@ -473,24 +473,24 @@ func TestParseBreakTag(t *testing.T) {
 		tmpl        string
 		wantErr     bool
 		errContains string
-		validate    func(*testing.T, Statement)
+		validate    func(*testing.T, statement)
 	}{
 		{
 			name: "break without arguments",
 			tmpl: `{% for item in items %}{% break %}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
 				found := false
 				for _, node := range n.Body {
-					if _, ok := node.(*BreakNode); ok {
+					if _, ok := node.(*breakNode); ok {
 						found = true
 					}
 				}
 				if !found {
-					t.Error("BreakNode not found in for body")
+					t.Error("breakNode not found in for body")
 				}
 			},
 		},
@@ -498,7 +498,7 @@ func TestParseBreakTag(t *testing.T) {
 			name:        "break with arguments should fail",
 			tmpl:        `{% for item in items %}{% break now %}{% endfor %}`,
 			wantErr:     true,
-			errContains: ErrBreakNoArgs.Error(),
+			errContains: errBreakNoArgs.Error(),
 		},
 		{
 			name: "multiple breaks in loop",
@@ -537,24 +537,24 @@ func TestParseContinueTag(t *testing.T) {
 		tmpl        string
 		wantErr     bool
 		errContains string
-		validate    func(*testing.T, Statement)
+		validate    func(*testing.T, statement)
 	}{
 		{
 			name: "continue without arguments",
 			tmpl: `{% for item in items %}{% continue %}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
 				found := false
 				for _, node := range n.Body {
-					if _, ok := node.(*ContinueNode); ok {
+					if _, ok := node.(*continueNode); ok {
 						found = true
 					}
 				}
 				if !found {
-					t.Error("ContinueNode not found in for body")
+					t.Error("continueNode not found in for body")
 				}
 			},
 		},
@@ -562,7 +562,7 @@ func TestParseContinueTag(t *testing.T) {
 			name:        "continue with arguments should fail",
 			tmpl:        `{% for item in items %}{% continue now %}{% endfor %}`,
 			wantErr:     true,
-			errContains: ErrContinueNoArgs.Error(),
+			errContains: errContinueNoArgs.Error(),
 		},
 		{
 			name: "multiple continues in loop",
@@ -961,15 +961,15 @@ func TestTagNodeStructure(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmpl     string
-		validate func(*testing.T, Statement)
+		validate func(*testing.T, statement)
 	}{
 		{
 			name: "if node structure",
 			tmpl: `{% if x %}yes{% endif %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*IfNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*ifNode)
 				if !ok {
-					t.Fatalf("got %T, want *IfNode", s)
+					t.Fatalf("got %T, want *ifNode", s)
 				}
 				if got := len(n.Branches); got != 1 {
 					t.Errorf("len(Branches) = %d, want 1", got)
@@ -986,10 +986,10 @@ func TestTagNodeStructure(t *testing.T) {
 		{
 			name: "for node structure",
 			tmpl: `{% for item in items %}x{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
 				if diff := cmp.Diff([]string{"item"}, n.Vars); diff != "" {
 					t.Errorf("Vars mismatch (-want +got):\n%s", diff)
@@ -1009,19 +1009,19 @@ func TestTagNodeStructure(t *testing.T) {
 		{
 			name: "break node structure",
 			tmpl: `{% for item in items %}{% break %}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
-				var brk *BreakNode
+				var brk *breakNode
 				for _, node := range n.Body {
-					if b, ok := node.(*BreakNode); ok {
+					if b, ok := node.(*breakNode); ok {
 						brk = b
 					}
 				}
 				if brk == nil {
-					t.Fatal("BreakNode not found in for body")
+					t.Fatal("breakNode not found in for body")
 				}
 				line, col := brk.Position()
 				if line != 1 {
@@ -1038,19 +1038,19 @@ func TestTagNodeStructure(t *testing.T) {
 		{
 			name: "continue node structure",
 			tmpl: `{% for item in items %}{% continue %}{% endfor %}`,
-			validate: func(t *testing.T, s Statement) {
-				n, ok := s.(*ForNode)
+			validate: func(t *testing.T, s statement) {
+				n, ok := s.(*forNode)
 				if !ok {
-					t.Fatalf("got %T, want *ForNode", s)
+					t.Fatalf("got %T, want *forNode", s)
 				}
-				var cont *ContinueNode
+				var cont *continueNode
 				for _, node := range n.Body {
-					if c, ok := node.(*ContinueNode); ok {
+					if c, ok := node.(*continueNode); ok {
 						cont = c
 					}
 				}
 				if cont == nil {
-					t.Fatal("ContinueNode not found in for body")
+					t.Fatal("continueNode not found in for body")
 				}
 				line, col := cont.Position()
 				if line != 1 {
@@ -1463,10 +1463,10 @@ func TestIntegration_ArithmeticAndComparison(t *testing.T) {
 	}
 }
 
-// testSetNode is a Statement implementation used in TestRegisterTagExternalStatement.
+// testSetNode is a statement implementation used by internal tag parser tests.
 type testSetNode struct {
 	varName string
-	expr    Expression
+	expr    expression
 	line    int
 	col     int
 }
@@ -1474,7 +1474,7 @@ type testSetNode struct {
 func (n *testSetNode) Position() (int, int) { return n.line, n.col }
 func (n *testSetNode) String() string       { return fmt.Sprintf("Set(%s)", n.varName) }
 
-func (n *testSetNode) Execute(ctx *RenderContext, _ io.Writer) error {
+func (n *testSetNode) Execute(ctx *renderContext, _ io.Writer) error {
 	val, err := n.expr.Evaluate(ctx)
 	if err != nil {
 		return err
@@ -1483,14 +1483,13 @@ func (n *testSetNode) Execute(ctx *RenderContext, _ io.Writer) error {
 	return nil
 }
 
-func TestRegisterTagExternalStatement(t *testing.T) {
-	engine := New()
-	err := engine.RegisterTag("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+func TestInternalTagParserStatement(t *testing.T) {
+	engine := New(withTag("set", func(_ *parser, start *token, args *parser) (statement, error) {
 		v, err := args.ExpectIdentifier()
 		if err != nil {
 			return nil, args.Error("expected variable name after 'set'")
 		}
-		if args.Match(TokenSymbol, "=") == nil {
+		if args.Match(tokenSymbol, "=") == nil {
 			return nil, args.Error("expected '=' after variable name")
 		}
 		expr, err := args.ParseExpression()
@@ -1501,15 +1500,12 @@ func TestRegisterTagExternalStatement(t *testing.T) {
 			return nil, args.Error("unexpected tokens after expression")
 		}
 		return &testSetNode{
-			varName: v.Value,
+			varName: v.value,
 			expr:    expr,
 			line:    start.Line,
 			col:     start.Col,
 		}, nil
-	})
-	if err != nil {
-		t.Fatalf("engine.RegisterTag(\"set\") = %v, want nil", err)
-	}
+	}))
 
 	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}, World!`)
 	if err != nil {
@@ -1579,10 +1575,10 @@ func TestBuiltinRegistryUnregisterTag(t *testing.T) {
 func TestTagRegistryCloneCopiesDirectTagsAndParent(t *testing.T) {
 	t.Parallel()
 
-	parent := NewTagRegistry()
+	parent := newTagRegistry()
 	parent.Replace("parent", parseIfTag)
 
-	r := NewTagRegistry()
+	r := newTagRegistry()
 	r.parent = parent
 	r.Replace("local", parseForTag)
 
@@ -1598,13 +1594,13 @@ func TestTagRegistryCloneCopiesDirectTagsAndParent(t *testing.T) {
 }
 
 func TestTagRegistryReplaceOverwrites(t *testing.T) {
-	r := NewTagRegistry()
+	r := newTagRegistry()
 
-	first := func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
-		return NewTextNode("first", start.Line, start.Col), nil
+	first := func(_ *parser, start *token, _ *parser) (statement, error) {
+		return newTextNode("first", start.Line, start.Col), nil
 	}
-	second := func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
-		return NewTextNode("second", start.Line, start.Col), nil
+	second := func(_ *parser, start *token, _ *parser) (statement, error) {
+		return newTextNode("second", start.Line, start.Col), nil
 	}
 
 	if err := r.Register("demo", first); err != nil {
@@ -1622,7 +1618,7 @@ func TestTagRegistryReplaceOverwrites(t *testing.T) {
 }
 
 func TestTagRegistryRegisterNilPanics(t *testing.T) {
-	r := NewTagRegistry()
+	r := newTagRegistry()
 
 	defer func() {
 		if recover() == nil {
@@ -1634,10 +1630,10 @@ func TestTagRegistryRegisterNilPanics(t *testing.T) {
 }
 
 func TestTagRegistryMustRegisterDuplicatePanics(t *testing.T) {
-	r := NewTagRegistry()
+	r := newTagRegistry()
 
-	parser := func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
-		return NewTextNode("ok", start.Line, start.Col), nil
+	parser := func(_ *parser, start *token, _ *parser) (statement, error) {
+		return newTextNode("ok", start.Line, start.Col), nil
 	}
 
 	r.MustRegister("dup", parser)
@@ -1658,7 +1654,7 @@ func TestDuplicateRegistration(t *testing.T) {
 	tests := []struct {
 		name string
 		tag  string
-		fn   TagParser
+		fn   tagParser
 	}{
 		{"duplicate if", "if", parseIfTag},
 		{"duplicate for", "for", parseForTag},
@@ -1666,8 +1662,8 @@ func TestDuplicateRegistration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := defaultTagRegistry.Register(tt.tag, tt.fn); !errors.Is(err, ErrTagAlreadyRegistered) {
-				t.Errorf("Register(%q) err = %v, want %v", tt.tag, err, ErrTagAlreadyRegistered)
+			if err := defaultTagRegistry.Register(tt.tag, tt.fn); !errors.Is(err, errTagAlreadyRegistered) {
+				t.Errorf("Register(%q) err = %v, want %v", tt.tag, err, errTagAlreadyRegistered)
 			}
 		})
 	}
@@ -1676,8 +1672,8 @@ func TestDuplicateRegistration(t *testing.T) {
 func TestTagRegistrySaveRestore(t *testing.T) {
 	saved := saveTagRegistry()
 
-	err := defaultTagRegistry.Register("mytesttag", func(_ *Parser, start *Token, _ *Parser) (Statement, error) {
-		return NewTextNode("", start.Line, start.Col), nil
+	err := defaultTagRegistry.Register("mytesttag", func(_ *parser, start *token, _ *parser) (statement, error) {
+		return newTextNode("", start.Line, start.Col), nil
 	})
 	if err != nil {
 		t.Fatalf("Register(\"mytesttag\") = %v, want nil", err)

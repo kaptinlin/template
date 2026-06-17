@@ -213,7 +213,7 @@ block's content. It works through any number of layers:
 Rendering `leaf.txt` → `L[M(A)]`.
 
 **Safety**: in an engine using `FormatHTML`, the super output is already rendered HTML
-and wrapped in `SafeString`, so it is **not** re-escaped when
+and wrapped in `SafeHTML`, so it is **not** re-escaped when
 interpolated.
 
 ### Constraints
@@ -299,12 +299,12 @@ To output pre-rendered HTML without escaping, either:
 {{ page.content | safe }}
 ```
 
-**2. Wrap the value in `SafeString`** in Go code:
+**2. Wrap the value in `SafeHTML`** in Go code:
 
 ```go
 engine.RenderTo("page.html", w, template.Data{
     "title":   "Hello <world>",                        // escaped
-    "content": template.SafeString("<p>trusted</p>"), // raw
+    "content": template.SafeHTML("<p>trusted</p>"), // raw
 })
 ```
 
@@ -315,7 +315,7 @@ safe-aware. `safe` and the `FormatHTML` override of `escape` are the only
 safe-aware filters shipped. Any other filter downgrades the value:
 
 ```django
-{{ x | safe }}                  → kept as SafeString → NOT escaped
+{{ x | safe }}                  → kept as SafeHTML → NOT escaped
 {{ x | safe | upper }}          → upper returns string → RE-escaped
 {{ x | upper | safe }}          → safe at terminal → NOT escaped
 ```
@@ -325,7 +325,7 @@ prevents "I thought I was safe" XSS bugs.
 
 ### Text mode
 
-An engine using `FormatText` does **not** auto-escape. `SafeString` and the `safe`
+An engine using `FormatText` does **not** auto-escape. `SafeHTML` and the `safe`
 filter still exist but are no-ops: they just produce the underlying
 string. The `escape` filter in text mode falls through to the global
 version and still returns plain `string`.

@@ -8,34 +8,27 @@ import (
 
 // toString converts the value to its string representation.
 func toString(value any) string {
-	switch v := value.(type) {
-	case nil:
-		return ""
-	case string:
-		return v
-	case fmt.Stringer:
-		return v.String()
-	default:
-		return fmt.Sprintf("%v", v)
-	}
+	return newValue(value).String()
 }
 
 // toInteger attempts to convert an any to an integer.
 func toInteger(input any) (int, error) {
 	input = dereferenceIfNeeded(input)
-	switch v := input.(type) {
-	case int:
-		return v, nil
-	case float64:
-		return int(v), nil
-	case string:
+	if v, ok := input.(string); ok {
 		if i, err := strconv.Atoi(v); err == nil {
 			return i, nil
 		}
 		return 0, fmt.Errorf("%w: unable to parse '%v' as integer", ErrFilterInputNotNumeric, input)
-	default:
+	}
+
+	i, err := newValue(input).Int()
+	if err != nil {
 		return 0, fmt.Errorf("%w: received %T", ErrFilterInputNotNumeric, input)
 	}
+	if !int64FitsInInt(i) {
+		return 0, fmt.Errorf("%w: %v overflows int", ErrFilterInputNotNumeric, input)
+	}
+	return int(i), nil
 }
 
 // dereferenceIfNeeded checks if the input is a pointer and dereferences it if it's not nil.

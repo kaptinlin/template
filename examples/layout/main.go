@@ -61,16 +61,16 @@ func run(out io.Writer) error {
 	)
 
 	// Render a blog post. Values flow through auto-escape except where
-	// explicitly marked with SafeString or the | safe filter.
+	// explicitly marked with SafeHTML or the | safe filter.
 	return engine.RenderTo("layouts/blog.html", out, template.Data{
 		"page": map[string]any{
 			"title":  "Hello <world> & friends",
 			"author": "Alice",
 			"date":   "2026-04-08",
-			// SafeString marks this as pre-rendered HTML so it is not
+			// SafeHTML marks this as pre-rendered HTML so it is not
 			// escaped. In a real app, this would be the output of a
 			// Markdown-to-HTML pipeline.
-			"content": template.SafeString(`
+			"content": template.SafeHTML(`
     <p>This is the <strong>trusted</strong> body,
     already rendered to HTML by an upstream Markdown pipeline.</p>`),
 			"tags": []string{"golang", "templates", "<example>"},

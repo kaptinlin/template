@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-// IncludeNode represents an {% include %} statement.
+// includeNode represents an {% include %} statement.
 //
 // Shapes:
 //   - Static path (string literal), resolved at parse time: prepared != nil.
@@ -20,7 +20,7 @@ import (
 //     excluding parent variables AND defaults.
 //   - ifExists: {% include "x" if_exists %} — missing template is a no-op
 //     instead of an error.
-type IncludeNode struct {
+type includeNode struct {
 	Line int
 	Col  int
 
@@ -32,7 +32,7 @@ type IncludeNode struct {
 	staticName string
 
 	// pathExpr is set for dynamic includes (non-string-literal path).
-	pathExpr Expression
+	pathExpr expression
 
 	// withPairs holds "with k=expr" bindings; may be nil.
 	withPairs []withPair
@@ -47,14 +47,14 @@ type IncludeNode struct {
 // withPair is a single "key=expression" binding on an include tag.
 type withPair struct {
 	name string
-	expr Expression
+	expr expression
 }
 
 // Position returns the source position of the include tag.
-func (n *IncludeNode) Position() (int, int) { return n.Line, n.Col }
+func (n *includeNode) Position() (int, int) { return n.Line, n.Col }
 
 // String returns a debug representation.
-func (n *IncludeNode) String() string {
+func (n *includeNode) String() string {
 	if n.prepared != nil {
 		return fmt.Sprintf("Include(%q)", n.prepared.name)
 	}
@@ -67,9 +67,9 @@ func (n *IncludeNode) String() string {
 const maxIncludeDepth = 32
 
 // Execute renders the included template. The parser only produces
-// IncludeNode inside an Engine with layout enabled, so ctx.engine is guaranteed non-nil by the
+// includeNode inside an Engine with layout enabled, so ctx.engine is guaranteed non-nil by the
 // time we reach here.
-func (n *IncludeNode) Execute(ctx *RenderContext, w io.Writer) error {
+func (n *includeNode) Execute(ctx *renderContext, w io.Writer) error {
 	if ctx.includeDepth >= maxIncludeDepth {
 		return fmt.Errorf("%w at line %d (max %d)",
 			ErrIncludeDepthExceeded, n.Line, maxIncludeDepth)
@@ -86,14 +86,14 @@ func (n *IncludeNode) Execute(ctx *RenderContext, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return child.Execute(childCtx, w)
+	return child.execute(childCtx, w)
 }
 
 // resolveChild loads the sub-template this include points at. It
 // returns (nil, nil) when the target is missing and if_exists is set,
 // signalling "silently render nothing". Any other failure is returned
 // as an error.
-func (n *IncludeNode) resolveChild(ctx *RenderContext) (*Template, error) {
+func (n *includeNode) resolveChild(ctx *renderContext) (*Template, error) {
 	if n.prepared != nil {
 		return n.prepared, nil
 	}
@@ -117,10 +117,10 @@ func (n *IncludeNode) resolveChild(ctx *RenderContext) (*Template, error) {
 // buildChildContext constructs the render context the sub-template
 // will run in. It honors the "only" keyword (full isolation) and
 // evaluates "with" bindings in the PARENT context.
-func (n *IncludeNode) buildChildContext(ctx *RenderContext) (*RenderContext, error) {
-	childCtx := NewChildContext(ctx)
+func (n *includeNode) buildChildContext(ctx *renderContext) (*renderContext, error) {
+	childCtx := newChildContext(ctx)
 	if n.only {
-		childCtx = NewIsolatedChildContext(ctx)
+		childCtx = newIsolatedChildContext(ctx)
 	}
 	childCtx.includeDepth = ctx.includeDepth + 1
 
@@ -139,7 +139,7 @@ func (n *IncludeNode) buildChildContext(ctx *RenderContext) (*RenderContext, err
 
 // resolveName returns the target template name for a lazy include,
 // re-validating dynamic names against fs.ValidPath (defense in depth).
-func (n *IncludeNode) resolveName(ctx *RenderContext) (string, error) {
+func (n *includeNode) resolveName(ctx *renderContext) (string, error) {
 	if n.pathExpr == nil {
 		return n.staticName, nil
 	}
@@ -173,16 +173,16 @@ func (n *IncludeNode) resolveName(ctx *RenderContext) (string, error) {
 // missing templates). Expressions are resolved at runtime (lazy mode).
 // Parse-time circular references are automatically downgraded to lazy
 // to support recursive template patterns.
-func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
-	node := &IncludeNode{Line: start.Line, Col: start.Col}
+func parseIncludeTag(_ *parser, start *token, args *parser) (statement, error) {
+	node := &includeNode{Line: start.Line, Col: start.Col}
 
 	tok := args.Current()
 	if tok == nil {
 		return nil, newParseError("include: missing path", start.Line, start.Col)
 	}
 
-	if tok.Type == TokenString {
-		node.staticName = tok.Value
+	if tok.Type == tokenString {
+		node.staticName = tok.value
 		args.Advance()
 	} else {
 		// Dynamic path: parse as expression for runtime resolution.
@@ -206,13 +206,10 @@ func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
 		return node, nil
 	}
 
-	// Detect parse-time circular reference and downgrade to lazy.
-	// Without this, mutual includes (A→B→A) cause infinite parse recursion.
-	if engine.isParsing(node.staticName) {
+	prepared, recursive, err := engine.loadInclude(node.staticName)
+	if recursive {
 		return node, nil
 	}
-
-	prepared, err := engine.Load(node.staticName)
 	if err != nil {
 		if errors.Is(err, ErrTemplateNotFound) {
 			if node.ifExists {
@@ -229,19 +226,19 @@ func parseIncludeTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
 
 // parseIncludeOptions consumes the "with k=v …", "only", and "if_exists"
 // trailing options from an include tag's argument parser.
-func parseIncludeOptions(node *IncludeNode, args *Parser) error {
+func parseIncludeOptions(node *includeNode, args *parser) error {
 	for args.Remaining() > 0 {
 		tok := args.Current()
 		if tok == nil {
 			break
 		}
-		if tok.Type != TokenIdentifier {
+		if tok.Type != tokenIdentifier {
 			return newParseError(
-				fmt.Sprintf("include: unexpected token %q", tok.Value),
+				fmt.Sprintf("include: unexpected token %q", tok.value),
 				tok.Line, tok.Col)
 		}
 
-		switch tok.Value {
+		switch tok.value {
 		case "with":
 			args.Advance()
 			if err := parseIncludeWithPairs(node, args); err != nil {
@@ -255,7 +252,7 @@ func parseIncludeOptions(node *IncludeNode, args *Parser) error {
 			node.ifExists = true
 		default:
 			return newParseError(
-				fmt.Sprintf("include: unknown option %q", tok.Value),
+				fmt.Sprintf("include: unknown option %q", tok.value),
 				tok.Line, tok.Col)
 		}
 	}
@@ -264,25 +261,25 @@ func parseIncludeOptions(node *IncludeNode, args *Parser) error {
 
 // parseIncludeWithPairs consumes one or more "key=expression" bindings.
 // It stops at "only", "if_exists", or end-of-args.
-func parseIncludeWithPairs(node *IncludeNode, args *Parser) error {
+func parseIncludeWithPairs(node *includeNode, args *parser) error {
 	for args.Remaining() > 0 {
 		tok := args.Current()
 		if tok == nil {
 			break
 		}
 		// Stop when we hit a trailing option keyword.
-		if tok.Type == TokenIdentifier && (tok.Value == "only" || tok.Value == "if_exists") {
+		if tok.Type == tokenIdentifier && (tok.value == "only" || tok.value == "if_exists") {
 			return nil
 		}
-		if tok.Type != TokenIdentifier {
+		if tok.Type != tokenIdentifier {
 			return newParseError(
-				fmt.Sprintf("include: expected identifier, got %q", tok.Value),
+				fmt.Sprintf("include: expected identifier, got %q", tok.value),
 				tok.Line, tok.Col)
 		}
-		name := tok.Value
+		name := tok.value
 		args.Advance()
 
-		if eq := args.Current(); eq == nil || eq.Type != TokenSymbol || eq.Value != "=" {
+		if eq := args.Current(); eq == nil || eq.Type != tokenSymbol || eq.value != "=" {
 			return newParseError(
 				fmt.Sprintf("include: expected '=' after %q", name),
 				tok.Line, tok.Col)

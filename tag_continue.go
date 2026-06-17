@@ -1,8 +1,8 @@
 package template
 
-func parseContinueTag(_ *Parser, start *Token, args *Parser) (Statement, error) {
+func parseContinueTag(_ *parser, start *token, args *parser) (statement, error) {
 	if args.Remaining() > 0 {
-		return nil, args.Error(ErrContinueNoArgs.Error())
+		return nil, args.Error(errContinueNoArgs.Error())
 	}
-	return &ContinueNode{Line: start.Line, Col: start.Col}, nil
+	return &continueNode{Line: start.Line, Col: start.Col}, nil
 }

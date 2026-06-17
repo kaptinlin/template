@@ -33,7 +33,7 @@ For any new tag, filter, loader behavior, or execution change, answer these ques
 
 1. Does this fit naturally inside `Engine`, `Format`, or `Feature`?
 2. Should this be global, or should it live only inside an engine feature?
-3. Does this affect HTML escaping or `SafeString` semantics?
+3. Does this affect HTML escaping or `SafeHTML` semantics?
 4. Does this need a new sentinel error or better wrapped context?
 5. Should registration use `Register`, `Replace`, or `MustRegister`?
 6. What regression test proves the design boundary still holds?

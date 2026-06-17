@@ -47,13 +47,13 @@ func BenchmarkExecuteSimple(b *testing.B) {
 	}
 	ctx := NewData()
 	ctx.Set("name", "World")
-	execCtx := NewRenderContext(ctx)
+	execCtx := newRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
 	for b.Loop() {
 		buf.Reset()
-		if err := tmpl.Execute(execCtx, &buf); err != nil {
+		if err := tmpl.execute(execCtx, &buf); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -68,13 +68,13 @@ func BenchmarkExecuteWithFilters(b *testing.B) {
 	}
 	ctx := NewData()
 	ctx.Set("name", "world")
-	execCtx := NewRenderContext(ctx)
+	execCtx := newRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
 	for b.Loop() {
 		buf.Reset()
-		if err := tmpl.Execute(execCtx, &buf); err != nil {
+		if err := tmpl.execute(execCtx, &buf); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -89,13 +89,13 @@ func BenchmarkExecuteWithLoop(b *testing.B) {
 	}
 	ctx := NewData()
 	ctx.Set("items", []string{"a", "b", "c", "d", "e"})
-	execCtx := NewRenderContext(ctx)
+	execCtx := newRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
 	for b.Loop() {
 		buf.Reset()
-		if err := tmpl.Execute(execCtx, &buf); err != nil {
+		if err := tmpl.execute(execCtx, &buf); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -110,13 +110,13 @@ func BenchmarkExecuteWithConditional(b *testing.B) {
 	}
 	ctx := NewData()
 	ctx.Set("age", 25)
-	execCtx := NewRenderContext(ctx)
+	execCtx := newRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
 	for b.Loop() {
 		buf.Reset()
-		if err := tmpl.Execute(execCtx, &buf); err != nil {
+		if err := tmpl.execute(execCtx, &buf); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -218,9 +218,9 @@ func BenchmarkEngineRenderCachedParallel(b *testing.B) {
 	})
 }
 
-// BenchmarkValueConversion benchmarks Value type conversions.
+// BenchmarkValueConversion benchmarks value type conversions.
 func BenchmarkValueConversion(b *testing.B) {
-	v := NewValue(42)
+	v := newValue(42)
 
 	for b.Loop() {
 		_, _ = v.Int()
@@ -230,12 +230,12 @@ func BenchmarkValueConversion(b *testing.B) {
 	}
 }
 
-// BenchmarkValueIterate benchmarks Value iteration over slices.
+// BenchmarkValueIterate benchmarks value iteration over slices.
 func BenchmarkValueIterate(b *testing.B) {
-	v := NewValue([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+	v := newValue([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 
 	for b.Loop() {
-		_ = v.Iterate(func(i, count int, key, val *Value) bool {
+		_ = v.Iterate(func(i, count int, key, val *value) bool {
 			return true
 		})
 	}
@@ -364,13 +364,13 @@ func BenchmarkComplexTemplate(b *testing.B) {
 		{"name": "Banana", "price": 0.567},
 		{"name": "Orange", "price": 2.345},
 	})
-	execCtx := NewRenderContext(ctx)
+	execCtx := newRenderContext(ctx)
 	var buf bytes.Buffer
 
 	b.ResetTimer()
 	for b.Loop() {
 		buf.Reset()
-		if err := tmpl.Execute(execCtx, &buf); err != nil {
+		if err := tmpl.execute(execCtx, &buf); err != nil {
 			b.Fatal(err)
 		}
 	}

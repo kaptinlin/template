@@ -33,7 +33,7 @@ func wrapTemplateSourceError(name string, err error) error {
 }
 
 func compileNamedForEngine(name, source string, engine *Engine) (*Template, error) {
-	l := NewLexer(source)
+	l := newLexer(source)
 	// Only enable raw-block lexer mode when layout is enabled.
 	if engine != nil && engine.HasFeature(FeatureLayout) {
 		l.allowRaw = true
@@ -43,14 +43,14 @@ func compileNamedForEngine(name, source string, engine *Engine) (*Template, erro
 		return nil, wrapTemplateSourceError(name, fmt.Errorf("tokenizing template: %w", err))
 	}
 
-	p := NewParser(tokens)
+	p := newParser(tokens)
 	p.engine = engine
 	ast, err := p.Parse()
 	if err != nil {
 		return nil, wrapTemplateSourceError(name, fmt.Errorf("parsing template: %w", err))
 	}
 
-	tpl := NewTemplate(ast)
+	tpl := newTemplate(ast)
 	// Transfer parse-time state onto the Template.
 	tpl.parent = p.parent
 	tpl.blocks = p.blocks

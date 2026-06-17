@@ -2,6 +2,8 @@ package template
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"sync"
@@ -38,17 +40,19 @@ type Engine struct {
 
 	// tags is the per-engine tag registry, layered on top of the global
 	// registry. Optional language features register into this private layer.
-	tags *TagRegistry
+	tags *tagRegistry
 
 	// filters is the per-engine filter registry, layered on top of the
 	// global registry. Engine-specific overrides live here.
-	filters *Registry
+	filters *registry
 
-	mu      sync.RWMutex
-	cache   map[string]*Template
-	aliases map[string]string
-	loading map[string]*loadCall
-	parsing map[string]bool // resolved names currently mid-compile
+	mu        sync.RWMutex
+	cache     map[string]*Template
+	aliases   map[string]string
+	loading   map[string]*loadCall
+	parsing   map[string]bool // resolved names currently mid-compile
+	configErr error
+	compiled  bool
 }
 
 type loadCall struct {
@@ -64,8 +68,8 @@ type EngineOption func(*Engine)
 func New(opts ...EngineOption) *Engine {
 	e := &Engine{
 		format:  FormatText,
-		tags:    NewTagRegistry(),
-		filters: NewRegistry(),
+		tags:    newTagRegistry(),
+		filters: newRegistry(),
 		cache:   make(map[string]*Template),
 		aliases: make(map[string]string),
 		loading: make(map[string]*loadCall),
@@ -117,36 +121,25 @@ func WithDefaults(g Data) EngineOption {
 	}
 }
 
-// WithFilters replaces the engine-local filter registry layer.
-func WithFilters(r *Registry) EngineOption {
+// WithFilter registers an engine-local filter at construction time.
+func WithFilter(name string, fn FilterFunc) EngineOption {
 	return func(e *Engine) {
-		if r == nil {
-			r = NewRegistry()
+		if fn == nil {
+			e.addConfigError(fmt.Errorf("filter %q: %w", name, errNilFilterFunction))
+			return
 		}
-		e.filters = r
-		e.filters.parent = defaultRegistry
-	}
-}
-
-// WithTags replaces the engine-local tag registry layer.
-func WithTags(r *TagRegistry) EngineOption {
-	return func(e *Engine) {
-		if r == nil {
-			r = NewTagRegistry()
-		}
-		e.tags = r
-		e.tags.parent = defaultTagRegistry
+		e.filters.Replace(name, fn)
 	}
 }
 
 func (e *Engine) rebuildRegistries() {
 	if e.tags == nil {
-		e.tags = NewTagRegistry()
+		e.tags = newTagRegistry()
 	}
 	e.tags.parent = defaultTagRegistry
 
 	if e.filters == nil {
-		e.filters = NewRegistry()
+		e.filters = newRegistry()
 	}
 	e.filters.parent = defaultRegistry
 
@@ -163,46 +156,38 @@ func (e *Engine) rebuildRegistries() {
 	}
 }
 
-// Tags returns the engine-local tag registry layer.
-func (e *Engine) Tags() *TagRegistry {
-	return e.tags
+// HasFilter reports whether this engine can apply the named filter.
+func (e *Engine) HasFilter(name string) bool {
+	return e.filters.Has(name)
 }
 
-// Filters returns the engine-local filter registry layer.
-func (e *Engine) Filters() *Registry {
-	return e.filters
+// RegisterFilter adds or replaces an engine-local filter for future template
+// compilation. Prefer [WithFilter] for normal construction-time setup; templates
+// that are already compiled keep the filter functions they resolved at compile
+// time. Once this engine starts compiling templates, RegisterFilter returns
+// [ErrEngineCompiled]; use [Engine.Clone] to derive a new configurable engine.
+func (e *Engine) RegisterFilter(name string, fn FilterFunc) error {
+	return e.mutateRegistry("register filter", name, func() error {
+		if fn == nil {
+			return fmt.Errorf("register filter %q: %w", name, errNilFilterFunction)
+		}
+		e.filters.Register(name, fn)
+		return nil
+	})
 }
 
-// RegisterFilter adds or replaces an engine-local filter.
-func (e *Engine) RegisterFilter(name string, fn FilterFunc) {
-	e.filters.Register(name, fn)
-}
-
-// ReplaceFilter overwrites an engine-local filter.
-func (e *Engine) ReplaceFilter(name string, fn FilterFunc) {
-	e.filters.Replace(name, fn)
-}
-
-// MustRegisterFilter adds or replaces an engine-local filter and panics on nil.
-func (e *Engine) MustRegisterFilter(name string, fn FilterFunc) {
-	e.filters.MustRegister(name, fn)
-}
-
-// RegisterTag adds an engine-local tag parser. Duplicate names return
-// [ErrTagAlreadyRegistered].
-func (e *Engine) RegisterTag(name string, parser TagParser) error {
-	return e.tags.Register(name, parser)
-}
-
-// ReplaceTag overwrites an engine-local tag parser.
-func (e *Engine) ReplaceTag(name string, parser TagParser) {
-	e.tags.Replace(name, parser)
-}
-
-// MustRegisterTag registers an engine-local tag parser and panics on duplicate
-// registration or nil parser.
-func (e *Engine) MustRegisterTag(name string, parser TagParser) {
-	e.tags.MustRegister(name, parser)
+// ReplaceFilter overwrites an engine-local filter for future template
+// compilation. Prefer [WithFilter] for normal construction-time setup. Once
+// this engine starts compiling templates, ReplaceFilter returns
+// [ErrEngineCompiled]; use [Engine.Clone] to derive a new configurable engine.
+func (e *Engine) ReplaceFilter(name string, fn FilterFunc) error {
+	return e.mutateRegistry("replace filter", name, func() error {
+		if fn == nil {
+			return fmt.Errorf("replace filter %q: %w", name, errNilFilterFunction)
+		}
+		e.filters.Replace(name, fn)
+		return nil
+	})
 }
 
 // Clone copies engine configuration into a fresh Engine with an empty cache.
@@ -211,16 +196,17 @@ func (e *Engine) Clone(opts ...EngineOption) *Engine {
 	defer e.mu.RUnlock()
 
 	clone := &Engine{
-		loader:   e.loader,
-		format:   e.format,
-		features: e.features,
-		defaults: maps.Clone(e.defaults),
-		tags:     e.tags.Clone(),
-		filters:  e.filters.Clone(),
-		cache:    make(map[string]*Template),
-		aliases:  make(map[string]string),
-		loading:  make(map[string]*loadCall),
-		parsing:  make(map[string]bool),
+		loader:    e.loader,
+		format:    e.format,
+		features:  e.features,
+		defaults:  maps.Clone(e.defaults),
+		tags:      e.tags.Clone(),
+		filters:   e.filters.Clone(),
+		cache:     make(map[string]*Template),
+		aliases:   make(map[string]string),
+		loading:   make(map[string]*loadCall),
+		parsing:   make(map[string]bool),
+		configErr: e.configErr,
 	}
 	for _, opt := range opts {
 		opt(clone)
@@ -236,6 +222,10 @@ func (e *Engine) HasFeature(feature Feature) bool {
 
 // ParseString compiles a template source string in the context of this engine.
 func (e *Engine) ParseString(source string) (*Template, error) {
+	if err := e.configError(); err != nil {
+		return nil, err
+	}
+	e.markCompiled()
 	tpl, err := compileNamedForEngine("", source, e)
 	if err != nil {
 		return nil, err
@@ -246,6 +236,9 @@ func (e *Engine) ParseString(source string) (*Template, error) {
 
 // Load resolves, compiles, and caches the named template.
 func (e *Engine) Load(name string) (*Template, error) {
+	if err := e.configError(); err != nil {
+		return nil, err
+	}
 	if e.loader == nil {
 		return nil, wrapTemplateSourceError(name, ErrTemplateNotFound)
 	}
@@ -258,7 +251,10 @@ func (e *Engine) Load(name string) (*Template, error) {
 	if err != nil {
 		return nil, wrapTemplateSourceError(name, err)
 	}
+	return e.loadOpened(name, src, resolved)
+}
 
+func (e *Engine) loadOpened(name, src, resolved string) (*Template, error) {
 	tpl, call, wait := e.beginLoad(name, resolved)
 	if tpl != nil {
 		return tpl, nil
@@ -268,10 +264,11 @@ func (e *Engine) Load(name string) (*Template, error) {
 		return call.tpl, call.err
 	}
 
+	e.markCompiled()
 	e.markParsing(resolved, true)
 	defer e.markParsing(resolved, false)
 
-	tpl, err = compileNamedForEngine(resolved, src, e)
+	tpl, err := compileNamedForEngine(resolved, src, e)
 	if err != nil {
 		e.finishLoad(resolved, call, nil, err)
 		return nil, err
@@ -281,6 +278,42 @@ func (e *Engine) Load(name string) (*Template, error) {
 
 	e.finishLoad(resolved, call, tpl, nil)
 	return tpl, nil
+}
+
+func (e *Engine) loadInclude(name string) (*Template, bool, error) {
+	tpl, _, parsing, err := e.loadDependency(name)
+	return tpl, parsing, err
+}
+
+func (e *Engine) loadExtends(name string) (*Template, error) {
+	tpl, resolved, parsing, err := e.loadDependency(name)
+	if parsing {
+		return nil, fmt.Errorf("%w: %q", ErrCircularExtends, resolved)
+	}
+	return tpl, err
+}
+
+// loadDependency resolves a parse-time template dependency without waiting on
+// the current parse stack. Static include downgrades to lazy mode when parsing;
+// extends turns the same signal into a circular-chain error.
+func (e *Engine) loadDependency(name string) (*Template, string, bool, error) {
+	if e.loader == nil {
+		return nil, "", false, wrapTemplateSourceError(name, ErrTemplateNotFound)
+	}
+	if tpl, ok := e.cachedTemplate(name); ok {
+		return tpl, "", false, nil
+	}
+
+	src, resolved, err := e.loader.Open(name)
+	if err != nil {
+		return nil, "", false, wrapTemplateSourceError(name, err)
+	}
+	if e.isParsing(resolved) {
+		return nil, resolved, true, nil
+	}
+
+	tpl, err := e.loadOpened(name, src, resolved)
+	return tpl, resolved, false, err
 }
 
 func (e *Engine) cachedTemplate(name string) (*Template, bool) {
@@ -363,10 +396,10 @@ func (e *Engine) RenderTo(name string, w io.Writer, data Data) error {
 		return err
 	}
 	merged := e.mergeContext(data)
-	ec := NewRenderContext(merged)
+	ec := newRenderContext(merged)
 	ec.engine = e
 	ec.autoescape = e.format == FormatHTML
-	return tpl.Execute(ec, w)
+	return tpl.execute(ec, w)
 }
 
 // Reset clears the template cache.
@@ -376,6 +409,32 @@ func (e *Engine) Reset() {
 	e.cache = make(map[string]*Template)
 	e.aliases = make(map[string]string)
 	e.loading = make(map[string]*loadCall)
+}
+
+func (e *Engine) mutateRegistry(action, name string, mutate func() error) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.compiled {
+		return fmt.Errorf("%s %q: %w", action, name, ErrEngineCompiled)
+	}
+	return mutate()
+}
+
+func (e *Engine) addConfigError(err error) {
+	e.configErr = errors.Join(e.configErr, err)
+}
+
+func (e *Engine) configError() error {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.configErr
+}
+
+func (e *Engine) markCompiled() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.compiled = true
 }
 
 func (e *Engine) mergeContext(ctx Data) Data {

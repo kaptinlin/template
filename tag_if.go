@@ -1,27 +1,27 @@
 package template
 
-// parseIfTag parses an if-elif-else-endif block into an IfNode.
+// parseIfTag parses an if-elif-else-endif block into an ifNode.
 //
 // Syntax:
 //
 //	{% if condition %}...{% elif condition %}...{% else %}...{% endif %}
-func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
-	var branches []IfBranch
-	var elseBody []Node
+func parseIfTag(doc *parser, start *token, args *parser) (statement, error) {
+	var branches []ifBranch
+	var elseBody []node
 
 	cond, err := args.ParseExpression()
 	if err != nil {
 		return nil, err
 	}
 	if args.Remaining() > 0 {
-		return nil, args.Error(ErrUnexpectedTokensAfterCondition.Error())
+		return nil, args.Error(errUnexpectedTokensAfterCondition.Error())
 	}
 
 	body, tag, ap, err := doc.ParseUntilWithArgs("elif", "else", "endif")
 	if err != nil {
 		return nil, err
 	}
-	branches = append(branches, IfBranch{
+	branches = append(branches, ifBranch{
 		Condition: cond,
 		Body:      convertStatementsToNodes(body),
 	})
@@ -34,13 +34,13 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 				return nil, err
 			}
 			if ap.Remaining() > 0 {
-				return nil, ap.Error(ErrUnexpectedTokensAfterCondition.Error())
+				return nil, ap.Error(errUnexpectedTokensAfterCondition.Error())
 			}
 			next, nextTag, nextAP, err := doc.ParseUntilWithArgs("elif", "else", "endif")
 			if err != nil {
 				return nil, err
 			}
-			branches = append(branches, IfBranch{
+			branches = append(branches, ifBranch{
 				Condition: cond,
 				Body:      convertStatementsToNodes(next),
 			})
@@ -49,7 +49,7 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 
 		case "else":
 			if ap.Remaining() > 0 {
-				return nil, ap.Error(ErrElseNoArgs.Error())
+				return nil, ap.Error(errElseNoArgs.Error())
 			}
 			stmts, nextTag, nextAP, err := doc.ParseUntilWithArgs("endif")
 			if err != nil {
@@ -65,10 +65,10 @@ func parseIfTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
 		return nil, doc.Errorf("expected endif, got %s", tag)
 	}
 	if ap.Remaining() > 0 {
-		return nil, ap.Error(ErrEndifNoArgs.Error())
+		return nil, ap.Error(errEndifNoArgs.Error())
 	}
 
-	return &IfNode{
+	return &ifNode{
 		Branches: branches,
 		ElseBody: elseBody,
 		Line:     start.Line,

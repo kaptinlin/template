@@ -1,8 +1,8 @@
 package template
 
-// Parser consumes tokens and builds an AST.
-type Parser struct {
-	tokens []*Token
+// parser consumes tokens and builds an AST.
+type parser struct {
+	tokens []*token
 	pos    int
 
 	// anchorLine/anchorCol provide a fallback source position when this parser
@@ -20,7 +20,7 @@ type Parser struct {
 	parent *Template
 
 	// blocks collects {% block %} definitions as they are parsed.
-	blocks map[string]*BlockNode
+	blocks map[string]*blockNode
 
 	// hasNonTrivialContent tracks whether any non-whitespace text,
 	// variable output, or non-extends tag has been seen. Used to enforce
@@ -36,21 +36,21 @@ var misusedTagHints = map[string]string{
 	"endfor": "endfor must match a corresponding for tag",
 }
 
-// NewParser creates a new Parser.
-func NewParser(tokens []*Token) *Parser {
-	return &Parser{tokens: tokens}
+// newParser creates a new parser.
+func newParser(tokens []*token) *parser {
+	return &parser{tokens: tokens}
 }
 
 // Engine returns the template engine associated with this parser, if any.
 // Tag parsers can use this to load referenced templates at parse time.
-func (p *Parser) Engine() *Engine {
+func (p *parser) Engine() *Engine {
 	return p.engine
 }
 
 // Parse parses the entire template and returns AST statement nodes.
-func (p *Parser) Parse() ([]Statement, error) {
+func (p *parser) Parse() ([]statement, error) {
 	estimated := max(len(p.tokens)/4, 4)
-	nodes := make([]Statement, 0, estimated)
+	nodes := make([]statement, 0, estimated)
 
 	for p.notEOF() {
 		node, err := p.parseNext()
@@ -69,111 +69,111 @@ func (p *Parser) Parse() ([]Statement, error) {
 }
 
 // parseNext parses the next node based on the current token type.
-func (p *Parser) parseNext() (Statement, error) {
+func (p *parser) parseNext() (statement, error) {
 	tok := p.Current()
-	if tok == nil || tok.Type == TokenEOF {
+	if tok == nil || tok.Type == tokenEOF {
 		return nil, nil
 	}
 
 	switch tok.Type {
-	case TokenText:
+	case tokenText:
 		return p.parseText(), nil
-	case TokenVarBegin:
+	case tokenVarBegin:
 		return p.parseVariable()
-	case TokenTagBegin:
+	case tokenTagBegin:
 		return p.parseTag()
-	case TokenError, TokenEOF, TokenVarEnd, TokenTagEnd,
-		TokenIdentifier, TokenString, TokenNumber, TokenSymbol:
+	case tokenError, tokenEOF, tokenVarEnd, tokenTagEnd,
+		tokenIdentifier, tokenString, tokenNumber, tokenSymbol:
 		return nil, p.Errorf("unexpected token: %s", tok.Type)
 	}
 	return nil, p.Errorf("unexpected token: %s", tok.Type)
 }
 
 // parseText parses a plain text node.
-func (p *Parser) parseText() Statement {
+func (p *parser) parseText() statement {
 	tok := p.Current()
 	p.Advance()
-	for _, r := range tok.Value {
+	for _, r := range tok.value {
 		switch r {
 		case ' ', '\t', '\r', '\n':
 			continue
 		default:
 			p.hasNonTrivialContent = true
-			return NewTextNode(tok.Value, tok.Line, tok.Col)
+			return newTextNode(tok.value, tok.Line, tok.Col)
 		}
 	}
-	return NewTextNode(tok.Value, tok.Line, tok.Col)
+	return newTextNode(tok.value, tok.Line, tok.Col)
 }
 
 // parseVariable parses a variable output: {{ expression }}.
-func (p *Parser) parseVariable() (Statement, error) {
+func (p *parser) parseVariable() (statement, error) {
 	p.hasNonTrivialContent = true
 	start := p.Current()
 	p.Advance() // Skip {{.
 
-	tokens := p.collectUntil(TokenVarEnd)
+	tokens := p.collectUntil(tokenVarEnd)
 	if len(tokens) == 0 {
 		return nil, newParseError("empty variable expression", start.Line, start.Col)
 	}
 
 	cur := p.Current()
-	if cur == nil || cur.Type != TokenVarEnd {
+	if cur == nil || cur.Type != tokenVarEnd {
 		return nil, newParseError("expected }}", start.Line, start.Col)
 	}
 	p.Advance() // Consume }}.
 
-	ep := NewExprParser(tokens)
+	ep := p.newExprParser(tokens)
 	expr, err := ep.ParseExpression()
 	if err != nil {
 		return nil, err
 	}
 
-	return NewOutputNode(expr, start.Line, start.Col), nil
+	return newOutputNode(expr, start.Line, start.Col), nil
 }
 
 // parseTag parses a tag: {% tag_name arguments %}.
-func (p *Parser) parseTag() (Statement, error) {
+func (p *parser) parseTag() (statement, error) {
 	start := p.Current()
 	p.Advance() // Skip {%.
 
 	name := p.Current()
-	if name == nil || name.Type != TokenIdentifier {
+	if name == nil || name.Type != tokenIdentifier {
 		return nil, newParseError("expected tag name", start.Line, start.Col)
 	}
 	p.Advance() // Consume tag name.
 
 	// Any tag other than extends marks the template as "has content",
 	// so a later {% extends %} will be rejected as not-first.
-	if name.Value != "extends" {
+	if name.value != "extends" {
 		p.hasNonTrivialContent = true
 	}
 
 	// Look up the tag parser. Templates compiled through an Engine consult
 	// the engine-local registry first, layered over the built-in registry.
-	var tagParser TagParser
+	var tagParser tagParser
 	var found bool
 	if p.engine != nil && p.engine.tags != nil {
-		tagParser, found = p.engine.tags.Get(name.Value)
+		tagParser, found = p.engine.tags.Get(name.value)
 	} else {
-		tagParser, found = defaultTagRegistry.Get(name.Value)
+		tagParser, found = defaultTagRegistry.Get(name.value)
 	}
 	if !found {
-		msg := "unknown tag: " + name.Value
-		if hint, found := misusedTagHints[name.Value]; found {
+		msg := "unknown tag: " + name.value
+		if hint, found := misusedTagHints[name.value]; found {
 			msg += " (" + hint + ")"
 		}
 		return nil, newParseError(msg, name.Line, name.Col)
 	}
 
-	args := p.collectUntil(TokenTagEnd)
+	args := p.collectUntil(tokenTagEnd)
 
 	cur := p.Current()
-	if cur == nil || cur.Type != TokenTagEnd {
+	if cur == nil || cur.Type != tokenTagEnd {
 		return nil, newParseError("expected %}", start.Line, start.Col)
 	}
 	p.Advance() // Consume %}.
 
-	argParser := NewParser(args)
+	argParser := newParser(args)
 	argParser.engine = p.engine
 	argParser.anchorLine = name.Line
 	argParser.anchorCol = name.Col
@@ -183,8 +183,8 @@ func (p *Parser) parseTag() (Statement, error) {
 // ParseUntil parses nodes until one of the given end tags is encountered.
 //
 // Returns the parsed nodes, the matched end-tag name, and any error.
-func (p *Parser) ParseUntil(endTags ...string) ([]Statement, string, error) {
-	var nodes []Statement
+func (p *parser) ParseUntil(endTags ...string) ([]statement, string, error) {
+	var nodes []statement
 
 	for p.notEOF() {
 		if p.isEndTag(endTags...) {
@@ -205,8 +205,8 @@ func (p *Parser) ParseUntil(endTags ...string) ([]Statement, string, error) {
 
 // ParseUntilWithArgs parses nodes until one of the given end tags is
 // encountered, and also returns a parser for the end-tag arguments.
-func (p *Parser) ParseUntilWithArgs(endTags ...string) ([]Statement, string, *Parser, error) {
-	var nodes []Statement
+func (p *parser) ParseUntilWithArgs(endTags ...string) ([]statement, string, *parser, error) {
+	var nodes []statement
 
 	for p.notEOF() {
 		if p.isEndTag(endTags...) {
@@ -230,15 +230,23 @@ func (p *Parser) ParseUntilWithArgs(endTags ...string) ([]Statement, string, *Pa
 }
 
 // ParseExpression parses an expression from the current token position.
-func (p *Parser) ParseExpression() (Expression, error) {
+func (p *parser) ParseExpression() (expression, error) {
 	if p.Remaining() == 0 {
 		return nil, p.Error("unexpected end of expression")
 	}
-	ep := NewExprParser(p.tokens[p.pos:])
+	ep := p.newExprParser(p.tokens[p.pos:])
 	expr, err := ep.ParseExpression()
 	if err != nil {
 		return nil, err
 	}
 	p.pos += ep.pos
 	return expr, nil
+}
+
+func (p *parser) newExprParser(tokens []*token) *exprParser {
+	ep := newExprParser(tokens)
+	if p.engine != nil && p.engine.filters != nil {
+		ep.filters = p.engine.filters
+	}
+	return ep
 }

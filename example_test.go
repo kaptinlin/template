@@ -40,7 +40,7 @@ func ExampleEngine_Render() {
 		"page": map[string]any{
 			"title":   "Hello <world>",
 			"content": "<p>escaped</p>",
-			"safe":    template.SafeString("<p>trusted</p>"),
+			"safe":    template.SafeHTML("<p>trusted</p>"),
 		},
 	})
 	if err != nil {

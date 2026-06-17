@@ -4,7 +4,7 @@
 
 `github.com/kaptinlin/template` is a Go template engine with Django-style control flow, Liquid-compatible filter syntax, and optional loader-backed layout rendering.
 
-Normal usage is engine-first: configure an `Engine` with `WithLoader(...)`, `WithFormat(...)`, and `WithLayout()` when needed, then parse source strings or render named templates. Advanced types such as `Loader`, `Template`, `RenderContext`, `Registry`, `TagRegistry`, `Statement`, and `Expression` stay public as extension points, not as separate product models.
+Normal usage is engine-first: configure an `Engine` with `WithLoader(...)`, `WithFormat(...)`, and `WithLayout()` when needed, then parse source strings or render named templates. Public extension is deliberately narrow: loaders and engine-local filters are the supported extension points; lexer, parser, AST, render context, and tag registries are internal implementation details.
 
 For usage examples, installation, and user-facing guides, see [README.md](README.md).
 
@@ -28,12 +28,12 @@ CI runs `task test` and `task lint` on pushes and pull requests to `main`.
 template/
 ├── engine.go        # Engine configuration, loader-backed rendering, cache, registry layering
 ├── template.go      # Compiled Template execution API
-├── data.go          # Data, DataBuilder, and RenderContext
+├── data.go          # Data, DataBuilder, and internal render context
 ├── loader.go        # Loader interface and memory/dir/fs/chain implementations
 ├── filter_*.go      # Built-in filters
-├── filters.go       # Filter registry and engine-local overrides
+├── filters.go       # Internal filter registry and engine-local overrides
 ├── tag_*.go         # Built-in tags and layout features
-├── tags.go          # Tag registry and feature-gated tag registration
+├── tags.go          # Internal tag registry and feature-gated tag registration
 ├── docs/            # User-facing guides
 └── examples/        # Runnable examples
 ```
@@ -41,7 +41,7 @@ template/
 Core execution flow:
 
 ```text
-Source -> Lexer -> Parser -> AST -> Template.Execute
+Source -> Lexer -> Parser -> AST -> Template.Render
                                   ^
                      Engine.Load / Engine.Render compile and cache named templates here
 ```
@@ -50,7 +50,7 @@ Key invariants:
 
 - `Engine` is the primary entry point for normal use.
 - Loader-backed templates are cached by loader-resolved name.
-- Engine-local tag and filter registries layer on top of built-in registries.
+- Engine-local filter registries layer on top of built-ins; tag registration stays internal.
 - `FeatureLayout` gates `include`, `extends`, `block`, `raw`, and `safe` behavior.
 - `FormatHTML` enables auto-escape for `{{ expr }}` output; `FormatText` does not.
 
@@ -73,14 +73,14 @@ Reference directories in [`.references/`](.references/):
 ## Design Philosophy
 
 - **KISS** — Day-to-day usage should start with one mental model: configure an `Engine`, then parse or render.
-- **OCP** — Extend behavior through loaders, filters, tags, statements, and expressions instead of forking the core execution path.
+- **OCP** — Extend behavior through loaders and engine-local filters instead of forking the core execution path; tag/parser/runtime internals stay private until a smaller public contract is proven.
 - **Precision over cleverness** — HTML escaping, safe output, and loader boundaries must stay explicit and visible in the API.
 - **Errors as teachers** — Lexer, parser, loader, and runtime failures should point to the exact category of mistake with position info or sentinel errors.
 - **Never:** accidental complexity, feature gravity, abstraction theater, configurability cope.
 
 ## API Design Principles
 
-- **Progressive Disclosure** — Most callers should only need `Engine`, `Data`, `WithFormat(...)`, `WithLoader(...)`, and `WithLayout()`. Lower-level registries and execution types exist for advanced integrations.
+- **Progressive Disclosure** — Most callers should only need `Engine`, `Data`, `WithFormat(...)`, `WithLoader(...)`, and `WithLayout()`. Do not expose lexer, parser, AST, render context, or tag registry internals as convenience APIs.
 
 ## Coding Rules
 
@@ -133,7 +133,6 @@ go test -bench=. -benchmem ./...     # Benchmarks
 | Dependency | Purpose |
 |---|---|
 | `github.com/kaptinlin/filter` | Shared implementations for built-in string, array, math, date, and number filters |
-| `github.com/kaptinlin/jsonpointer` | Dot-path access for `Data` and render context lookups |
 | `github.com/go-json-experiment/json` | JSON-backed data shaping and JSON-oriented filter behavior |
 
 ## Error Handling

@@ -20,12 +20,9 @@ type aliasLoader struct {
 	opens map[string]int
 }
 
-func literalTag(text string) TagParser {
-	return func(_ *Parser, start *Token, args *Parser) (Statement, error) {
-		if args.Remaining() > 0 {
-			return nil, args.Error("literal tag does not take arguments")
-		}
-		return NewTextNode(text, start.Line, start.Col), nil
+func withTag(name string, parser tagParser) EngineOption {
+	return func(e *Engine) {
+		e.tags.Replace(name, parser)
 	}
 }
 
@@ -81,65 +78,41 @@ func TestWithFeatures_EnablesLayoutRegistryLayer(t *testing.T) {
 	if !engine.HasFeature(FeatureLayout) {
 		t.Fatal("HasFeature(FeatureLayout) = false, want true")
 	}
-	if !engine.Tags().Has("include") {
-		t.Fatal("Tags().Has(include) = false, want true")
-	}
-	if !engine.Filters().Has("safe") {
-		t.Fatal("Filters().Has(safe) = false, want true")
+	if !engine.HasFilter("safe") {
+		t.Fatal("HasFilter(safe) = false, want true")
 	}
 
 	core := New()
-	if core.Tags().Has("include") {
-		t.Fatal("core Tags().Has(include) = true, want false")
-	}
-	if core.Filters().Has("safe") {
-		t.Fatal("core Filters().Has(safe) = true, want false")
+	if core.HasFilter("safe") {
+		t.Fatal("core HasFilter(safe) = true, want false")
 	}
 }
 
-func TestEngineRegistryAccessors_ReturnLocalLayersWithParents(t *testing.T) {
+func TestEngineFilterQueries_IncludeLocalAndBuiltInLayers(t *testing.T) {
 	t.Parallel()
 
-	filters := NewRegistry()
-	filters.Register("bang", func(value any, _ ...any) (any, error) {
-		return toString(value) + "!", nil
-	})
-	tags := NewTagRegistry()
-	if err := tags.Register("marker", literalTag("ok")); err != nil {
-		t.Fatalf("Register(marker) err = %v", err)
+	engine := New(
+		WithFilter("bang", func(value any, _ ...any) (any, error) {
+			return toString(value) + "!", nil
+		}),
+	)
+	if !engine.HasFilter("bang") {
+		t.Fatal("HasFilter(bang) = false, want true")
 	}
-
-	engine := New(WithFilters(filters), WithTags(tags))
-	if engine.Filters() != filters {
-		t.Fatal("Filters() returned a different registry, want configured registry")
-	}
-	if engine.Tags() != tags {
-		t.Fatal("Tags() returned a different registry, want configured registry")
-	}
-	if !engine.Filters().Has("bang") {
-		t.Fatal("Filters().Has(bang) = false, want true")
-	}
-	if !engine.Filters().Has("escape") {
-		t.Fatal("Filters().Has(escape) = false, want built-in parent filter")
-	}
-	if !engine.Tags().Has("marker") {
-		t.Fatal("Tags().Has(marker) = false, want true")
-	}
-	if !engine.Tags().Has("if") {
-		t.Fatal("Tags().Has(if) = false, want built-in parent tag")
+	if !engine.HasFilter("escape") {
+		t.Fatal("HasFilter(escape) = false, want built-in parent filter")
 	}
 }
 
-func TestEngineRegisterTag_AddsEngineLocalTag(t *testing.T) {
+func TestEngineInternalTagOption_AddsEngineLocalTag(t *testing.T) {
 	t.Parallel()
 
-	engine := New()
-	err := engine.RegisterTag("set", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+	engine := New(withTag("set", func(_ *parser, start *token, args *parser) (statement, error) {
 		v, err := args.ExpectIdentifier()
 		if err != nil {
 			return nil, args.Error("expected variable name after 'set'")
 		}
-		if args.Match(TokenSymbol, "=") == nil {
+		if args.Match(tokenSymbol, "=") == nil {
 			return nil, args.Error("expected '=' after variable name")
 		}
 		expr, err := args.ParseExpression()
@@ -147,15 +120,12 @@ func TestEngineRegisterTag_AddsEngineLocalTag(t *testing.T) {
 			return nil, err
 		}
 		return &testSetNode{
-			varName: v.Value,
+			varName: v.value,
 			expr:    expr,
 			line:    start.Line,
 			col:     start.Col,
 		}, nil
-	})
-	if err != nil {
-		t.Fatalf("RegisterTag() err = %v", err)
-	}
+	}))
 
 	tpl, err := engine.ParseString(`{% set greeting = "Hello" %}{{ greeting }}`)
 	if err != nil {
@@ -174,9 +144,11 @@ func TestEngineRegisterFilter_AddsEngineLocalFilter(t *testing.T) {
 	t.Parallel()
 
 	engine := New()
-	engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
+	if err := engine.RegisterFilter("repeat", func(value any, args ...any) (any, error) {
 		return toString(value) + toString(value), nil
-	})
+	}); err != nil {
+		t.Fatalf("RegisterFilter(repeat) err = %v", err)
+	}
 
 	tpl, err := engine.ParseString(`{{ word | repeat }}`)
 	if err != nil {
@@ -191,16 +163,32 @@ func TestEngineRegisterFilter_AddsEngineLocalFilter(t *testing.T) {
 	}
 }
 
+func TestEngineRegisterFilter_NilFilterReturnsError(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	if err := engine.RegisterFilter("bad", nil); !errors.Is(err, errNilFilterFunction) {
+		t.Fatalf("RegisterFilter(bad, nil) err = %v, want errNilFilterFunction", err)
+	}
+	if err := engine.ReplaceFilter("bad", nil); !errors.Is(err, errNilFilterFunction) {
+		t.Fatalf("ReplaceFilter(bad, nil) err = %v, want errNilFilterFunction", err)
+	}
+}
+
 func TestEngineReplaceFilter_OverridesEngineLocalFilter(t *testing.T) {
 	t.Parallel()
 
 	engine := New()
-	engine.RegisterFilter("mark", func(value any, _ ...any) (any, error) {
+	if err := engine.RegisterFilter("mark", func(value any, _ ...any) (any, error) {
 		return "old:" + toString(value), nil
-	})
-	engine.ReplaceFilter("mark", func(value any, _ ...any) (any, error) {
+	}); err != nil {
+		t.Fatalf("RegisterFilter(mark) err = %v", err)
+	}
+	if err := engine.ReplaceFilter("mark", func(value any, _ ...any) (any, error) {
 		return "new:" + toString(value), nil
-	})
+	}); err != nil {
+		t.Fatalf("ReplaceFilter(mark) err = %v", err)
+	}
 
 	tpl, err := engine.ParseString(`{{ word | mark }}`)
 	if err != nil {
@@ -215,61 +203,176 @@ func TestEngineReplaceFilter_OverridesEngineLocalFilter(t *testing.T) {
 	}
 }
 
-func TestEngineMustRegisterFilter_PanicsOnNilFilter(t *testing.T) {
+func TestWithFilter_NilFilterReturnsCompileError(t *testing.T) {
 	t.Parallel()
 
-	engine := New()
-	defer func() {
-		if recover() == nil {
-			t.Fatal("MustRegisterFilter(nil) did not panic, want panic")
-		}
-	}()
-
-	engine.MustRegisterFilter("bad", nil)
+	engine := New(WithFilter("bad", nil))
+	_, err := engine.ParseString(`{{ word | bad }}`)
+	if !errors.Is(err, errNilFilterFunction) {
+		t.Fatalf("ParseString() err = %v, want errNilFilterFunction", err)
+	}
 }
 
-func TestEngineReplaceTag_OverridesEngineLocalTag(t *testing.T) {
+func TestWithFilter_AddsEngineLocalFilterAtConstruction(t *testing.T) {
 	t.Parallel()
 
-	engine := New()
-	if err := engine.RegisterTag("marker", literalTag("old")); err != nil {
-		t.Fatalf("RegisterTag(marker) err = %v", err)
-	}
-	engine.ReplaceTag("marker", literalTag("new"))
+	engine := New(WithFilter("mark", func(value any, _ ...any) (any, error) {
+		return "mark:" + toString(value), nil
+	}))
 
-	tpl, err := engine.ParseString(`{% marker %}`)
+	tpl, err := engine.ParseString(`{{ word | mark }}`)
 	if err != nil {
 		t.Fatalf("ParseString() err = %v", err)
 	}
-	got, err := tpl.Render(nil)
+	got, err := tpl.Render(Data{"word": "ok"})
 	if err != nil {
 		t.Fatalf("Render() err = %v", err)
 	}
-	if got != "new" {
-		t.Errorf("Render() = %q, want %q", got, "new")
+	if got != "mark:ok" {
+		t.Errorf("Render() = %q, want %q", got, "mark:ok")
 	}
 }
 
-func TestEngineMustRegisterTag_PanicsOnDuplicateTag(t *testing.T) {
+func TestEngineCachedTemplateKeepsCompiledFilterAfterRejectedMutation(t *testing.T) {
+	t.Parallel()
+
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"page.txt": `{{ word | mark }}`,
+		})),
+	)
+	if err := engine.RegisterFilter("mark", func(value any, _ ...any) (any, error) {
+		return "old:" + toString(value), nil
+	}); err != nil {
+		t.Fatalf("RegisterFilter(mark) err = %v", err)
+	}
+
+	got, err := engine.Render("page.txt", Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("Render(page.txt) err = %v", err)
+	}
+	if got != "old:ok" {
+		t.Fatalf("Render(page.txt) = %q, want %q", got, "old:ok")
+	}
+
+	err = engine.ReplaceFilter("mark", func(value any, _ ...any) (any, error) {
+		return "new:" + toString(value), nil
+	})
+	if !errors.Is(err, ErrEngineCompiled) {
+		t.Fatalf("ReplaceFilter(mark) err = %v, want ErrEngineCompiled", err)
+	}
+
+	got, err = engine.Render("page.txt", Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("Render(page.txt) after mutation err = %v", err)
+	}
+	if got != "old:ok" {
+		t.Errorf("Render(page.txt) after mutation = %q, want %q", got, "old:ok")
+	}
+}
+
+func TestEngineCompiledFiltersStayEngineLocal(t *testing.T) {
+	t.Parallel()
+
+	left := New(WithFilter("mark", func(value any, _ ...any) (any, error) {
+		return "left:" + toString(value), nil
+	}))
+	right := New(WithFilter("mark", func(value any, _ ...any) (any, error) {
+		return "right:" + toString(value), nil
+	}))
+
+	leftTpl, err := left.ParseString(`{{ word | mark }}`)
+	if err != nil {
+		t.Fatalf("left ParseString() err = %v", err)
+	}
+	rightTpl, err := right.ParseString(`{{ word | mark }}`)
+	if err != nil {
+		t.Fatalf("right ParseString() err = %v", err)
+	}
+
+	err = left.ReplaceFilter("mark", func(value any, _ ...any) (any, error) {
+		return "changed:" + toString(value), nil
+	})
+	if !errors.Is(err, ErrEngineCompiled) {
+		t.Fatalf("left ReplaceFilter(mark) err = %v, want ErrEngineCompiled", err)
+	}
+
+	got, err := leftTpl.Render(Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("left Render() err = %v", err)
+	}
+	if got != "left:ok" {
+		t.Errorf("left Render() = %q, want %q", got, "left:ok")
+	}
+
+	got, err = rightTpl.Render(Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("right Render() err = %v", err)
+	}
+	if got != "right:ok" {
+		t.Errorf("right Render() = %q, want %q", got, "right:ok")
+	}
+}
+
+func TestEngineRegisterFilterAfterCompileErrors(t *testing.T) {
 	t.Parallel()
 
 	engine := New()
-	engine.MustRegisterTag("marker", literalTag("ok"))
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("MustRegisterTag(duplicate) did not panic, want panic")
-		}
-		err, ok := r.(error)
-		if !ok {
-			t.Fatalf("panic value = %T, want error", r)
-		}
-		if !errors.Is(err, ErrTagAlreadyRegistered) {
-			t.Fatalf("panic error = %v, want ErrTagAlreadyRegistered", err)
-		}
-	}()
+	tpl, err := engine.ParseString(`{{ word }}`)
+	if err != nil {
+		t.Fatalf("ParseString() err = %v", err)
+	}
 
-	engine.MustRegisterTag("marker", literalTag("duplicate"))
+	err = engine.RegisterFilter("late", func(value any, _ ...any) (any, error) {
+		return value, nil
+	})
+	if !errors.Is(err, ErrEngineCompiled) {
+		t.Fatalf("RegisterFilter(late) err = %v, want ErrEngineCompiled", err)
+	}
+
+	got, err := tpl.Render(Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("Render() err = %v", err)
+	}
+	if got != "ok" {
+		t.Errorf("Render() = %q, want %q", got, "ok")
+	}
+}
+
+func TestEngineReplaceFilterAfterLoadErrors(t *testing.T) {
+	t.Parallel()
+
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"page.txt": `{{ word | mark }}`,
+		})),
+		WithFilter("mark", func(value any, _ ...any) (any, error) {
+			return "old:" + toString(value), nil
+		}),
+	)
+
+	got, err := engine.Render("page.txt", Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("Render(page.txt) err = %v", err)
+	}
+	if got != "old:ok" {
+		t.Fatalf("Render(page.txt) = %q, want %q", got, "old:ok")
+	}
+
+	err = engine.ReplaceFilter("mark", func(value any, _ ...any) (any, error) {
+		return "new:" + toString(value), nil
+	})
+	if !errors.Is(err, ErrEngineCompiled) {
+		t.Fatalf("ReplaceFilter(mark) err = %v, want ErrEngineCompiled", err)
+	}
+
+	got, err = engine.Render("page.txt", Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("Render(page.txt) after ReplaceFilter err = %v", err)
+	}
+	if got != "old:ok" {
+		t.Errorf("Render(page.txt) after ReplaceFilter = %q, want %q", got, "old:ok")
+	}
 }
 
 func TestTemplateRenderTo_UsesDataPath(t *testing.T) {
@@ -385,14 +488,11 @@ func TestEngineRenderString_HTMLFormatAutoescapes(t *testing.T) {
 func TestEngineTemplateRender_InheritsEngineSemantics(t *testing.T) {
 	t.Parallel()
 
-	registry := NewRegistry()
-	registry.Register("bang", func(value any, _ ...any) (any, error) {
-		return toString(value) + "!", nil
-	})
-
 	engine := New(
 		WithFormat(FormatHTML),
-		WithFilters(registry),
+		WithFilter("bang", func(value any, _ ...any) (any, error) {
+			return toString(value) + "!", nil
+		}),
 	)
 
 	tpl, err := engine.ParseString(`{{ title | bang }}`)
@@ -413,16 +513,20 @@ func TestEngineClone_IsolatesLocalRegistries(t *testing.T) {
 	t.Parallel()
 
 	engine := New()
-	engine.RegisterFilter("alpha", func(value any, _ ...any) (any, error) {
+	if err := engine.RegisterFilter("alpha", func(value any, _ ...any) (any, error) {
 		return "alpha:" + toString(value), nil
-	})
+	}); err != nil {
+		t.Fatalf("RegisterFilter(alpha) err = %v", err)
+	}
 
 	clone := engine.Clone()
-	clone.RegisterFilter("beta", func(value any, _ ...any) (any, error) {
+	if err := clone.RegisterFilter("beta", func(value any, _ ...any) (any, error) {
 		return "beta:" + toString(value), nil
-	})
+	}); err != nil {
+		t.Fatalf("clone RegisterFilter(beta) err = %v", err)
+	}
 
-	if engine.Filters().Has("beta") {
+	if engine.HasFilter("beta") {
 		t.Fatal("original engine unexpectedly sees clone-local filter")
 	}
 
@@ -436,6 +540,61 @@ func TestEngineClone_IsolatesLocalRegistries(t *testing.T) {
 	}
 	if got != "beta:ok" {
 		t.Errorf("renderSourceTemplate() = %q, want %q", got, "beta:ok")
+	}
+}
+
+func TestEngineCloneAllowsRegistrationAfterOriginalCompiled(t *testing.T) {
+	t.Parallel()
+
+	engine := New()
+	if _, err := engine.ParseString(`{{ word }}`); err != nil {
+		t.Fatalf("ParseString() err = %v", err)
+	}
+	if err := engine.RegisterFilter("late", func(value any, _ ...any) (any, error) {
+		return value, nil
+	}); !errors.Is(err, ErrEngineCompiled) {
+		t.Fatalf("RegisterFilter(late) err = %v, want ErrEngineCompiled", err)
+	}
+
+	clone := engine.Clone()
+	if err := clone.RegisterFilter("late", func(value any, _ ...any) (any, error) {
+		return "clone:" + toString(value), nil
+	}); err != nil {
+		t.Fatalf("clone RegisterFilter(late) err = %v", err)
+	}
+
+	tpl, err := clone.ParseString(`{{ word | late }}`)
+	if err != nil {
+		t.Fatalf("clone ParseString() err = %v", err)
+	}
+	got, err := tpl.Render(Data{"word": "ok"})
+	if err != nil {
+		t.Fatalf("clone Render() err = %v", err)
+	}
+	if got != "clone:ok" {
+		t.Errorf("clone Render() = %q, want %q", got, "clone:ok")
+	}
+}
+
+func TestEngineResetDoesNotReopenRegistries(t *testing.T) {
+	t.Parallel()
+
+	engine := New(
+		WithLoader(NewMemoryLoader(map[string]string{
+			"page.txt": `ok`,
+		})),
+	)
+	if _, err := engine.Load("page.txt"); err != nil {
+		t.Fatalf("Load(page.txt) err = %v", err)
+	}
+
+	engine.Reset()
+
+	err := engine.RegisterFilter("late", func(value any, _ ...any) (any, error) {
+		return value, nil
+	})
+	if !errors.Is(err, ErrEngineCompiled) {
+		t.Fatalf("RegisterFilter(late) after Reset err = %v, want ErrEngineCompiled", err)
 	}
 }
 
@@ -484,15 +643,12 @@ func TestEngineLoad_CachesByResolvedName(t *testing.T) {
 
 	var parseCount atomic.Int32
 
-	registry := NewTagRegistry()
-	if err := registry.Register("probe", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+	probeTag := func(_ *parser, start *token, args *parser) (statement, error) {
 		parseCount.Add(1)
 		if args.Remaining() > 0 {
 			return nil, args.Error("probe does not take arguments")
 		}
-		return NewTextNode("ok", start.Line, start.Col), nil
-	}); err != nil {
-		t.Fatalf("Register(probe) err = %v", err)
+		return newTextNode("ok", start.Line, start.Col), nil
 	}
 
 	loader := &aliasLoader{
@@ -505,7 +661,7 @@ func TestEngineLoad_CachesByResolvedName(t *testing.T) {
 
 	engine := New(
 		WithLoader(loader),
-		WithTags(registry),
+		withTag("probe", probeTag),
 	)
 
 	first, err := engine.Load("a.txt")
@@ -538,23 +694,20 @@ func TestEngineLoad_WaitsForInFlightCompile(t *testing.T) {
 	release := make(chan struct{})
 	var startOnce sync.Once
 
-	registry := NewTagRegistry()
-	if err := registry.Register("gate", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+	gateTag := func(_ *parser, start *token, args *parser) (statement, error) {
 		if args.Remaining() > 0 {
 			return nil, args.Error("gate does not take arguments")
 		}
 		startOnce.Do(func() { close(started) })
 		<-release
-		return NewTextNode("ok", start.Line, start.Col), nil
-	}); err != nil {
-		t.Fatalf("Register(gate) err = %v", err)
+		return newTextNode("ok", start.Line, start.Col), nil
 	}
 
 	engine := New(
 		WithLoader(NewMemoryLoader(map[string]string{
 			"a.txt": `{% gate %}`,
 		})),
-		WithTags(registry),
+		withTag("gate", gateTag),
 	)
 
 	firstDone := make(chan struct{})
@@ -595,22 +748,19 @@ func TestEngineLoad_ConcurrentRequestsCompileOnce(t *testing.T) {
 
 	var parseCount atomic.Int32
 
-	registry := NewTagRegistry()
-	if err := registry.Register("probe", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+	probeTag := func(_ *parser, start *token, args *parser) (statement, error) {
 		parseCount.Add(1)
 		if args.Remaining() > 0 {
 			return nil, args.Error("probe does not take arguments")
 		}
-		return NewTextNode("ok", start.Line, start.Col), nil
-	}); err != nil {
-		t.Fatalf("Register(probe) err = %v", err)
+		return newTextNode("ok", start.Line, start.Col), nil
 	}
 
 	engine := New(
 		WithLoader(NewMemoryLoader(map[string]string{
 			"a.txt": `{% probe %}`,
 		})),
-		WithTags(registry),
+		withTag("probe", probeTag),
 	)
 
 	const workers = 16
@@ -659,15 +809,12 @@ func TestEngineRenderString_ConcurrentAliasNamesShareResolvedTemplate(t *testing
 
 	var parseCount atomic.Int32
 
-	registry := NewTagRegistry()
-	if err := registry.Register("probe", func(_ *Parser, start *Token, args *Parser) (Statement, error) {
+	probeTag := func(_ *parser, start *token, args *parser) (statement, error) {
 		parseCount.Add(1)
 		if args.Remaining() > 0 {
 			return nil, args.Error("probe does not take arguments")
 		}
-		return NewTextNode("ok", start.Line, start.Col), nil
-	}); err != nil {
-		t.Fatalf("Register(probe) err = %v", err)
+		return newTextNode("ok", start.Line, start.Col), nil
 	}
 
 	loader := &aliasLoader{
@@ -680,7 +827,7 @@ func TestEngineRenderString_ConcurrentAliasNamesShareResolvedTemplate(t *testing
 
 	engine := New(
 		WithLoader(loader),
-		WithTags(registry),
+		withTag("probe", probeTag),
 	)
 
 	const workers = 16

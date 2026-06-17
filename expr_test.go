@@ -9,23 +9,23 @@ import (
 
 // mustTokenize creates tokens from a string expression for testing.
 // It wraps the expression in {{ }} and extracts the inner tokens.
-func mustTokenize(t *testing.T, expr string) []*Token {
+func mustTokenize(t *testing.T, expr string) []*token {
 	t.Helper()
 	source := "{{ " + expr + " }}"
-	lexer := NewLexer(source)
+	lexer := newLexer(source)
 	tokens, err := lexer.Tokenize()
 	if err != nil {
 		t.Fatalf("Failed to tokenize %q: %v", expr, err)
 	}
 
-	var exprTokens []*Token
+	var exprTokens []*token
 	inExpr := false
 	for _, tok := range tokens {
-		if tok.Type == TokenVarBegin {
+		if tok.Type == tokenVarBegin {
 			inExpr = true
 			continue
 		}
-		if tok.Type == TokenVarEnd {
+		if tok.Type == tokenVarEnd {
 			break
 		}
 		if inExpr {
@@ -38,44 +38,44 @@ func mustTokenize(t *testing.T, expr string) []*Token {
 func TestNewExprParser(t *testing.T) {
 	tests := []struct {
 		name   string
-		tokens []*Token
+		tokens []*token
 	}{
 		{
 			name:   "empty tokens",
-			tokens: []*Token{},
+			tokens: []*token{},
 		},
 		{
 			name: "single token",
-			tokens: []*Token{
-				{Type: TokenNumber, Value: "42", Line: 1, Col: 1},
+			tokens: []*token{
+				{Type: tokenNumber, value: "42", Line: 1, Col: 1},
 			},
 		},
 		{
 			name: "multiple tokens",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "x", Line: 1, Col: 1},
-				{Type: TokenSymbol, Value: "+", Line: 1, Col: 3},
-				{Type: TokenNumber, Value: "10", Line: 1, Col: 5},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "x", Line: 1, Col: 1},
+				{Type: tokenSymbol, value: "+", Line: 1, Col: 3},
+				{Type: tokenNumber, value: "10", Line: 1, Col: 5},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewExprParser(tt.tokens)
+			parser := newExprParser(tt.tokens)
 			if parser == nil {
-				t.Fatalf("NewExprParser(%v) = nil, want non-nil", tt.tokens)
+				t.Fatalf("newExprParser(%v) = nil, want non-nil", tt.tokens)
 			}
 			if got, want := len(parser.tokens), len(tt.tokens); got != want {
-				t.Errorf("NewExprParser(%v) token count = %v, want %v", tt.tokens, got, want)
+				t.Errorf("newExprParser(%v) token count = %v, want %v", tt.tokens, got, want)
 			}
 			for i, tok := range parser.tokens {
 				if tok != tt.tokens[i] {
-					t.Errorf("NewExprParser(%v).tokens[%d] = %v, want %v", tt.tokens, i, tok, tt.tokens[i])
+					t.Errorf("newExprParser(%v).tokens[%d] = %v, want %v", tt.tokens, i, tok, tt.tokens[i])
 				}
 			}
 			if got, want := parser.pos, 0; got != want {
-				t.Errorf("NewExprParser(%v).pos = %v, want %v", tt.tokens, got, want)
+				t.Errorf("newExprParser(%v).pos = %v, want %v", tt.tokens, got, want)
 			}
 		})
 	}
@@ -91,37 +91,37 @@ func TestParseLiterals(t *testing.T) {
 		{
 			name:          "string literal",
 			expr:          `"hello"`,
-			expectedType:  "LiteralNode",
+			expectedType:  "literalNode",
 			expectedValue: "hello",
 		},
 		{
 			name:          "integer literal",
 			expr:          "42",
-			expectedType:  "LiteralNode",
+			expectedType:  "literalNode",
 			expectedValue: 42.0,
 		},
 		{
 			name:          "float literal",
 			expr:          "3.14",
-			expectedType:  "LiteralNode",
+			expectedType:  "literalNode",
 			expectedValue: 3.14,
 		},
 		{
 			name:          "boolean true",
 			expr:          "true",
-			expectedType:  "LiteralNode",
+			expectedType:  "literalNode",
 			expectedValue: true,
 		},
 		{
 			name:          "boolean false",
 			expr:          "false",
-			expectedType:  "LiteralNode",
+			expectedType:  "literalNode",
 			expectedValue: false,
 		},
 		{
 			name:          "negative number",
 			expr:          "-10",
-			expectedType:  "UnaryOpNode",
+			expectedType:  "unaryOpNode",
 			expectedValue: nil, // Check operator instead
 		},
 	}
@@ -129,7 +129,7 @@ func TestParseLiterals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
@@ -139,19 +139,19 @@ func TestParseLiterals(t *testing.T) {
 			}
 
 			switch tt.expectedType {
-			case "LiteralNode":
-				litNode, ok := result.(*LiteralNode)
+			case "literalNode":
+				litNode, ok := result.(*literalNode)
 				if !ok {
-					t.Errorf("ParseExpression(%q) type = %T, want *LiteralNode", tt.expr, result)
+					t.Errorf("ParseExpression(%q) type = %T, want *literalNode", tt.expr, result)
 					return
 				}
 				if got, want := litNode.Value, tt.expectedValue; got != want {
-					t.Errorf("ParseExpression(%q).Value = %v, want %v", tt.expr, got, want)
+					t.Errorf("ParseExpression(%q).value = %v, want %v", tt.expr, got, want)
 				}
-			case "UnaryOpNode":
-				unaryNode, ok := result.(*UnaryOpNode)
+			case "unaryOpNode":
+				unaryNode, ok := result.(*unaryOpNode)
 				if !ok {
-					t.Errorf("ParseExpression(%q) type = %T, want *UnaryOpNode", tt.expr, result)
+					t.Errorf("ParseExpression(%q) type = %T, want *unaryOpNode", tt.expr, result)
 					return
 				}
 				if got, want := unaryNode.Operator, "-"; got != want {
@@ -188,15 +188,15 @@ func TestParseVariables(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
 			}
 
-			varNode, ok := result.(*VariableNode)
+			varNode, ok := result.(*variableNode)
 			if !ok {
-				t.Errorf("ParseExpression(%q) type = %T, want *VariableNode", tt.expr, result)
+				t.Errorf("ParseExpression(%q) type = %T, want *variableNode", tt.expr, result)
 				return
 			}
 			if got, want := varNode.Name, tt.expectedName; got != want {
@@ -237,15 +237,15 @@ func TestParseUnaryOperators(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
 			}
 
-			unaryNode, ok := result.(*UnaryOpNode)
+			unaryNode, ok := result.(*unaryOpNode)
 			if !ok {
-				t.Errorf("ParseExpression(%q) type = %T, want *UnaryOpNode", tt.expr, result)
+				t.Errorf("ParseExpression(%q) type = %T, want *unaryOpNode", tt.expr, result)
 				return
 			}
 			if got, want := unaryNode.Operator, tt.expectedOperator; got != want {
@@ -334,15 +334,15 @@ func TestParseBinaryOperators(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
 			}
 
-			binNode, ok := result.(*BinaryOpNode)
+			binNode, ok := result.(*binaryOpNode)
 			if !ok {
-				t.Errorf("ParseExpression(%q) type = %T, want *BinaryOpNode", tt.expr, result)
+				t.Errorf("ParseExpression(%q) type = %T, want *binaryOpNode", tt.expr, result)
 				return
 			}
 			if got, want := binNode.Operator, tt.expectedOperator; got != want {
@@ -356,22 +356,22 @@ func TestParseOperatorPrecedence(t *testing.T) {
 	tests := []struct {
 		name           string
 		expr           string
-		validateResult func(*testing.T, Expression)
+		validateResult func(*testing.T, expression)
 	}{
 		{
 			name: "multiplication before addition",
 			expr: "a + b * c",
-			validateResult: func(t *testing.T, result Expression) {
+			validateResult: func(t *testing.T, result expression) {
 				// Should parse as: a + (b * c)
-				binNode := result.(*BinaryOpNode)
+				binNode := result.(*binaryOpNode)
 				if got, want := binNode.Operator, "+"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
 
 				// Right side should be multiplication
-				rightBin, ok := binNode.Right.(*BinaryOpNode)
+				rightBin, ok := binNode.Right.(*binaryOpNode)
 				if !ok {
-					t.Errorf("Right type = %T, want *BinaryOpNode", binNode.Right)
+					t.Errorf("Right type = %T, want *binaryOpNode", binNode.Right)
 					return
 				}
 				if got, want := rightBin.Operator, "*"; got != want {
@@ -382,17 +382,17 @@ func TestParseOperatorPrecedence(t *testing.T) {
 		{
 			name: "addition before comparison",
 			expr: "a + b > c",
-			validateResult: func(t *testing.T, result Expression) {
+			validateResult: func(t *testing.T, result expression) {
 				// Should parse as: (a + b) > c
-				binNode := result.(*BinaryOpNode)
+				binNode := result.(*binaryOpNode)
 				if got, want := binNode.Operator, ">"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
 
 				// Left side should be addition
-				leftBin, ok := binNode.Left.(*BinaryOpNode)
+				leftBin, ok := binNode.Left.(*binaryOpNode)
 				if !ok {
-					t.Errorf("Left type = %T, want *BinaryOpNode", binNode.Left)
+					t.Errorf("Left type = %T, want *binaryOpNode", binNode.Left)
 					return
 				}
 				if got, want := leftBin.Operator, "+"; got != want {
@@ -403,26 +403,26 @@ func TestParseOperatorPrecedence(t *testing.T) {
 		{
 			name: "comparison before and",
 			expr: "a > b and c < d",
-			validateResult: func(t *testing.T, result Expression) {
+			validateResult: func(t *testing.T, result expression) {
 				// Should parse as: (a > b) and (c < d)
-				binNode := result.(*BinaryOpNode)
+				binNode := result.(*binaryOpNode)
 				if got, want := binNode.Operator, "and"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
 
 				// Both sides should be comparisons
-				leftBin, ok := binNode.Left.(*BinaryOpNode)
+				leftBin, ok := binNode.Left.(*binaryOpNode)
 				if !ok {
-					t.Errorf("Left type = %T, want *BinaryOpNode", binNode.Left)
+					t.Errorf("Left type = %T, want *binaryOpNode", binNode.Left)
 					return
 				}
 				if got, want := leftBin.Operator, ">"; got != want {
 					t.Errorf("Left.Operator = %v, want %v", got, want)
 				}
 
-				rightBin, ok := binNode.Right.(*BinaryOpNode)
+				rightBin, ok := binNode.Right.(*binaryOpNode)
 				if !ok {
-					t.Errorf("Right type = %T, want *BinaryOpNode", binNode.Right)
+					t.Errorf("Right type = %T, want *binaryOpNode", binNode.Right)
 					return
 				}
 				if got, want := rightBin.Operator, "<"; got != want {
@@ -433,17 +433,17 @@ func TestParseOperatorPrecedence(t *testing.T) {
 		{
 			name: "and before or",
 			expr: "a or b and c",
-			validateResult: func(t *testing.T, result Expression) {
+			validateResult: func(t *testing.T, result expression) {
 				// Should parse as: a or (b and c)
-				binNode := result.(*BinaryOpNode)
+				binNode := result.(*binaryOpNode)
 				if got, want := binNode.Operator, "or"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
 
 				// Right side should be and
-				rightBin, ok := binNode.Right.(*BinaryOpNode)
+				rightBin, ok := binNode.Right.(*binaryOpNode)
 				if !ok {
-					t.Errorf("Right type = %T, want *BinaryOpNode", binNode.Right)
+					t.Errorf("Right type = %T, want *binaryOpNode", binNode.Right)
 					return
 				}
 				if got, want := rightBin.Operator, "and"; got != want {
@@ -454,9 +454,9 @@ func TestParseOperatorPrecedence(t *testing.T) {
 		{
 			name: "complex precedence",
 			expr: "a + b * c > d and e or f",
-			validateResult: func(t *testing.T, result Expression) {
+			validateResult: func(t *testing.T, result expression) {
 				// Should parse as: ((a + (b * c)) > d and e) or f
-				binNode := result.(*BinaryOpNode)
+				binNode := result.(*binaryOpNode)
 				if got, want := binNode.Operator, "or"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
@@ -467,7 +467,7 @@ func TestParseOperatorPrecedence(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
@@ -503,17 +503,17 @@ func TestParsePropertyAccess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
 			}
 
 			// For chained properties like "user.profile.email",
-			// the result is PropertyAccessNode with property="email"
-			propNode, ok := result.(*PropertyAccessNode)
+			// the result is propertyAccessNode with property="email"
+			propNode, ok := result.(*propertyAccessNode)
 			if !ok {
-				t.Errorf("ParseExpression(%q) type = %T, want *PropertyAccessNode", tt.expr, result)
+				t.Errorf("ParseExpression(%q) type = %T, want *propertyAccessNode", tt.expr, result)
 				return
 			}
 			if got, want := propNode.Property, tt.expectedProperty; got != want {
@@ -527,64 +527,64 @@ func TestParseSubscript(t *testing.T) {
 	tests := []struct {
 		name           string
 		expr           string
-		validateResult func(*testing.T, Expression)
+		validateResult func(*testing.T, expression)
 	}{
 		{
 			name: "numeric subscript",
 			expr: "items[0]",
-			validateResult: func(t *testing.T, result Expression) {
-				subNode, ok := result.(*SubscriptNode)
+			validateResult: func(t *testing.T, result expression) {
+				subNode, ok := result.(*subscriptNode)
 				if !ok {
-					t.Errorf("type = %T, want *SubscriptNode", result)
+					t.Errorf("type = %T, want *subscriptNode", result)
 					return
 				}
 
 				// Check index is a literal number
-				litNode, ok := subNode.Index.(*LiteralNode)
+				litNode, ok := subNode.Index.(*literalNode)
 				if !ok {
-					t.Errorf("Index type = %T, want *LiteralNode", subNode.Index)
+					t.Errorf("Index type = %T, want *literalNode", subNode.Index)
 					return
 				}
 				if got, want := litNode.Value, 0.0; got != want {
-					t.Errorf("Index.Value = %v, want %v", got, want)
+					t.Errorf("Index.value = %v, want %v", got, want)
 				}
 			},
 		},
 		{
 			name: "string subscript",
 			expr: `dict["key"]`,
-			validateResult: func(t *testing.T, result Expression) {
-				subNode, ok := result.(*SubscriptNode)
+			validateResult: func(t *testing.T, result expression) {
+				subNode, ok := result.(*subscriptNode)
 				if !ok {
-					t.Errorf("type = %T, want *SubscriptNode", result)
+					t.Errorf("type = %T, want *subscriptNode", result)
 					return
 				}
 
 				// Check index is a literal string
-				litNode, ok := subNode.Index.(*LiteralNode)
+				litNode, ok := subNode.Index.(*literalNode)
 				if !ok {
-					t.Errorf("Index type = %T, want *LiteralNode", subNode.Index)
+					t.Errorf("Index type = %T, want *literalNode", subNode.Index)
 					return
 				}
 				if got, want := litNode.Value, "key"; got != want {
-					t.Errorf("Index.Value = %v, want %v", got, want)
+					t.Errorf("Index.value = %v, want %v", got, want)
 				}
 			},
 		},
 		{
 			name: "variable subscript",
 			expr: "items[i]",
-			validateResult: func(t *testing.T, result Expression) {
-				subNode, ok := result.(*SubscriptNode)
+			validateResult: func(t *testing.T, result expression) {
+				subNode, ok := result.(*subscriptNode)
 				if !ok {
-					t.Errorf("type = %T, want *SubscriptNode", result)
+					t.Errorf("type = %T, want *subscriptNode", result)
 					return
 				}
 
 				// Check index is a variable
-				varNode, ok := subNode.Index.(*VariableNode)
+				varNode, ok := subNode.Index.(*variableNode)
 				if !ok {
-					t.Errorf("Index type = %T, want *VariableNode", subNode.Index)
+					t.Errorf("Index type = %T, want *variableNode", subNode.Index)
 					return
 				}
 				if got, want := varNode.Name, "i"; got != want {
@@ -595,18 +595,18 @@ func TestParseSubscript(t *testing.T) {
 		{
 			name: "chained subscript",
 			expr: "matrix[0][1]",
-			validateResult: func(t *testing.T, result Expression) {
+			validateResult: func(t *testing.T, result expression) {
 				// Outer subscript
-				outerSub, ok := result.(*SubscriptNode)
+				outerSub, ok := result.(*subscriptNode)
 				if !ok {
-					t.Errorf("type = %T, want *SubscriptNode", result)
+					t.Errorf("type = %T, want *subscriptNode", result)
 					return
 				}
 
 				// Inner subscript
-				innerSub, ok := outerSub.Object.(*SubscriptNode)
+				innerSub, ok := outerSub.Object.(*subscriptNode)
 				if !ok {
-					t.Errorf("Object type = %T, want *SubscriptNode", outerSub.Object)
+					t.Errorf("Object type = %T, want *subscriptNode", outerSub.Object)
 					return
 				}
 				if innerSub == nil {
@@ -619,7 +619,7 @@ func TestParseSubscript(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
@@ -665,16 +665,16 @@ func TestParseFilter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
 			}
 
 			// Find the outermost filter
-			filterNode, ok := result.(*FilterNode)
+			filterNode, ok := result.(*filterNode)
 			if !ok {
-				t.Errorf("ParseExpression(%q) type = %T, want *FilterNode", tt.expr, result)
+				t.Errorf("ParseExpression(%q) type = %T, want *filterNode", tt.expr, result)
 				return
 			}
 			if got, want := filterNode.Name, tt.expectedFilter; got != want {
@@ -691,15 +691,15 @@ func TestParseParentheses(t *testing.T) {
 	tests := []struct {
 		name           string
 		expr           string
-		validateResult func(*testing.T, Expression)
+		validateResult func(*testing.T, expression)
 	}{
 		{
 			name: "simple parentheses",
 			expr: "(x)",
-			validateResult: func(t *testing.T, result Expression) {
-				varNode, ok := result.(*VariableNode)
+			validateResult: func(t *testing.T, result expression) {
+				varNode, ok := result.(*variableNode)
 				if !ok {
-					t.Errorf("type = %T, want *VariableNode", result)
+					t.Errorf("type = %T, want *variableNode", result)
 					return
 				}
 				if got, want := varNode.Name, "x"; got != want {
@@ -710,17 +710,17 @@ func TestParseParentheses(t *testing.T) {
 		{
 			name: "parentheses change precedence",
 			expr: "(a + b) * c",
-			validateResult: func(t *testing.T, result Expression) {
+			validateResult: func(t *testing.T, result expression) {
 				// Should parse as: (a + b) * c
-				binNode := result.(*BinaryOpNode)
+				binNode := result.(*binaryOpNode)
 				if got, want := binNode.Operator, "*"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
 
 				// Left side should be addition
-				leftBin, ok := binNode.Left.(*BinaryOpNode)
+				leftBin, ok := binNode.Left.(*binaryOpNode)
 				if !ok {
-					t.Errorf("Left type = %T, want *BinaryOpNode", binNode.Left)
+					t.Errorf("Left type = %T, want *binaryOpNode", binNode.Left)
 					return
 				}
 				if got, want := leftBin.Operator, "+"; got != want {
@@ -731,10 +731,10 @@ func TestParseParentheses(t *testing.T) {
 		{
 			name: "nested parentheses",
 			expr: "((x + y) * z)",
-			validateResult: func(t *testing.T, result Expression) {
-				binNode, ok := result.(*BinaryOpNode)
+			validateResult: func(t *testing.T, result expression) {
+				binNode, ok := result.(*binaryOpNode)
 				if !ok {
-					t.Errorf("type = %T, want *BinaryOpNode", result)
+					t.Errorf("type = %T, want *binaryOpNode", result)
 					return
 				}
 				if got, want := binNode.Operator, "*"; got != want {
@@ -747,7 +747,7 @@ func TestParseParentheses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
@@ -799,7 +799,7 @@ func TestParseComplexExpressions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
@@ -847,7 +847,7 @@ func TestParseErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			_, err := parser.ParseExpression()
 			if err == nil {
 				t.Errorf("ParseExpression(%q) error = nil, want error containing %q", tt.expr, tt.errorContains)
@@ -901,15 +901,15 @@ func TestParseFilterArguments(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
 			}
 
-			filterNode, ok := result.(*FilterNode)
+			filterNode, ok := result.(*filterNode)
 			if !ok {
-				t.Errorf("ParseExpression(%q) type = %T, want *FilterNode", tt.expr, result)
+				t.Errorf("ParseExpression(%q) type = %T, want *filterNode", tt.expr, result)
 				return
 			}
 			if got, want := len(filterNode.Args), len(tt.expectedArgs); got != want {
@@ -920,35 +920,35 @@ func TestParseFilterArguments(t *testing.T) {
 				arg := filterNode.Args[i]
 				switch expected := expectedArg.(type) {
 				case string:
-					// Could be either LiteralNode or VariableNode
-					if litNode, ok := arg.(*LiteralNode); ok {
+					// Could be either literalNode or variableNode
+					if litNode, ok := arg.(*literalNode); ok {
 						if got, want := litNode.Value, expected; got != want {
-							t.Errorf("Args[%d].Value = %v, want %v", i, got, want)
+							t.Errorf("Args[%d].value = %v, want %v", i, got, want)
 						}
-					} else if varNode, ok := arg.(*VariableNode); ok {
+					} else if varNode, ok := arg.(*variableNode); ok {
 						if got, want := varNode.Name, expected; got != want {
 							t.Errorf("Args[%d].Name = %v, want %v", i, got, want)
 						}
 					} else {
-						t.Errorf("Args[%d] type = %T, want *LiteralNode or *VariableNode", i, arg)
+						t.Errorf("Args[%d] type = %T, want *literalNode or *variableNode", i, arg)
 					}
 				case float64:
-					litNode, ok := arg.(*LiteralNode)
+					litNode, ok := arg.(*literalNode)
 					if !ok {
-						t.Errorf("Args[%d] type = %T, want *LiteralNode", i, arg)
+						t.Errorf("Args[%d] type = %T, want *literalNode", i, arg)
 						continue
 					}
 					if got, want := litNode.Value, expected; got != want {
-						t.Errorf("Args[%d].Value = %v, want %v", i, got, want)
+						t.Errorf("Args[%d].value = %v, want %v", i, got, want)
 					}
 				case bool:
-					litNode, ok := arg.(*LiteralNode)
+					litNode, ok := arg.(*literalNode)
 					if !ok {
-						t.Errorf("Args[%d] type = %T, want *LiteralNode", i, arg)
+						t.Errorf("Args[%d] type = %T, want *literalNode", i, arg)
 						continue
 					}
 					if got, want := litNode.Value, expected; got != want {
-						t.Errorf("Args[%d].Value = %v, want %v", i, got, want)
+						t.Errorf("Args[%d].value = %v, want %v", i, got, want)
 					}
 				}
 			}
@@ -964,11 +964,11 @@ func TestExprParserHelperMethods(t *testing.T) {
 		{
 			name: "current returns current token",
 			test: func(t *testing.T) {
-				tokens := []*Token{
-					{Type: TokenNumber, Value: "1", Line: 1, Col: 1},
-					{Type: TokenNumber, Value: "2", Line: 1, Col: 2},
+				tokens := []*token{
+					{Type: tokenNumber, value: "1", Line: 1, Col: 1},
+					{Type: tokenNumber, value: "2", Line: 1, Col: 2},
 				}
-				parser := NewExprParser(tokens)
+				parser := newExprParser(tokens)
 				if got, want := parser.current(), tokens[0]; got != want {
 					t.Errorf("current() = %v, want %v", got, want)
 				}
@@ -977,8 +977,8 @@ func TestExprParserHelperMethods(t *testing.T) {
 		{
 			name: "current returns nil at end",
 			test: func(t *testing.T) {
-				tokens := []*Token{}
-				parser := NewExprParser(tokens)
+				tokens := []*token{}
+				parser := newExprParser(tokens)
 				if got := parser.current(); got != nil {
 					t.Errorf("current() = %v, want nil", got)
 				}
@@ -987,11 +987,11 @@ func TestExprParserHelperMethods(t *testing.T) {
 		{
 			name: "advance moves position",
 			test: func(t *testing.T) {
-				tokens := []*Token{
-					{Type: TokenNumber, Value: "1", Line: 1, Col: 1},
-					{Type: TokenNumber, Value: "2", Line: 1, Col: 2},
+				tokens := []*token{
+					{Type: tokenNumber, value: "1", Line: 1, Col: 1},
+					{Type: tokenNumber, value: "2", Line: 1, Col: 2},
 				}
-				parser := NewExprParser(tokens)
+				parser := newExprParser(tokens)
 				parser.advance()
 				if got, want := parser.current(), tokens[1]; got != want {
 					t.Errorf("current() after advance() = %v, want %v", got, want)
@@ -1054,10 +1054,10 @@ func TestExprParserErrorMethods(t *testing.T) {
 		{
 			name: "parseErr creates error with current position",
 			test: func(t *testing.T) {
-				tokens := []*Token{
-					{Type: TokenNumber, Value: "1", Line: 5, Col: 10},
+				tokens := []*token{
+					{Type: tokenNumber, value: "1", Line: 5, Col: 10},
 				}
-				parser := NewExprParser(tokens)
+				parser := newExprParser(tokens)
 				err := parser.parseErr("test error")
 				var parseErr *ParseError
 				if !errors.As(err, &parseErr) {
@@ -1078,10 +1078,10 @@ func TestExprParserErrorMethods(t *testing.T) {
 		{
 			name: "parseErr at end falls back to previous token position",
 			test: func(t *testing.T) {
-				tokens := []*Token{
-					{Type: TokenIdentifier, Value: "name", Line: 7, Col: 11},
+				tokens := []*token{
+					{Type: tokenIdentifier, value: "name", Line: 7, Col: 11},
 				}
-				parser := NewExprParser(tokens)
+				parser := newExprParser(tokens)
 				parser.advance()
 				err := parser.parseErr("test error")
 				var parseErr *ParseError
@@ -1103,9 +1103,9 @@ func TestExprParserErrorMethods(t *testing.T) {
 		{
 			name: "errAtTok creates error at token position",
 			test: func(t *testing.T) {
-				token := &Token{Type: TokenNumber, Value: "1", Line: 3, Col: 7}
-				parser := NewExprParser([]*Token{})
-				err := parser.errAtTok(token, "custom error")
+				tok := &token{Type: tokenNumber, value: "1", Line: 3, Col: 7}
+				parser := newExprParser([]*token{})
+				err := parser.errAtTok(tok, "custom error")
 				var parseErr *ParseError
 				if !errors.As(err, &parseErr) {
 					t.Errorf("errAtTok() error type = %T, want *ParseError", err)
@@ -1136,16 +1136,16 @@ func TestExpressionNodeTypes(t *testing.T) {
 		name           string
 		expr           string
 		expectedType   string
-		validateStruct func(*testing.T, Expression)
+		validateStruct func(*testing.T, expression)
 	}{
 		{
-			name:         "LiteralNode structure",
+			name:         "literalNode structure",
 			expr:         "42",
-			expectedType: "*template.LiteralNode",
-			validateStruct: func(t *testing.T, expr Expression) {
-				node := expr.(*LiteralNode)
+			expectedType: "*template.literalNode",
+			validateStruct: func(t *testing.T, expr expression) {
+				node := expr.(*literalNode)
 				if got, want := node.Value, 42.0; got != want {
-					t.Errorf("Value = %v, want %v", got, want)
+					t.Errorf("value = %v, want %v", got, want)
 				}
 				line, col := node.Position()
 				if line <= 0 {
@@ -1157,11 +1157,11 @@ func TestExpressionNodeTypes(t *testing.T) {
 			},
 		},
 		{
-			name:         "VariableNode structure",
+			name:         "variableNode structure",
 			expr:         "username",
-			expectedType: "*template.VariableNode",
-			validateStruct: func(t *testing.T, expr Expression) {
-				node := expr.(*VariableNode)
+			expectedType: "*template.variableNode",
+			validateStruct: func(t *testing.T, expr expression) {
+				node := expr.(*variableNode)
 				if got, want := node.Name, "username"; got != want {
 					t.Errorf("Name = %v, want %v", got, want)
 				}
@@ -1175,11 +1175,11 @@ func TestExpressionNodeTypes(t *testing.T) {
 			},
 		},
 		{
-			name:         "BinaryOpNode structure",
+			name:         "binaryOpNode structure",
 			expr:         "a + b",
-			expectedType: "*template.BinaryOpNode",
-			validateStruct: func(t *testing.T, expr Expression) {
-				node := expr.(*BinaryOpNode)
+			expectedType: "*template.binaryOpNode",
+			validateStruct: func(t *testing.T, expr expression) {
+				node := expr.(*binaryOpNode)
 				if got, want := node.Operator, "+"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
@@ -1199,11 +1199,11 @@ func TestExpressionNodeTypes(t *testing.T) {
 			},
 		},
 		{
-			name:         "UnaryOpNode structure",
+			name:         "unaryOpNode structure",
 			expr:         "not x",
-			expectedType: "*template.UnaryOpNode",
-			validateStruct: func(t *testing.T, expr Expression) {
-				node := expr.(*UnaryOpNode)
+			expectedType: "*template.unaryOpNode",
+			validateStruct: func(t *testing.T, expr expression) {
+				node := expr.(*unaryOpNode)
 				if got, want := node.Operator, "not"; got != want {
 					t.Errorf("Operator = %v, want %v", got, want)
 				}
@@ -1220,11 +1220,11 @@ func TestExpressionNodeTypes(t *testing.T) {
 			},
 		},
 		{
-			name:         "PropertyAccessNode structure",
+			name:         "propertyAccessNode structure",
 			expr:         "user.name",
-			expectedType: "*template.PropertyAccessNode",
-			validateStruct: func(t *testing.T, expr Expression) {
-				node := expr.(*PropertyAccessNode)
+			expectedType: "*template.propertyAccessNode",
+			validateStruct: func(t *testing.T, expr expression) {
+				node := expr.(*propertyAccessNode)
 				if got, want := node.Property, "name"; got != want {
 					t.Errorf("Property = %v, want %v", got, want)
 				}
@@ -1241,11 +1241,11 @@ func TestExpressionNodeTypes(t *testing.T) {
 			},
 		},
 		{
-			name:         "SubscriptNode structure",
+			name:         "subscriptNode structure",
 			expr:         "items[0]",
-			expectedType: "*template.SubscriptNode",
-			validateStruct: func(t *testing.T, expr Expression) {
-				node := expr.(*SubscriptNode)
+			expectedType: "*template.subscriptNode",
+			validateStruct: func(t *testing.T, expr expression) {
+				node := expr.(*subscriptNode)
 				if node.Object == nil {
 					t.Errorf("Object = nil, want non-nil")
 				}
@@ -1262,16 +1262,16 @@ func TestExpressionNodeTypes(t *testing.T) {
 			},
 		},
 		{
-			name:         "FilterNode structure",
+			name:         "filterNode structure",
 			expr:         "name|upper",
-			expectedType: "*template.FilterNode",
-			validateStruct: func(t *testing.T, expr Expression) {
-				node := expr.(*FilterNode)
+			expectedType: "*template.filterNode",
+			validateStruct: func(t *testing.T, expr expression) {
+				node := expr.(*filterNode)
 				if got, want := node.Name, "upper"; got != want {
 					t.Errorf("Name = %v, want %v", got, want)
 				}
 				if node.Expr == nil {
-					t.Errorf("Expression = nil, want non-nil")
+					t.Errorf("expression = nil, want non-nil")
 				}
 				line, col := node.Position()
 				if line <= 0 {
@@ -1287,7 +1287,7 @@ func TestExpressionNodeTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.expr, err)
@@ -1351,7 +1351,7 @@ func TestParseExpressionEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 
 			if tt.expectError {
@@ -1548,7 +1548,7 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			expr, err := parser.ParseExpression()
 
 			if tt.wantErr {
@@ -1567,7 +1567,7 @@ func TestLogicalOperatorSymbols(t *testing.T) {
 			}
 
 			// Evaluate the expression
-			ctx := NewRenderContext(tt.context)
+			ctx := newRenderContext(tt.context)
 			result, err := expr.Evaluate(ctx)
 			if err != nil {
 				t.Errorf("Evaluate(%q) error = %v, want nil", tt.expr, err)
@@ -1614,7 +1614,7 @@ func TestParsePropertyAccessEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens := mustTokenize(t, tt.expr)
-			parser := NewExprParser(tokens)
+			parser := newExprParser(tokens)
 			result, err := parser.ParseExpression()
 			if tt.expectError {
 				if err == nil {
@@ -1637,37 +1637,37 @@ func TestParsePropertyAccessEdgeCases(t *testing.T) {
 	// Test float numeric index via direct token construction.
 	// The lexer never produces a float after ".", but the parser handles it.
 	t.Run("float numeric index via tokens", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenIdentifier, Value: "items", Line: 1, Col: 1},
-			{Type: TokenSymbol, Value: ".", Line: 1, Col: 6},
-			{Type: TokenNumber, Value: "3.14", Line: 1, Col: 7},
+		tokens := []*token{
+			{Type: tokenIdentifier, value: "items", Line: 1, Col: 1},
+			{Type: tokenSymbol, value: ".", Line: 1, Col: 6},
+			{Type: tokenNumber, value: "3.14", Line: 1, Col: 7},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		result, err := parser.ParseExpression()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		sub, ok := result.(*SubscriptNode)
+		sub, ok := result.(*subscriptNode)
 		if !ok {
-			t.Fatalf("type = %T, want *SubscriptNode", result)
+			t.Fatalf("type = %T, want *subscriptNode", result)
 		}
-		lit, ok := sub.Index.(*LiteralNode)
+		lit, ok := sub.Index.(*literalNode)
 		if !ok {
-			t.Fatalf("Index type = %T, want *LiteralNode", sub.Index)
+			t.Fatalf("Index type = %T, want *literalNode", sub.Index)
 		}
 		if got, want := lit.Value, 3.14; got != want {
-			t.Errorf("Index.Value = %v, want %v", got, want)
+			t.Errorf("Index.value = %v, want %v", got, want)
 		}
 	})
 
 	// Test invalid numeric index (both ParseInt and ParseFloat fail).
 	t.Run("invalid numeric index via tokens", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenIdentifier, Value: "items", Line: 1, Col: 1},
-			{Type: TokenSymbol, Value: ".", Line: 1, Col: 6},
-			{Type: TokenNumber, Value: "1e999999", Line: 1, Col: 7},
+		tokens := []*token{
+			{Type: tokenIdentifier, value: "items", Line: 1, Col: 1},
+			{Type: tokenSymbol, value: ".", Line: 1, Col: 6},
+			{Type: tokenNumber, value: "1e999999", Line: 1, Col: 7},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		_, err := parser.ParseExpression()
 		if err == nil {
 			t.Fatal("expected error for invalid numeric index")
@@ -1682,13 +1682,13 @@ func TestParseFilterArgEdgeCases(t *testing.T) {
 	// Test missing filter argument after colon.
 	t.Run("missing arg after colon", func(t *testing.T) {
 		// Construct tokens: name | truncate :
-		tokens := []*Token{
-			{Type: TokenIdentifier, Value: "name", Line: 1, Col: 1},
-			{Type: TokenSymbol, Value: "|", Line: 1, Col: 6},
-			{Type: TokenIdentifier, Value: "truncate", Line: 1, Col: 7},
-			{Type: TokenSymbol, Value: ":", Line: 1, Col: 15},
+		tokens := []*token{
+			{Type: tokenIdentifier, value: "name", Line: 1, Col: 1},
+			{Type: tokenSymbol, value: "|", Line: 1, Col: 6},
+			{Type: tokenIdentifier, value: "truncate", Line: 1, Col: 7},
+			{Type: tokenSymbol, value: ":", Line: 1, Col: 15},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		_, err := parser.ParseExpression()
 		if err == nil {
 			t.Fatal("expected error for missing filter argument")
@@ -1700,14 +1700,14 @@ func TestParseFilterArgEdgeCases(t *testing.T) {
 
 	// Test unexpected token type as filter argument (e.g., a symbol).
 	t.Run("symbol as filter arg", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenIdentifier, Value: "name", Line: 1, Col: 1},
-			{Type: TokenSymbol, Value: "|", Line: 1, Col: 6},
-			{Type: TokenIdentifier, Value: "truncate", Line: 1, Col: 7},
-			{Type: TokenSymbol, Value: ":", Line: 1, Col: 15},
-			{Type: TokenSymbol, Value: "+", Line: 1, Col: 16},
+		tokens := []*token{
+			{Type: tokenIdentifier, value: "name", Line: 1, Col: 1},
+			{Type: tokenSymbol, value: "|", Line: 1, Col: 6},
+			{Type: tokenIdentifier, value: "truncate", Line: 1, Col: 7},
+			{Type: tokenSymbol, value: ":", Line: 1, Col: 15},
+			{Type: tokenSymbol, value: "+", Line: 1, Col: 16},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		_, err := parser.ParseExpression()
 		if err == nil {
 			t.Fatal("expected error for symbol as filter argument")
@@ -1721,10 +1721,10 @@ func TestParseFilterArgEdgeCases(t *testing.T) {
 func TestParsePrimaryEdgeCases(t *testing.T) {
 	// Test unexpected symbol (not parenthesis).
 	t.Run("unexpected symbol", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenSymbol, Value: "]", Line: 1, Col: 1},
+		tokens := []*token{
+			{Type: tokenSymbol, value: "]", Line: 1, Col: 1},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		_, err := parser.ParseExpression()
 		if err == nil {
 			t.Fatal("expected error for unexpected symbol")
@@ -1734,12 +1734,12 @@ func TestParsePrimaryEdgeCases(t *testing.T) {
 		}
 	})
 
-	// Test unexpected token type (e.g., TokenVarEnd).
+	// Test unexpected token type (e.g., tokenVarEnd).
 	t.Run("unexpected token type", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 1},
+		tokens := []*token{
+			{Type: tokenVarEnd, value: "}}", Line: 1, Col: 1},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		_, err := parser.ParseExpression()
 		if err == nil {
 			t.Fatal("expected error for unexpected token type")
@@ -1751,11 +1751,11 @@ func TestParsePrimaryEdgeCases(t *testing.T) {
 
 	// Test error propagation from parenthesized expression.
 	t.Run("error inside parentheses", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenSymbol, Value: "(", Line: 1, Col: 1},
-			{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 2},
+		tokens := []*token{
+			{Type: tokenSymbol, value: "(", Line: 1, Col: 1},
+			{Type: tokenVarEnd, value: "}}", Line: 1, Col: 2},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		_, err := parser.ParseExpression()
 		if err == nil {
 			t.Fatal("expected error for invalid expression inside parentheses")
@@ -1764,11 +1764,11 @@ func TestParsePrimaryEdgeCases(t *testing.T) {
 
 	// Test missing closing parenthesis with nil token.
 	t.Run("missing closing paren at EOF", func(t *testing.T) {
-		tokens := []*Token{
-			{Type: TokenSymbol, Value: "(", Line: 1, Col: 1},
-			{Type: TokenIdentifier, Value: "x", Line: 1, Col: 2},
+		tokens := []*token{
+			{Type: tokenSymbol, value: "(", Line: 1, Col: 1},
+			{Type: tokenIdentifier, value: "x", Line: 1, Col: 2},
 		}
-		parser := NewExprParser(tokens)
+		parser := newExprParser(tokens)
 		_, err := parser.ParseExpression()
 		if err == nil {
 			t.Fatal("expected error for missing closing paren")
@@ -1783,83 +1783,83 @@ func TestParseErrorPropagation(t *testing.T) {
 	// These tests trigger error propagation through each precedence level.
 	tests := []struct {
 		name   string
-		tokens []*Token
+		tokens []*token
 	}{
 		{
 			// Error in right operand of "or": a or <bad>
 			name: "error in or right operand",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
-				{Type: TokenIdentifier, Value: "or", Line: 1, Col: 3},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 6},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "a", Line: 1, Col: 1},
+				{Type: tokenIdentifier, value: "or", Line: 1, Col: 3},
+				{Type: tokenVarEnd, value: "}}", Line: 1, Col: 6},
 			},
 		},
 		{
 			// Error in right operand of "and": a and <bad>
 			name: "error in and right operand",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
-				{Type: TokenIdentifier, Value: "and", Line: 1, Col: 3},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 7},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "a", Line: 1, Col: 1},
+				{Type: tokenIdentifier, value: "and", Line: 1, Col: 3},
+				{Type: tokenVarEnd, value: "}}", Line: 1, Col: 7},
 			},
 		},
 		{
 			// Error in right operand of comparison: a == <bad>
 			name: "error in comparison right operand",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
-				{Type: TokenSymbol, Value: "==", Line: 1, Col: 3},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 6},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "a", Line: 1, Col: 1},
+				{Type: tokenSymbol, value: "==", Line: 1, Col: 3},
+				{Type: tokenVarEnd, value: "}}", Line: 1, Col: 6},
 			},
 		},
 		{
 			// Error in right operand of addition: a + <bad>
 			name: "error in addition right operand",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
-				{Type: TokenSymbol, Value: "+", Line: 1, Col: 3},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "a", Line: 1, Col: 1},
+				{Type: tokenSymbol, value: "+", Line: 1, Col: 3},
+				{Type: tokenVarEnd, value: "}}", Line: 1, Col: 5},
 			},
 		},
 		{
 			// Error in right operand of multiplication: a * <bad>
 			name: "error in multiplication right operand",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
-				{Type: TokenSymbol, Value: "*", Line: 1, Col: 3},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "a", Line: 1, Col: 1},
+				{Type: tokenSymbol, value: "*", Line: 1, Col: 3},
+				{Type: tokenVarEnd, value: "}}", Line: 1, Col: 5},
 			},
 		},
 		{
 			// Error in unary operand: not <bad>
 			name: "error in unary operand",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "not", Line: 1, Col: 1},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 5},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "not", Line: 1, Col: 1},
+				{Type: tokenVarEnd, value: "}}", Line: 1, Col: 5},
 			},
 		},
 		{
 			// Error in unary minus operand: - <bad>
 			name: "error in unary minus operand",
-			tokens: []*Token{
-				{Type: TokenSymbol, Value: "-", Line: 1, Col: 1},
-				{Type: TokenVarEnd, Value: "}}", Line: 1, Col: 3},
+			tokens: []*token{
+				{Type: tokenSymbol, value: "-", Line: 1, Col: 1},
+				{Type: tokenVarEnd, value: "}}", Line: 1, Col: 3},
 			},
 		},
 		{
 			// Error in filter pipe missing name: a | <non-identifier>
 			name: "filter pipe with non-identifier",
-			tokens: []*Token{
-				{Type: TokenIdentifier, Value: "a", Line: 1, Col: 1},
-				{Type: TokenSymbol, Value: "|", Line: 1, Col: 3},
-				{Type: TokenNumber, Value: "123", Line: 1, Col: 5},
+			tokens: []*token{
+				{Type: tokenIdentifier, value: "a", Line: 1, Col: 1},
+				{Type: tokenSymbol, value: "|", Line: 1, Col: 3},
+				{Type: tokenNumber, value: "123", Line: 1, Col: 5},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewExprParser(tt.tokens)
+			parser := newExprParser(tt.tokens)
 			_, err := parser.ParseExpression()
 			if err == nil {
 				t.Fatal("expected error, got nil")
@@ -1906,13 +1906,13 @@ func TestKeywordAndSymbolEquivalence(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse and evaluate keyword version
 			tokensKeyword := mustTokenize(t, tt.exprKeyword)
-			parserKeyword := NewExprParser(tokensKeyword)
+			parserKeyword := newExprParser(tokensKeyword)
 			exprKeyword, err := parserKeyword.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.exprKeyword, err)
 			}
 
-			ctx := NewRenderContext(tt.context)
+			ctx := newRenderContext(tt.context)
 			resultKeyword, err := exprKeyword.Evaluate(ctx)
 			if err != nil {
 				t.Fatalf("Evaluate(%q) error = %v, want nil", tt.exprKeyword, err)
@@ -1920,7 +1920,7 @@ func TestKeywordAndSymbolEquivalence(t *testing.T) {
 
 			// Parse and evaluate symbol version
 			tokensSymbol := mustTokenize(t, tt.exprSymbol)
-			parserSymbol := NewExprParser(tokensSymbol)
+			parserSymbol := newExprParser(tokensSymbol)
 			exprSymbol, err := parserSymbol.ParseExpression()
 			if err != nil {
 				t.Fatalf("ParseExpression(%q) error = %v, want nil", tt.exprSymbol, err)

@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// TagParser is the parse function signature for template tags.
+// tagParser is the parse function signature for template tags.
 //
 // Parameters:
 //   - doc: The document-level parser used to parse nested tag bodies.
@@ -18,39 +18,39 @@ import (
 //     Example: in {% if x > 5 %}, this parser sees "x > 5".
 //
 // Returns:
-//   - Statement: The parsed statement node.
+//   - statement: The parsed statement node.
 //   - error: Any parse error encountered.
-type TagParser func(doc *Parser, start *Token, arguments *Parser) (Statement, error)
+type tagParser func(doc *parser, start *token, arguments *parser) (statement, error)
 
-// TagRegistry stores tag parsers. An optional parent registry is
+// tagRegistry stores tag parsers. An optional parent registry is
 // consulted when a lookup misses, enabling an Engine to layer its own
 // private tags over the global registry without copying entries.
 //
-// TagRegistry is safe for concurrent use.
-type TagRegistry struct {
+// tagRegistry is safe for concurrent use.
+type tagRegistry struct {
 	mu     sync.RWMutex
-	tags   map[string]TagParser
-	parent *TagRegistry
+	tags   map[string]tagParser
+	parent *tagRegistry
 }
 
-// NewTagRegistry creates an empty [TagRegistry].
-func NewTagRegistry() *TagRegistry {
-	return &TagRegistry{tags: make(map[string]TagParser)}
+// newTagRegistry creates an empty [tagRegistry].
+func newTagRegistry() *tagRegistry {
+	return &tagRegistry{tags: make(map[string]tagParser)}
 }
 
-func (r *TagRegistry) validate(name string, parser TagParser) {
+func (r *tagRegistry) validate(name string, parser tagParser) {
 	if parser == nil {
 		panic(fmt.Sprintf("template: nil tag parser for %q", name))
 	}
 }
 
-// Register adds a tag parser. Duplicate names return [ErrTagAlreadyRegistered].
-func (r *TagRegistry) Register(name string, parser TagParser) error {
+// Register adds a tag parser. Duplicate names return [errTagAlreadyRegistered].
+func (r *tagRegistry) Register(name string, parser tagParser) error {
 	r.validate(name, parser)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.tags[name]; exists {
-		return fmt.Errorf("%w: %q", ErrTagAlreadyRegistered, name)
+		return fmt.Errorf("%w: %q", errTagAlreadyRegistered, name)
 	}
 	r.tags[name] = parser
 	return nil
@@ -59,7 +59,7 @@ func (r *TagRegistry) Register(name string, parser TagParser) error {
 // Replace stores parser under name, overwriting any direct existing entry.
 //
 // Replace panics if parser is nil.
-func (r *TagRegistry) Replace(name string, parser TagParser) {
+func (r *tagRegistry) Replace(name string, parser tagParser) {
 	r.validate(name, parser)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -68,7 +68,7 @@ func (r *TagRegistry) Replace(name string, parser TagParser) {
 
 // MustRegister registers parser under name and panics on duplicate
 // registration or nil parser.
-func (r *TagRegistry) MustRegister(name string, parser TagParser) {
+func (r *tagRegistry) MustRegister(name string, parser tagParser) {
 	if err := r.Register(name, parser); err != nil {
 		panic(err)
 	}
@@ -76,7 +76,7 @@ func (r *TagRegistry) MustRegister(name string, parser TagParser) {
 
 // Get looks up a tag parser by name. If not found and a parent registry
 // is set, the parent is consulted.
-func (r *TagRegistry) Get(name string) (TagParser, bool) {
+func (r *tagRegistry) Get(name string) (tagParser, bool) {
 	r.mu.RLock()
 	fn, ok := r.tags[name]
 	r.mu.RUnlock()
@@ -90,21 +90,21 @@ func (r *TagRegistry) Get(name string) (TagParser, bool) {
 }
 
 // Has reports whether a tag is registered (including in ancestors).
-func (r *TagRegistry) Has(name string) bool {
+func (r *tagRegistry) Has(name string) bool {
 	_, ok := r.Get(name)
 	return ok
 }
 
 // List returns a sorted list of tag names registered directly in this
 // registry (excluding parents).
-func (r *TagRegistry) List() []string {
+func (r *tagRegistry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return slices.Sorted(maps.Keys(r.tags))
 }
 
 // Unregister removes a tag from this registry (does not touch parents).
-func (r *TagRegistry) Unregister(name string) {
+func (r *tagRegistry) Unregister(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.tags, name)
@@ -112,11 +112,11 @@ func (r *TagRegistry) Unregister(name string) {
 
 // Clone returns a shallow copy of the registry and its direct entries.
 // The parent registry reference is preserved.
-func (r *TagRegistry) Clone() *TagRegistry {
+func (r *tagRegistry) Clone() *tagRegistry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	return &TagRegistry{
+	return &tagRegistry{
 		tags:   maps.Clone(r.tags),
 		parent: r.parent,
 	}
@@ -124,14 +124,14 @@ func (r *TagRegistry) Clone() *TagRegistry {
 
 // defaultTagRegistry is the package-wide built-in tag registry used as the
 // parent layer for engine-local registries.
-var defaultTagRegistry = NewTagRegistry()
+var defaultTagRegistry = newTagRegistry()
 
 // Built-in tag registration.
 
 // builtinTag pairs a tag name with its parser for deterministic registration.
 type builtinTag struct {
 	name   string
-	parser TagParser
+	parser tagParser
 }
 
 // builtinTags lists tags that are registered into the built-in registry

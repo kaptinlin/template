@@ -19,7 +19,7 @@ Default guidance:
 - Prefer `NewDirLoader` for local directories.
 - Prefer `FormatHTML` for HTML output.
 - Treat `NewFSLoader(os.DirFS(...))` as an explicit escape hatch.
-- Treat `SafeString` as trusted output only, never as a convenience cast.
+- Treat `SafeHTML` as trusted output only, never as a convenience cast.
 
 These defaults are intentionally opinionated: the library is designed so
 the most common path is also the safest one.
@@ -42,7 +42,7 @@ or dynamic paths. Specifically:
 | Template names passed to `Engine.Render(name, ...)` | Same — the caller may derive `name` from URL parameters or frontmatter |
 | Symbolic links in the templates directory | Accidental or malicious escape of the root |
 | File names on case-insensitive filesystems | Cache collisions in multi-layer chains |
-| Pre-rendered HTML from upstream services | Must be explicitly marked `SafeString` — never infer "trusted" |
+| Pre-rendered HTML from upstream services | Must be explicitly marked `SafeHTML` — never infer "trusted" |
 
 ## Security decisions at a glance
 
@@ -51,7 +51,7 @@ that determine most real-world safety outcomes:
 
 1. Pick `FormatHTML` whenever the output is HTML.
 2. Pick `NewDirLoader` whenever templates live on local disk.
-3. Use `SafeString` only for content that has already been validated or
+3. Use `SafeHTML` only for content that has already been validated or
    escaped for the exact output context.
 4. Keep template names and dynamic include paths on the validated
    loader path; do not bypass `Loader.Open`.
@@ -70,7 +70,7 @@ that determine most real-world safety outcomes:
 | T8 | Mutual include cycle | A → B → A | Parse-time detection downgrades to lazy; runtime hits depth cap |
 | T9 | Self-include / deep chain | A → A or 50-level nesting | Hard-coded `maxIncludeDepth = 32`, `maxExtendsDepth = 10` |
 | T10 | HTML injection (XSS) | `{{ user_title }}` contains `<script>` | `FormatHTML` auto-escapes by default |
-| T11 | Double-escape bypass | `{{ x \| safe \| some_filter }}` | Non-safe-aware filters downgrade `SafeString` back to plain |
+| T11 | Double-escape bypass | `{{ x \| safe \| some_filter }}` | Non-safe-aware filters downgrade `SafeHTML` back to plain |
 
 ## Layered defense
 
@@ -176,18 +176,18 @@ something is probably wrong.
 An engine using `FormatHTML` wires `ec.autoescape = true`, which causes
 `OutputNode.Execute` to pipe every `{{ expr }}` output through
 `filter.Escape` before writing — **unless** the underlying value is a
-`SafeString`.
+`SafeHTML`.
 
-`SafeString` is opt-in, not opt-out:
+`SafeHTML` is opt-in, not opt-out:
 
 - The `safe` filter wraps a value: `{{ content | safe }}`
 - Go code can construct one directly:
-  `template.SafeString("<p>trusted</p>")`
+  `template.SafeHTML("<p>trusted</p>")`
 - The `FormatHTML` overrides of `escape`, `escape_once`, and `h` return
-  `SafeString`, so `{{ x | escape }}` doesn't double-escape.
+  `SafeHTML`, so `{{ x | escape }}` doesn't double-escape.
 
 **Conservative downgrade**: if any non-safe-aware filter runs on a
-`SafeString`, the wrapper is stripped and the value becomes plain
+`SafeHTML`, the wrapper is stripped and the value becomes plain
 string again (subject to auto-escape). This prevents "I thought I was
 safe" XSS bugs like `{{ user_input | safe | upper }}`. The only
 safe-aware filters in v1 are `safe` and (in `FormatHTML`) the `escape`

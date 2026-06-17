@@ -8,10 +8,10 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/go-json-experiment/json"
-	"github.com/kaptinlin/jsonpointer"
 )
 
 // Data stores template variables as a string-keyed map.
@@ -26,14 +26,14 @@ type DataBuilder struct {
 	errors  []error
 }
 
-// RenderContext holds the execution state for template rendering,
+// renderContext holds the execution state for template rendering,
 // separating render input data (Data) from local bindings (Locals).
-type RenderContext struct {
+type renderContext struct {
 	Data   Data // render input data
 	Locals Data // local bindings (e.g., loop counters)
 
-	// engine is the owning Engine when rendering via Engine.Render; nil for
-	// standalone Template.Execute calls.
+	// engine is the owning Engine for loader-backed renders; nil when a
+	// template parsed from a source string renders without a loader.
 	engine *Engine
 
 	// autoescape controls whether {{ expr }} output is HTML-escaped.
@@ -45,7 +45,7 @@ type RenderContext struct {
 	includeDepth int
 
 	// currentLeaf is the "most-child" template in the current extends
-	// chain, used by BlockNode.Execute to walk up through overrides.
+	// chain, used by blockNode.Execute to walk up through overrides.
 	currentLeaf *Template
 }
 
@@ -112,31 +112,94 @@ func (c Data) Get(key string) (any, error) {
 		return nil, fmt.Errorf("%w: empty path component in '%s'", ErrContextInvalidKeyType, key)
 	}
 
-	value, err := jsonpointer.Get(c, parts...)
-	if err != nil {
-		return nil, classifyGetError(err, key)
+	current := any(c)
+	for _, part := range parts {
+		next, err := dataPathValue(current, part)
+		if err != nil {
+			return nil, wrapDataGetError(err, key)
+		}
+		current = next
 	}
-	return value, nil
+	return current, nil
 }
 
-// classifyGetError maps jsonpointer errors to data-level sentinel
-// errors.
-func classifyGetError(err error, key string) error {
-	switch {
-	case errors.Is(err, jsonpointer.ErrNotFound),
-		errors.Is(err, jsonpointer.ErrKeyNotFound),
-		errors.Is(err, jsonpointer.ErrFieldNotFound):
-		return fmt.Errorf("%w: '%s'", ErrContextKeyNotFound, key)
-	case errors.Is(err, jsonpointer.ErrIndexOutOfBounds),
-		errors.Is(err, jsonpointer.ErrInvalidIndex):
-		return fmt.Errorf("%w: '%s'", ErrContextIndexOutOfRange, key)
-	case errors.Is(err, jsonpointer.ErrInvalidPath),
-		errors.Is(err, jsonpointer.ErrInvalidPathStep),
-		errors.Is(err, jsonpointer.ErrNilPointer):
-		return fmt.Errorf("%w: '%s'", ErrContextInvalidKeyType, key)
-	default:
-		return fmt.Errorf("accessing '%s': %w", key, err)
+func dataPathValue(current any, part string) (any, error) {
+	rv := newValue(current).resolved()
+	if !rv.IsValid() {
+		return nil, ErrContextInvalidKeyType
 	}
+
+	switch rv.Kind() {
+	case reflect.Map:
+		key, ok := dataPathMapKey(part, rv.Type().Key())
+		if !ok {
+			return nil, ErrContextKeyNotFound
+		}
+		value := rv.MapIndex(key)
+		if !value.IsValid() {
+			return nil, ErrContextKeyNotFound
+		}
+		return value.Interface(), nil
+	case reflect.Struct:
+		field, found := findStructField(rv, part)
+		if !found {
+			return nil, ErrContextKeyNotFound
+		}
+		return field.Interface(), nil
+	case reflect.Slice, reflect.Array:
+		index, err := dataPathIndex(part)
+		if err != nil || index < 0 || index >= rv.Len() {
+			return nil, ErrContextIndexOutOfRange
+		}
+		return rv.Index(index).Interface(), nil
+	case reflect.String:
+		index, err := dataPathIndex(part)
+		if err != nil {
+			return nil, ErrContextKeyNotFound
+		}
+		runes := []rune(rv.String())
+		if index < 0 || index >= len(runes) {
+			return nil, ErrContextIndexOutOfRange
+		}
+		return string(runes[index]), nil
+	default:
+		return nil, ErrContextKeyNotFound
+	}
+}
+
+func dataPathMapKey(part string, target reflect.Type) (reflect.Value, bool) {
+	if key, ok := mapKeyValue(part, target); ok {
+		return key, true
+	}
+
+	switch target.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		i, err := strconv.ParseInt(part, 10, target.Bits())
+		if err != nil {
+			return reflect.Value{}, false
+		}
+		return reflect.ValueOf(i).Convert(target), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		i, err := strconv.ParseUint(part, 10, target.Bits())
+		if err != nil {
+			return reflect.Value{}, false
+		}
+		return reflect.ValueOf(i).Convert(target), true
+	default:
+		return reflect.Value{}, false
+	}
+}
+
+func dataPathIndex(part string) (int, error) {
+	i, err := strconv.ParseInt(part, 10, 0)
+	if err != nil || !int64FitsInInt(i) {
+		return 0, ErrContextIndexOutOfRange
+	}
+	return int(i), nil
+}
+
+func wrapDataGetError(err error, key string) error {
+	return fmt.Errorf("%w: '%s'", err, key)
 }
 
 // splitDotPath splits a dot-notation string into path components.
@@ -374,16 +437,16 @@ func (cb *DataBuilder) Build() (Data, error) {
 	return cb.context, nil
 }
 
-// NewRenderContext creates a new [RenderContext] from user data.
-func NewRenderContext(data Data) *RenderContext {
-	return &RenderContext{
+// newRenderContext creates a new [renderContext] from user data.
+func newRenderContext(data Data) *renderContext {
+	return &renderContext{
 		Data:   data,
 		Locals: NewData(),
 	}
 }
 
 // Get retrieves a variable, checking Locals first, then Data.
-func (ec *RenderContext) Get(name string) (any, bool) {
+func (ec *renderContext) Get(name string) (any, bool) {
 	if val, err := ec.Locals.Get(name); err == nil {
 		return val, true
 	}
@@ -398,15 +461,15 @@ func (ec *RenderContext) Get(name string) (any, bool) {
 }
 
 // Set stores a variable in the local bindings.
-func (ec *RenderContext) Set(name string, value any) {
+func (ec *renderContext) Set(name string, value any) {
 	ec.Locals.Set(name, value)
 }
 
-// NewChildContext creates a child [RenderContext] that shares the
+// newChildContext creates a child [renderContext] that shares the
 // parent's Data, copies the Locals for isolated scope, and preserves
 // runtime rendering state.
-func NewChildContext(parent *RenderContext) *RenderContext {
-	return &RenderContext{
+func newChildContext(parent *renderContext) *renderContext {
+	return &renderContext{
 		Data:         parent.Data,
 		Locals:       maps.Clone(parent.Locals),
 		engine:       parent.engine,
@@ -416,10 +479,10 @@ func NewChildContext(parent *RenderContext) *RenderContext {
 	}
 }
 
-// NewIsolatedChildContext creates a child [RenderContext] with fresh
+// newIsolatedChildContext creates a child [renderContext] with fresh
 // Data/Locals while preserving runtime rendering state.
-func NewIsolatedChildContext(parent *RenderContext) *RenderContext {
-	return &RenderContext{
+func newIsolatedChildContext(parent *renderContext) *renderContext {
+	return &renderContext{
 		Data:         nil,
 		Locals:       NewData(),
 		engine:       parent.engine,

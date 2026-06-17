@@ -13,29 +13,29 @@ import (
 	"github.com/go-json-experiment/json"
 )
 
-// Value wraps a Go value for template execution, providing
+// value wraps a Go value for template execution, providing
 // type checking, conversion, and comparison operations.
-type Value struct {
+type value struct {
 	val any
 }
 
-// NewValue creates a Value wrapping v.
-func NewValue(v any) *Value {
-	return &Value{val: v}
+// newValue creates a value wrapping v.
+func newValue(v any) *value {
+	return &value{val: v}
 }
 
 // Interface returns the underlying Go value.
-func (v *Value) Interface() any {
+func (v *value) Interface() any {
 	return v.val
 }
 
 // IsNil reports whether the value is nil.
-func (v *Value) IsNil() bool {
+func (v *value) IsNil() bool {
 	return !v.resolved().IsValid()
 }
 
 // resolved dereferences pointers and interfaces to get the underlying value.
-func (v *Value) resolved() reflect.Value {
+func (v *value) resolved() reflect.Value {
 	if v.val == nil {
 		return reflect.Value{}
 	}
@@ -48,7 +48,7 @@ func (v *Value) resolved() reflect.Value {
 
 // IsTrue reports whether the value is truthy in a template context.
 // False values: nil, false, 0, "", empty slice/map/array.
-func (v *Value) IsTrue() bool {
+func (v *value) IsTrue() bool {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return false
@@ -81,8 +81,28 @@ func formatFloat(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
+func floatToExactInt64(f float64) (int64, error) {
+	const (
+		minInt64        = -1 << 63
+		maxInt64PlusOne = 1 << 63
+	)
+	if math.IsNaN(f) || math.IsInf(f, 0) || math.Trunc(f) != f {
+		return 0, ErrCannotConvertToInt
+	}
+	if f < float64(minInt64) || f >= float64(maxInt64PlusOne) {
+		return 0, errIntegerOverflow
+	}
+	return int64(f), nil
+}
+
+func int64FitsInInt(i int64) bool {
+	maxInt := int64(int(^uint(0) >> 1))
+	minInt := -maxInt - 1
+	return i >= minInt && i <= maxInt
+}
+
 // String returns the string representation of the value.
-func (v *Value) String() string {
+func (v *value) String() string {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return ""
@@ -167,7 +187,7 @@ func formatSliceItem(rv reflect.Value) string {
 }
 
 // Int returns the value as int64, converting if possible.
-func (v *Value) Int() (int64, error) {
+func (v *value) Int() (int64, error) {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToInt
@@ -178,23 +198,18 @@ func (v *Value) Int() (int64, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		u := rv.Uint()
 		if u > math.MaxInt64 {
-			return 0, ErrIntegerOverflow
+			return 0, errIntegerOverflow
 		}
 		return int64(u), nil
 	case reflect.Float32, reflect.Float64:
-		return int64(rv.Float()), nil
-	case reflect.Bool:
-		if rv.Bool() {
-			return 1, nil
-		}
-		return 0, nil
+		return floatToExactInt64(rv.Float())
 	default:
 		return 0, fmt.Errorf("%w: %T", ErrCannotConvertToInt, v.val)
 	}
 }
 
 // Float returns the value as float64, converting if possible.
-func (v *Value) Float() (float64, error) {
+func (v *value) Float() (float64, error) {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return 0, ErrCannotConvertNilToFloat
@@ -212,18 +227,20 @@ func (v *Value) Float() (float64, error) {
 }
 
 // Bool reports whether the value is truthy.
-func (v *Value) Bool() bool {
+func (v *value) Bool() bool {
 	return v.IsTrue()
 }
 
 // Len returns the length of the value (string, slice, map, or array).
-func (v *Value) Len() (int, error) {
+func (v *value) Len() (int, error) {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return 0, nil
 	}
 	switch rv.Kind() {
-	case reflect.String, reflect.Slice, reflect.Map, reflect.Array:
+	case reflect.String:
+		return len([]rune(rv.String())), nil
+	case reflect.Slice, reflect.Map, reflect.Array:
 		return rv.Len(), nil
 	default:
 		return 0, fmt.Errorf("%w: %T", ErrTypeHasNoLength, v.val)
@@ -231,7 +248,7 @@ func (v *Value) Len() (int, error) {
 }
 
 // Index returns the element at index i (for slices, arrays, strings).
-func (v *Value) Index(i int) (*Value, error) {
+func (v *value) Index(i int) (*value, error) {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return nil, ErrCannotIndexNil
@@ -241,20 +258,20 @@ func (v *Value) Index(i int) (*Value, error) {
 		if i < 0 || i >= rv.Len() {
 			return nil, fmt.Errorf("%w: %d", ErrIndexOutOfRange, i)
 		}
-		return NewValue(rv.Index(i).Interface()), nil
+		return newValue(rv.Index(i).Interface()), nil
 	case reflect.String:
-		s := rv.String()
-		if i < 0 || i >= len(s) {
+		runes := []rune(rv.String())
+		if i < 0 || i >= len(runes) {
 			return nil, fmt.Errorf("%w: %d", ErrIndexOutOfRange, i)
 		}
-		return NewValue(string(s[i])), nil
+		return newValue(string(runes[i])), nil
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrTypeNotIndexable, v.val)
 	}
 }
 
 // Key returns the map value for the given key.
-func (v *Value) Key(key any) (*Value, error) {
+func (v *value) Key(key any) (*value, error) {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return nil, ErrCannotGetKeyFromNil
@@ -262,16 +279,62 @@ func (v *Value) Key(key any) (*Value, error) {
 	if rv.Kind() != reflect.Map {
 		return nil, fmt.Errorf("%w: %T", ErrTypeNotMap, v.val)
 	}
-	result := rv.MapIndex(reflect.ValueOf(key))
-	if !result.IsValid() {
-		return NewValue(nil), nil
+	mapKey, ok := mapKeyValue(key, rv.Type().Key())
+	if !ok {
+		return newValue(nil), nil
 	}
-	return NewValue(result.Interface()), nil
+	result := rv.MapIndex(mapKey)
+	if !result.IsValid() {
+		return newValue(nil), nil
+	}
+	return newValue(result.Interface()), nil
+}
+
+func mapKeyValue(key any, target reflect.Type) (reflect.Value, bool) {
+	if key == nil {
+		return reflect.Value{}, false
+	}
+	kv := reflect.ValueOf(key)
+	if !kv.IsValid() {
+		return reflect.Value{}, false
+	}
+	if kv.Type().AssignableTo(target) {
+		return kv, true
+	}
+	if !kv.Type().ConvertibleTo(target) {
+		return reflect.Value{}, false
+	}
+	if !mapKeyConversionPreservesValue(kv, target) {
+		return reflect.Value{}, false
+	}
+	return kv.Convert(target), true
+}
+
+func mapKeyConversionPreservesValue(v reflect.Value, target reflect.Type) bool {
+	if v.Kind() == target.Kind() {
+		return true
+	}
+	if !isNumericKind(v.Kind()) || !isNumericKind(target.Kind()) {
+		return false
+	}
+	converted := v.Convert(target)
+	return reflect.DeepEqual(v.Interface(), converted.Convert(v.Type()).Interface())
+}
+
+func isNumericKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
 }
 
 // Field returns the value of a struct field or map key by name.
 // For structs, it searches by JSON tag first, then by exported field name.
-func (v *Value) Field(name string) (*Value, error) {
+func (v *value) Field(name string) (*value, error) {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return nil, ErrCannotGetFieldFromNil
@@ -280,15 +343,19 @@ func (v *Value) Field(name string) (*Value, error) {
 	case reflect.Struct:
 		field, found := findStructField(rv, name)
 		if !found {
-			return nil, fmt.Errorf("%w: %q", ErrStructHasNoField, name)
+			return newValue(nil), nil
 		}
-		return NewValue(field.Interface()), nil
+		return newValue(field.Interface()), nil
 	case reflect.Map:
-		result := rv.MapIndex(reflect.ValueOf(name))
-		if !result.IsValid() {
-			return NewValue(nil), nil
+		mapKey, ok := mapKeyValue(name, rv.Type().Key())
+		if !ok {
+			return newValue(nil), nil
 		}
-		return NewValue(result.Interface()), nil
+		result := rv.MapIndex(mapKey)
+		if !result.IsValid() {
+			return newValue(nil), nil
+		}
+		return newValue(result.Interface()), nil
 	default:
 		return nil, fmt.Errorf("%w: %T %q", ErrTypeHasNoField, v.val, name)
 	}
@@ -306,7 +373,11 @@ func findStructField(rv reflect.Value, name string) (reflect.Value, bool) {
 
 	// First pass: match by JSON tag.
 	for i := range n {
-		tag := typ.Field(i).Tag.Get("json")
+		field := typ.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		tag := field.Tag.Get("json")
 		if tag == "" {
 			continue
 		}
@@ -321,7 +392,15 @@ func findStructField(rv reflect.Value, name string) (reflect.Value, bool) {
 
 	// Second pass: match by exported field name.
 	for i := range n {
-		if typ.Field(i).Name == name {
+		field := typ.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		tagName, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if tagName == "-" {
+			continue
+		}
+		if field.Name == name {
 			return rv.Field(i), true
 		}
 	}
@@ -332,7 +411,7 @@ func findStructField(rv reflect.Value, name string) (reflect.Value, bool) {
 // Iterate calls fn for each element in a collection (slice, array, map, string).
 // fn receives the iteration index, total count, key, and value.
 // Returning false from fn stops iteration early.
-func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
+func (v *value) Iterate(fn func(idx, count int, key, val *value) bool) error {
 	rv := v.resolved()
 	if !rv.IsValid() {
 		return nil
@@ -341,7 +420,7 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 	case reflect.Slice, reflect.Array:
 		count := rv.Len()
 		for i := range count {
-			if !fn(i, count, NewValue(i), NewValue(rv.Index(i).Interface())) {
+			if !fn(i, count, newValue(i), newValue(rv.Index(i).Interface())) {
 				break
 			}
 		}
@@ -349,7 +428,7 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 	case reflect.Map:
 		keys := rv.MapKeys()
 		slices.SortFunc(keys, func(a, b reflect.Value) int {
-			va, vb := NewValue(a.Interface()), NewValue(b.Interface())
+			va, vb := newValue(a.Interface()), newValue(b.Interface())
 			if fa, err := va.Float(); err == nil {
 				if fb, err := vb.Float(); err == nil {
 					return cmp.Compare(fa, fb)
@@ -359,7 +438,7 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 		})
 		count := len(keys)
 		for i, k := range keys {
-			if !fn(i, count, NewValue(k.Interface()), NewValue(rv.MapIndex(k).Interface())) {
+			if !fn(i, count, newValue(k.Interface()), newValue(rv.MapIndex(k).Interface())) {
 				break
 			}
 		}
@@ -368,7 +447,7 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 		rs := []rune(rv.String())
 		count := len(rs)
 		for i, r := range rs {
-			if !fn(i, count, NewValue(i), NewValue(string(r))) {
+			if !fn(i, count, newValue(i), newValue(string(r))) {
 				break
 			}
 		}
@@ -380,7 +459,7 @@ func (v *Value) Iterate(fn func(idx, count int, key, val *Value) bool) error {
 
 // Compare compares v with other.
 // It returns -1 if v < other, 0 if v == other, 1 if v > other.
-func (v *Value) Compare(other *Value) (int, error) {
+func (v *value) Compare(other *value) (int, error) {
 	if v.IsNil() && other.IsNil() {
 		return 0, nil
 	}
@@ -403,7 +482,7 @@ func (v *Value) Compare(other *Value) (int, error) {
 }
 
 // Equals reports whether v and other represent the same value.
-func (v *Value) Equals(other *Value) bool {
+func (v *value) Equals(other *value) bool {
 	if v.IsNil() && other.IsNil() {
 		return true
 	}

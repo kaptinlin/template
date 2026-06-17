@@ -66,6 +66,9 @@ func run(out io.Writer) error {
 			"broken.txt":   "broken token={{ token|missing_filter }}\n",
 		})),
 		template.WithFormat(template.FormatText),
+		template.WithFilter("redact", func(_ any, _ ...any) (any, error) {
+			return redacted, nil
+		}),
 	)
 
 	data := template.Data{
@@ -83,10 +86,6 @@ func run(out io.Writer) error {
 	}, data); err != nil {
 		return err
 	}
-
-	engine.RegisterFilter("redact", func(_ any, _ ...any) (any, error) {
-		return redacted, nil
-	})
 
 	if _, err := fmt.Fprintln(out, "filter redaction:"); err != nil {
 		return err

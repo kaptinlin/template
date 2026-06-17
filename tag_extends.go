@@ -6,23 +6,23 @@ import (
 	"io"
 )
 
-// ExtendsNode is a marker for {% extends "parent" %}. It produces no
-// output directly; inheritance is handled by [Template.Execute] when
+// extendsNode is a marker for {% extends "parent" %}. It produces no
+// output directly; inheritance is handled by the template execution path when
 // it detects a non-nil parent field.
-type ExtendsNode struct {
+type extendsNode struct {
 	Line int
 	Col  int
 }
 
 // Position returns the source position of the extends tag.
-func (n *ExtendsNode) Position() (int, int) { return n.Line, n.Col }
+func (n *extendsNode) Position() (int, int) { return n.Line, n.Col }
 
 // String returns a debug representation.
-func (n *ExtendsNode) String() string { return "Extends" }
+func (n *extendsNode) String() string { return "Extends" }
 
-// Execute is a no-op. The parent relationship is established at parse
-// time and consumed by Template.Execute.
-func (n *ExtendsNode) Execute(_ *RenderContext, _ io.Writer) error {
+// Execute is a no-op. The parent relationship is established at parse time and
+// consumed by the template execution path.
+func (n *extendsNode) Execute(_ *renderContext, _ io.Writer) error {
 	return nil
 }
 
@@ -41,7 +41,7 @@ const maxExtendsDepth = 10
 //
 // Sets doc.parent on the owning parser so compilation can transfer the
 // reference to the final Template.
-func parseExtendsTag(doc *Parser, start *Token, args *Parser) (Statement, error) {
+func parseExtendsTag(doc *parser, start *token, args *parser) (statement, error) {
 	if doc.hasNonTrivialContent {
 		return nil, fmt.Errorf("%w at line %d", ErrExtendsNotFirst, start.Line)
 	}
@@ -55,10 +55,10 @@ func parseExtendsTag(doc *Parser, start *Token, args *Parser) (Statement, error)
 	if tok == nil {
 		return nil, newParseError("extends: expected parent path", start.Line, start.Col)
 	}
-	if tok.Type != TokenString {
+	if tok.Type != tokenString {
 		return nil, fmt.Errorf("%w at line %d", ErrExtendsPathNotLiteral, start.Line)
 	}
-	parentName := tok.Value
+	parentName := tok.value
 	args.Advance()
 
 	if args.Remaining() > 0 {
@@ -69,12 +69,7 @@ func parseExtendsTag(doc *Parser, start *Token, args *Parser) (Statement, error)
 	// (the tag is not in the global registry), so doc.Engine() is non-nil here.
 	engine := doc.Engine()
 
-	// Circular extends: detect if the parent is already mid-compile.
-	if engine.isParsing(parentName) {
-		return nil, fmt.Errorf("%w: %q", ErrCircularExtends, parentName)
-	}
-
-	parentTpl, err := engine.Load(parentName)
+	parentTpl, err := engine.loadExtends(parentName)
 	if err != nil {
 		if errors.Is(err, ErrTemplateNotFound) {
 			return nil, err
@@ -92,5 +87,5 @@ func parseExtendsTag(doc *Parser, start *Token, args *Parser) (Statement, error)
 	}
 
 	doc.parent = parentTpl
-	return &ExtendsNode{Line: start.Line, Col: start.Col}, nil
+	return &extendsNode{Line: start.Line, Col: start.Col}, nil
 }

@@ -12,28 +12,28 @@ func noopFilter(value any, _ ...any) (any, error) {
 	return value, nil
 }
 
-// --- Registry type tests ---
+// --- registry type tests ---
 
 func TestRegistryRegisterAndFilter(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name      string
-		setup     func(r *Registry)
+		setup     func(r *registry)
 		register  string
 		query     string
 		wantFound bool
 	}{
 		{
 			name:      "register and retrieve",
-			setup:     func(_ *Registry) {},
+			setup:     func(_ *registry) {},
 			register:  "testfilter",
 			query:     "testfilter",
 			wantFound: true,
 		},
 		{
 			name: "overwrite existing",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("existing", noopFilter)
 			},
 			register:  "existing",
@@ -42,14 +42,14 @@ func TestRegistryRegisterAndFilter(t *testing.T) {
 		},
 		{
 			name:      "query missing filter",
-			setup:     func(_ *Registry) {},
+			setup:     func(_ *registry) {},
 			register:  "registered",
 			query:     "nonexistent",
 			wantFound: false,
 		},
 		{
 			name: "multiple filters independent",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("alpha", noopFilter)
 			},
 			register:  "bravo",
@@ -62,7 +62,7 @@ func TestRegistryRegisterAndFilter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := NewRegistry()
+			r := newRegistry()
 			tt.setup(r)
 			r.Register(tt.register, noopFilter)
 
@@ -80,7 +80,7 @@ func TestRegistryRegisterAndFilter(t *testing.T) {
 func TestRegistryRegisterNilPanics(t *testing.T) {
 	t.Parallel()
 
-	r := NewRegistry()
+	r := newRegistry()
 
 	defer func() {
 		if recover() == nil {
@@ -94,7 +94,7 @@ func TestRegistryRegisterNilPanics(t *testing.T) {
 func TestRegistryReplaceOverwrites(t *testing.T) {
 	t.Parallel()
 
-	r := NewRegistry()
+	r := newRegistry()
 	r.Register("answer", func(_ any, _ ...any) (any, error) {
 		return "old", nil
 	})
@@ -118,7 +118,7 @@ func TestRegistryReplaceOverwrites(t *testing.T) {
 func TestRegistryMustRegisterNilPanics(t *testing.T) {
 	t.Parallel()
 
-	r := NewRegistry()
+	r := newRegistry()
 
 	defer func() {
 		if recover() == nil {
@@ -134,24 +134,24 @@ func TestRegistryList(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		setup func(r *Registry)
+		setup func(r *registry)
 		want  []string
 	}{
 		{
 			name:  "empty registry",
-			setup: func(_ *Registry) {},
+			setup: func(_ *registry) {},
 			want:  nil,
 		},
 		{
 			name: "single filter",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("alpha", noopFilter)
 			},
 			want: []string{"alpha"},
 		},
 		{
 			name: "sorted order",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("charlie", noopFilter)
 				r.Register("alpha", noopFilter)
 				r.Register("bravo", noopFilter)
@@ -160,7 +160,7 @@ func TestRegistryList(t *testing.T) {
 		},
 		{
 			name: "lexicographic numeric sort",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("2nd", noopFilter)
 				r.Register("10th", noopFilter)
 				r.Register("1st", noopFilter)
@@ -173,7 +173,7 @@ func TestRegistryList(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := NewRegistry()
+			r := newRegistry()
 			tt.setup(r)
 
 			got := r.List()
@@ -187,10 +187,10 @@ func TestRegistryList(t *testing.T) {
 func TestRegistryCloneCopiesDirectFiltersAndParent(t *testing.T) {
 	t.Parallel()
 
-	parent := NewRegistry()
+	parent := newRegistry()
 	parent.Register("parent", noopFilter)
 
-	r := NewRegistry()
+	r := newRegistry()
 	r.parent = parent
 	r.Register("local", noopFilter)
 
@@ -210,13 +210,13 @@ func TestRegistryHas(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		setup  func(r *Registry)
+		setup  func(r *registry)
 		filter string
 		want   bool
 	}{
 		{
 			name: "existing filter",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("myfilter", noopFilter)
 			},
 			filter: "myfilter",
@@ -224,19 +224,19 @@ func TestRegistryHas(t *testing.T) {
 		},
 		{
 			name:   "missing filter",
-			setup:  func(_ *Registry) {},
+			setup:  func(_ *registry) {},
 			filter: "nonexistent",
 			want:   false,
 		},
 		{
 			name:   "empty name",
-			setup:  func(_ *Registry) {},
+			setup:  func(_ *registry) {},
 			filter: "",
 			want:   false,
 		},
 		{
 			name: "case sensitive",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("Upper", noopFilter)
 			},
 			filter: "upper",
@@ -248,7 +248,7 @@ func TestRegistryHas(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := NewRegistry()
+			r := newRegistry()
 			tt.setup(r)
 
 			if got := r.Has(tt.filter); got != tt.want {
@@ -263,13 +263,13 @@ func TestRegistryUnregister(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		setup      func(r *Registry)
+		setup      func(r *registry)
 		unregister string
 		wantAfter  map[string]bool
 	}{
 		{
 			name: "removes existing filter",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("removeme", noopFilter)
 				r.Register("keepme", noopFilter)
 			},
@@ -281,7 +281,7 @@ func TestRegistryUnregister(t *testing.T) {
 		},
 		{
 			name: "no-op for missing filter",
-			setup: func(r *Registry) {
+			setup: func(r *registry) {
 				r.Register("keep", noopFilter)
 			},
 			unregister: "nonexistent",
@@ -292,7 +292,7 @@ func TestRegistryUnregister(t *testing.T) {
 		},
 		{
 			name:       "no-op on empty registry",
-			setup:      func(_ *Registry) {},
+			setup:      func(_ *registry) {},
 			unregister: "anything",
 			wantAfter:  map[string]bool{"anything": false},
 		},
@@ -302,7 +302,7 @@ func TestRegistryUnregister(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := NewRegistry()
+			r := newRegistry()
 			tt.setup(r)
 			r.Unregister(tt.unregister)
 
@@ -319,7 +319,7 @@ func TestRegistryUnregister(t *testing.T) {
 // --- Built-in registry tests ---
 
 func TestBuiltinRegistryRegisterAndFilter(t *testing.T) {
-	r := NewRegistry()
+	r := newRegistry()
 	r.Register("testfilter", noopFilter)
 
 	fn, ok := r.Filter("testfilter")
@@ -337,7 +337,7 @@ func TestBuiltinRegistryRegisterAndFilter(t *testing.T) {
 }
 
 func TestBuiltinRegistryRegisterNilPanics(t *testing.T) {
-	r := NewRegistry()
+	r := newRegistry()
 	defer func() {
 		if recover() == nil {
 			t.Error("Register(nil) did not panic, want panic")
@@ -348,7 +348,7 @@ func TestBuiltinRegistryRegisterNilPanics(t *testing.T) {
 }
 
 func TestBuiltinRegistryList(t *testing.T) {
-	r := NewRegistry()
+	r := newRegistry()
 	r.Register("charlie", noopFilter)
 	r.Register("alpha", noopFilter)
 	r.Register("bravo", noopFilter)
@@ -361,7 +361,7 @@ func TestBuiltinRegistryList(t *testing.T) {
 }
 
 func TestBuiltinRegistryHas(t *testing.T) {
-	r := NewRegistry()
+	r := newRegistry()
 	r.Register("myfilter", noopFilter)
 
 	if got := r.Has("myfilter"); !got {
@@ -373,7 +373,7 @@ func TestBuiltinRegistryHas(t *testing.T) {
 }
 
 func TestBuiltinRegistryUnregister(t *testing.T) {
-	r := NewRegistry()
+	r := newRegistry()
 	r.Register("removeme", noopFilter)
 	r.Register("keepme", noopFilter)
 	r.Unregister("removeme")
@@ -444,7 +444,7 @@ func TestFilterRegistryConcurrentAccess(_ *testing.T) {
 	// Concurrent register and query to verify thread safety.
 	const goroutines = 10
 	done := make(chan struct{})
-	r := NewRegistry()
+	r := newRegistry()
 
 	for i := range goroutines {
 		go func(id int) {

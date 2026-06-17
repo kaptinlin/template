@@ -1,6 +1,7 @@
 package template
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -84,7 +85,12 @@ func TestToString(t *testing.T) {
 		{
 			name:     "slice of ints",
 			input:    []int{1, 2, 3},
-			expected: "[1 2 3]",
+			expected: "[1,2,3]",
+		},
+		{
+			name:     "map deterministic JSON",
+			input:    map[string]int{"b": 2, "a": 1},
+			expected: `{"a":1,"b":2}`,
 		},
 	}
 
@@ -124,10 +130,10 @@ func TestToInteger(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "float64 truncated",
+			name:        "float64 fractional errors",
 			input:       3.14,
-			expected:    3,
-			expectError: false,
+			expected:    0,
+			expectError: true,
 		},
 		{
 			name:        "float64 whole number",
@@ -136,10 +142,34 @@ func TestToInteger(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "float64 negative",
+			name:        "float64 negative fractional errors",
 			input:       -2.9,
-			expected:    -2,
+			expected:    0,
+			expectError: true,
+		},
+		{
+			name:        "float32 whole number",
+			input:       float32(7),
+			expected:    7,
 			expectError: false,
+		},
+		{
+			name:        "int64 value",
+			input:       int64(64),
+			expected:    64,
+			expectError: false,
+		},
+		{
+			name:        "uint value",
+			input:       uint(8),
+			expected:    8,
+			expectError: false,
+		},
+		{
+			name:        "uint64 overflow errors",
+			input:       uint64(math.MaxInt64) + 1,
+			expected:    0,
+			expectError: true,
 		},
 		{
 			name:        "string numeric",

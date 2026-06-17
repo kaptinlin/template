@@ -107,6 +107,18 @@ func TestStringFilters(t *testing.T) {
 			expected: "5",
 		},
 		{
+			name:     "LengthFilterUnicodeString",
+			template: "{{ word | length }}",
+			context:  map[string]any{"word": "a界b"},
+			expected: "3",
+		},
+		{
+			name:     "SizeFilterUnicodeString",
+			template: "{{ word | size }}",
+			context:  map[string]any{"word": "a界b"},
+			expected: "3",
+		},
+		{
 			name:     "UpperFilter",
 			template: "{{ 'hello' | upper }}",
 			expected: "HELLO",
@@ -259,6 +271,12 @@ func TestStringFilters(t *testing.T) {
 			expected: "ell",
 		},
 		{
+			name:     "SliceFilterUnicodeString",
+			template: "{{ word | slice:1,1 }}",
+			context:  map[string]any{"word": "a界b"},
+			expected: "界",
+		},
+		{
 			name:     "SliceFilterStringNoLength",
 			template: "{{ 'hello' | slice:1 }}",
 			expected: "e",
@@ -395,6 +413,12 @@ func TestStringFilterErrors(t *testing.T) {
 		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
 	})
 
+	t.Run("TruncateFractionalLength", func(t *testing.T) {
+		_, err := truncateFilter("hello", 3.14)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
+	})
+
 	t.Run("PluralizeInvalidCount", func(t *testing.T) {
 		_, err := pluralizeFilter("not_a_number", "apple", "apples")
 		require.Error(t, err)
@@ -451,6 +475,12 @@ func TestStringFilterErrors(t *testing.T) {
 
 	t.Run("SliceInvalidOffset", func(t *testing.T) {
 		_, err := sliceFilter("hello", "abc")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
+	})
+
+	t.Run("SliceFractionalOffset", func(t *testing.T) {
+		_, err := sliceFilter("hello", 1.2)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrFilterInputNotNumeric)
 	})
