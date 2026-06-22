@@ -27,7 +27,7 @@ jobs:
       GOWORK: "off"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         # Do NOT initialize submodules
 
       - name: Configure Git for private modules
@@ -66,7 +66,7 @@ jobs:
       GOMEMLIMIT: 4GiB
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         # Do NOT initialize submodules
 
       - name: Configure Git for private modules
@@ -110,7 +110,7 @@ jobs:
       GOWORK: "off"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configure Git for private modules
         env:
