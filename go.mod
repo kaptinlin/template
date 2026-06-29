@@ -3,9 +3,9 @@ module github.com/kaptinlin/template
 go 1.26.4
 
 require (
-	github.com/go-json-experiment/json v0.0.0-20260601182631-00ed12fed2a6
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/google/go-cmp v0.7.0
-	github.com/kaptinlin/filter v0.5.0
+	github.com/kaptinlin/filter v0.6.1
 	github.com/stretchr/testify v1.11.1
 )
 
