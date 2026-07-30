@@ -163,7 +163,9 @@ func whereFilter(value any, args ...any) (any, error) {
 	if len(args) >= 2 {
 		return filter.Where(value, toString(args[0]), args[1])
 	}
-	return filter.Where(value, toString(args[0]))
+	return filter.WhereFunc(value, toString(args[0]), func(candidate any) bool {
+		return newValue(candidate).IsTrue()
+	})
 }
 
 // rejectFilter selects items where a key does not match a value.
@@ -175,7 +177,9 @@ func rejectFilter(value any, args ...any) (any, error) {
 	if len(args) >= 2 {
 		return filter.Reject(value, toString(args[0]), args[1])
 	}
-	return filter.Reject(value, toString(args[0]))
+	return filter.RejectFunc(value, toString(args[0]), func(candidate any) bool {
+		return newValue(candidate).IsTrue()
+	})
 }
 
 // findFilter returns the first item where a key matches a value.
@@ -203,5 +207,7 @@ func hasFilter(value any, args ...any) (any, error) {
 	if len(args) >= 2 {
 		return filter.Has(value, toString(args[0]), args[1])
 	}
-	return filter.Has(value, toString(args[0]))
+	return filter.HasFunc(value, toString(args[0]), func(candidate any) bool {
+		return newValue(candidate).IsTrue()
+	})
 }
